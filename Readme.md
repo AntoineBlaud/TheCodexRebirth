@@ -35,6 +35,8 @@ Check the examples in this order:
   - `strict_symbolic_check` -> If set to True, the program will stop as soon as an error is detected, allowing for investigation.
   - `symbolic_check` -> Removes tainted values that do not correspond to memory values (which may cause certain details to be missed).
 
+- Having `symbolic_check` disabled allow to speed up execution to 3000 instructions per second instead of 500
+
 - For memory strings, you should use `taint_memory` with a byte step size of 1 or `sizeof(int)` depending on their usage. If the string is read by moving 4 or 8 bytes at a time, and you set the memory step size to 1, it will not work correctly.
 
 - If you find `addrof` in your results, it means that the script contains operations similar to those in the `indirect_load.c` file.
