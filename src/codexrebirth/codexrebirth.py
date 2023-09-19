@@ -1,5 +1,5 @@
 #########################################################
-# Author: @d0raken - Antoine Blaud 
+# Author: @d0raken - Antoine Blaud
 # Date: 2023-09-18
 # CodexRebirth is a symbolic execution engine based on Qiling
 # It is used to emulate a binary and to extract the symbolic execution trace
@@ -46,14 +46,7 @@ stdout = sys.stdout
 isatty = stdout.isatty()
 
 
-
-
-__all__ = [
-    "DebugLevel",
-    "ARCH",
-    "CodexRebirth",
-    "Instruction"
-]
+__all__ = ["DebugLevel", "ARCH", "CodexRebirth", "Instruction"]
 
 set_option(rational_to_decimal=True)
 
@@ -70,7 +63,7 @@ class DebugLevel:
     INFO = 1
     DEBUG = 2
 
-    
+
 class _Color:
     ANSI_COLOR_FORMAT = "\033[38;5;{}m"
 
@@ -85,7 +78,8 @@ class _Color:
         Returns the input text with the ANSI color code applied.
         """
         return f"{self.color_code}{text}\033[0m"
-    
+
+
 class ANSIColors:
     OKBLUE = "\033[94m"
     OKCYAN = "\033[96m"
@@ -109,11 +103,10 @@ def log(dlevel, message, debug_level, color):
     date = time.strftime("%H:%M:%S", time.localtime())
     if dlevel <= debug_level:
         if isatty:
-         message = f"\033[2m{date}\033[0m  {color}{message}\033[0m"
+            message = f"\033[2m{date}\033[0m  {color}{message}\033[0m"
         else:
             message = f"{message}"
         print(message)
-
 
 
 class ARCH:
@@ -125,7 +118,8 @@ class ARCH:
         "binary_mask": 0xFFFFFFFFFFFFFFFF,
         "binary_size": 64,
     }
-    
+
+
 class ArchitectureTranslator(dict):
     def __init__(self):
         super().__init__(
@@ -135,21 +129,23 @@ class ArchitectureTranslator(dict):
             }
         )
 
-    
-if (getglobal('BINARY_ARCH') is None):
-    msg = "BINARY_ARCH not defined, please define it in your script before importing CodexRebirth\n" \
-        + "from superglobals import setglobal\n" \
-        + "setglobal('BINARY_ARCH', 'X86') # X86, X64,\n" \
+
+if getglobal("BINARY_ARCH") is None:
+    msg = (
+        "BINARY_ARCH not defined, please define it in your script before importing CodexRebirth\n"
+        + "from superglobals import setglobal\n"
+        + "setglobal('BINARY_ARCH', 'X86') # X86, X64,\n"
         + "from codexrebirth import *"
+    )
     log(DebugLevel.ERROR, msg, DebugLevel.ERROR, ANSIColors.ERROR)
     exit(-1)
 
-if getglobal('BINARY_ARCH') not in ArchitectureTranslator():
+if getglobal("BINARY_ARCH") not in ArchitectureTranslator():
     msg = f"Unknown architecture {getglobal('BINARY_ARCH')}, please choose between X86 or X64"
     log(DebugLevel.ERROR, msg, DebugLevel.ERROR, ANSIColors.ERROR)
-    exit(-1)  
+    exit(-1)
 
-BINARY_ARCH = ArchitectureTranslator()[getglobal('BINARY_ARCH')]
+BINARY_ARCH = ArchitectureTranslator()[getglobal("BINARY_ARCH")]
 
 BINARY_MAX_MASK = BINARY_ARCH["binary_mask"]
 BINARY_ARCH_SIZE = BINARY_ARCH["binary_size"]
@@ -160,7 +156,7 @@ new_var_counter = itertools.count(1)
 ###################################################################################################
 # Utility functions
 # - reformat_expression
-# - instructions/addr get 
+# - instructions/addr get
 # - check_memory_access
 # - log
 # - Some math functions for binary operations
@@ -179,7 +175,11 @@ def extract_special_marker(expression, marker):
                     open_parenthesis_count -= 1
                     if open_parenthesis_count == 0:
                         expression = (
-                            expression[:i] + "addrof" + expression[i:index] + "" + expression[index + len(marker) :]
+                            expression[:i]
+                            + "addrof"
+                            + expression[i:index]
+                            + ""
+                            + expression[index + len(marker) :]
                         )
                         break
     return expression
@@ -194,10 +194,11 @@ def replace_integers_with_hex(input_string):
     integer_pattern = r"\b\d+\b"
 
     # Use a lambda function to convert matched integers to hexadecimal format
-    hex_string = re.sub(integer_pattern, lambda match: hex(int(match.group())), input_string)
+    hex_string = re.sub(
+        integer_pattern, lambda match: hex(int(match.group())), input_string
+    )
 
     return hex_string
-
 
 
 def reformat_expression(expression):
@@ -219,31 +220,38 @@ def __map_regs() -> Mapping[int, int]:
     from unicorn import x86_const as uc_x86_const
 
     def __canonicalized_mapping(module, prefix: str) -> Mapping[str, int]:
-        return dict((k[len(prefix) :], getattr(module, k)) for k in dir(module) if k.startswith(prefix))
+        return dict(
+            (k[len(prefix) :], getattr(module, k))
+            for k in dir(module)
+            if k.startswith(prefix)
+        )
 
     cs_x86_regs = __canonicalized_mapping(cs_x86_const, "X86_REG")
     uc_x86_regs = __canonicalized_mapping(uc_x86_const, "UC_X86_REG")
 
-    return dict((cs_x86_regs[k], uc_x86_regs[k]) for k in cs_x86_regs if k in uc_x86_regs)
+    return dict(
+        (cs_x86_regs[k], uc_x86_regs[k]) for k in cs_x86_regs if k in uc_x86_regs
+    )
 
 
 # capstone to unicorn regs mapping
 CS_UC_REGS = __map_regs()
+
 
 def get_instruction_address(ql):
     if ql.arch.type == QL_ARCH.X8664:
         return ql.arch.regs.rip
     elif ql.arch.type == QL_ARCH.X86:
         return ql.arch.regs.eip
-    
+
     raise ValueError("Unknown architecture type")
+
 
 def get_current_instruction(ql):
     pc = get_instruction_address(ql)
     md = ql.arch.disassembler
     buf = ql.mem.read(pc, 0x10)
     return next(md.disasm(buf, pc))
-
 
 
 def get_instruction_from_address(ql, addr):
@@ -261,7 +269,6 @@ def get_stack_pointer(ql):
     raise ValueError("Unknown architecture type")
 
 
-
 def check_memory_access(insn):
     # lea instruction is not a memory access
     if insn.mnemonic == "lea":
@@ -272,6 +279,7 @@ def check_memory_access(insn):
             return True
     return False
 
+
 def read_while_ptr(ql, addr):
     real_value = addr
     if is_mapped(ql, addr):
@@ -280,17 +288,20 @@ def read_while_ptr(ql, addr):
             real_value = read_memory_int(ql, real_value)
     return real_value
 
+
 def ask_to_continue(sentence):
     y_n = input(f"{sentence}\nDo you want to continue? [y/n]: ")
     if y_n.lower() == "n":
         exit(0)
-        
+
+
 def create_name_from_addr(name):
     # Process the name, converting integers to 'mem_0xXXXX' format
     if isinstance(name, int):
         return "mem_" + hex(name)
     return name
-    
+
+
 def Not(x):
     return ~x & BINARY_MAX_MASK
 
@@ -303,6 +314,7 @@ def binary_subtraction(X, Y):
     result = (X + Y_complement) & BINARY_MAX_MASK
     return result
 
+
 # Must only be used with 'eval' function to evaluate the expression
 def RotateLeft(x, n):
     return ((x << n) | (x >> (BINARY_ARCH_SIZE - n))) & BINARY_MAX_MASK
@@ -314,7 +326,9 @@ def RotateRight(x, n):
 
 
 def read_memory_int(ql, address):
-    return int.from_bytes(ql.mem.read(address, BINARY_ARCH_SIZE//8), byteorder="little")
+    return int.from_bytes(
+        ql.mem.read(address, BINARY_ARCH_SIZE // 8), byteorder="little"
+    )
 
 
 def is_mapped(ql: Qiling, address):
@@ -330,7 +344,6 @@ def is_mapped(ql: Qiling, address):
 # This class is used to store the name of the symbolic variables
 # and also name for functions, and memory addresses
 class AddressBook(dict):
-
     def __init__(self):
         super().__init__()
 
@@ -350,10 +363,11 @@ class ValueBook(dict):
 
     def __repr__(self) -> str:
         return super().__repr__()
-    
+
 
 ValueBookInst = ValueBook()
-    
+
+
 # This class is used to store the mask of the symbolic variables
 # from tainted memory addresses
 class MaskBook(dict):
@@ -385,11 +399,8 @@ class InstructionSet(list):
         return False
 
 
-
-
 # class used to store Unicorn operand and our own operand
 class Instruction:
-    
     def __init__(self, cinsn):
         # Instruction can have up to 3 operands
         self.op1 = None
@@ -399,7 +410,7 @@ class Instruction:
         self.v_op1 = None
         self.v_op2 = None
         self.v_op3 = None
-    
+
     def __repr__(self) -> str:
         res = self.cinsn.mnemonic + " " + self.cinsn.op_str
         if self.v_op1:
@@ -410,9 +421,9 @@ class Instruction:
             res += f"\n\t\top3 = {self.v_op3}"
         if self.op1 or self.op2 or self.op3:
             res += "\n"
-            
+
         return res
-    
+
     def clone(self):
         clone = Instruction(self.cinsn)
         clone.op1 = self.op1
@@ -429,10 +440,9 @@ class TraceEntry:
         self.Insn = Insn
         self.is_symbolic = is_symbolic
         self.op_values = op_values
-        
+
     def __repr__(self) -> str:
         return f"{self.Insn}, {self.is_symbolic}, {self.op_values}"
-    
 
 
 class Trace(dict):
@@ -444,21 +454,18 @@ class Trace(dict):
         if insn_addr not in self:
             self[insn_addr] = {}
         self[insn_addr][counter] = TraceEntry(Insn.clone(), is_symbolic, op_values)
-        
-    
+
     def __repr__(self) -> str:
         res = ""
         for addr in self:
-            res +=(f"{hex(addr)}:\n")
+            res += f"{hex(addr)}:\n"
             for counter in self[addr]:
-                res+= (f"\t{counter}: {self[addr][counter].Insn, self[addr][counter].is_symbolic, self[addr][counter].op_values}\n")
+                res += f"\t{counter}: {self[addr][counter].Insn, self[addr][counter].is_symbolic, self[addr][counter].op_values}\n"
         return res
-        
+
 
 # instanciante the CodexDump class, used to register all instructions that have been executed
 TraceInst = Trace()
-
-
 
 
 class SymValue:
@@ -480,7 +487,6 @@ class SymValue:
 # We have to wrap 'value' inside a object class to avoid
 # copy and reference problems, specially when we have to clone it
 class _SymValue:
-    
     def __init__(self, value):
         self._value = value
 
@@ -516,8 +522,6 @@ class _SymValue:
 # We have to wrap 'value' inside a object class to avoid
 # copy and reference problems, specially when we have to clone it
 class _RealValue:
-
-
     def __init__(self, value):
         self._value = value
 
@@ -536,11 +540,13 @@ class _RealValue:
     def sym_value(self):
         return self._value
 
-#==================================================================================================
+
+# ==================================================================================================
 # _RealValue are wrapped by RealValue
 # With this wrapper, we can apply operation between all kind of values
 # -> RealValue -> _RealValue
 # -> SymValue -> SymRegister, SymMemory -> _SymValue
+
 
 class RealValue:
     def __init__(self, value):
@@ -575,7 +581,9 @@ class RealValue:
 
     def __sub__(self, other):
         other = other.clone()
-        other.sym_value.value = binary_subtraction(self.sym_value.value, other.sym_value.value)
+        other.sym_value.value = binary_subtraction(
+            self.sym_value.value, other.sym_value.value
+        )
         return other
 
     def __xor__(self, other):
@@ -619,12 +627,16 @@ class RealValue:
 
     def ror(self, other):
         other = other.clone()
-        other.sym_value.value = z3.RotateRight(other.sym_value.value, self.sym_value.value)
+        other.sym_value.value = z3.RotateRight(
+            other.sym_value.value, self.sym_value.value
+        )
         return other
 
     def rol(self, other):
         other = other.clone()
-        other.sym_value.value = z3.RotateLeft(other.sym_value.value, self.sym_value.value)
+        other.sym_value.value = z3.RotateLeft(
+            other.sym_value.value, self.sym_value.value
+        )
         return other
 
     def _not(self):
@@ -644,7 +656,6 @@ class SymMemory(SymValue):
             self.sym_value = _SymValue(BitVec(name, BINARY_ARCH_SIZE))
         else:
             raise Exception("SymMemory name must be a string")
-
 
     @property
     def size(self):
@@ -675,7 +686,9 @@ class SymMemory(SymValue):
         return self
 
     def __sub__(self, other):
-        self.sym_value.value = binary_subtraction(self.sym_value.value, other.sym_value.value)
+        self.sym_value.value = binary_subtraction(
+            self.sym_value.value, other.sym_value.value
+        )
         return self
 
     def __xor__(self, other):
@@ -711,11 +724,15 @@ class SymMemory(SymValue):
         return self
 
     def ror(self, other):
-        self.sym_value.value = z3.RotateRight(self.sym_value.value, other.sym_value.value)
+        self.sym_value.value = z3.RotateRight(
+            self.sym_value.value, other.sym_value.value
+        )
         return self
 
     def rol(self, other):
-        self.sym_value.value = z3.RotateLeft(self.sym_value.value, other.sym_value.value)
+        self.sym_value.value = z3.RotateLeft(
+            self.sym_value.value, other.sym_value.value
+        )
         return self
 
     def _not(self):
@@ -781,7 +798,7 @@ class SymRegister(SymValue):
             # TODO: check target size diferrent from self
         elif isinstance(target, SymValue):
             self.sym_value = target.sym_value.clone()
-        
+
         else:
             raise Exception("Target type unknown '{}'".format(type(target)))
 
@@ -808,12 +825,11 @@ class SymRegister(SymValue):
         self.sym = _SymValue(BitVec(str(self.name), BINARY_ARCH_SIZE))
         self.color = _Color()
         return self
-    
+
     def apply_mask(self, other):
-        
         if isinstance(other, RealValue) and self.size != BINARY_ARCH_SIZE:
             other.sym_value.value &= (1 << self.size) - 1
-            
+
         if isinstance(other, SymValue) and self.size != other.size:
             other.sym_value.value &= (1 << self.size) - 1
 
@@ -836,7 +852,9 @@ class SymRegister(SymValue):
 
     def __sub__(self, other):
         other = self.apply_mask(other)
-        self.sym_value.value = binary_subtraction(self.sym_value.value, other.sym_value.value)
+        self.sym_value.value = binary_subtraction(
+            self.sym_value.value, other.sym_value.value
+        )
         return self.update(self.sym_value)
 
     def __xor__(self, other):
@@ -876,10 +894,14 @@ class SymRegister(SymValue):
         return self.update(self.sym_value)
 
     def ror(self, other):
-        return self.update(_SymValue(z3.RotateRight(self.sym_value.value, other.sym_value.value)))
+        return self.update(
+            _SymValue(z3.RotateRight(self.sym_value.value, other.sym_value.value))
+        )
 
     def rol(self, other):
-        return self.update(_SymValue(z3.RotateLeft(self.sym_value.value, other.sym_value.value)))
+        return self.update(
+            _SymValue(z3.RotateLeft(self.sym_value.value, other.sym_value.value))
+        )
 
     def _not(self):
         self.sym_value.value = ~self.sym_value.value & BINARY_MAX_MASK
@@ -887,7 +909,6 @@ class SymRegister(SymValue):
 
 
 if BINARY_ARCH in (ARCH.X86_64, ARCH.X86):
-    
     SUPPORTED_INSTRUCTIONS = InstructionSet(
         [
             ".?mov.*",
@@ -1085,7 +1106,10 @@ class CodexState(dict):
         # Delete a symbolic variable, handling register parts and individual variables
         processed_name = create_name_from_addr(name)
         if processed_name in self:
-            if isinstance(self[processed_name], SymRegister) and processed_name == self[processed_name].name:
+            if (
+                isinstance(self[processed_name], SymRegister)
+                and processed_name == self[processed_name].name
+            ):
                 for reg in SymRegisterFactory[processed_name]:
                     try:
                         del self[reg.name]
@@ -1099,15 +1123,27 @@ class CodexState(dict):
         representation = []
 
         # Add _SymValue entries (e.g., var_00XXX) to the representation
-        sym_value_entries = [f"{key} = {value}" for key, value in self.items() if isinstance(value, _SymValue)]
+        sym_value_entries = [
+            f"{key} = {value}"
+            for key, value in self.items()
+            if isinstance(value, _SymValue)
+        ]
         representation.extend(sym_value_entries)
 
         # Add SymRegister entries (e.g., rax, eax, ax, ah, al) to the representation
-        sym_register_entries = [f"{key} = {value}" for key, value in self.items() if isinstance(value, SymRegister)]
+        sym_register_entries = [
+            f"{key} = {value}"
+            for key, value in self.items()
+            if isinstance(value, SymRegister)
+        ]
         representation.extend(sym_register_entries)
 
         # Add SymMemory entries (e.g., mem_0xXXXX) to the representation
-        sym_memory_entries = [f"{key} = {value}" for key, value in self.items() if isinstance(value, SymMemory)]
+        sym_memory_entries = [
+            f"{key} = {value}"
+            for key, value in self.items()
+            if isinstance(value, SymMemory)
+        ]
         representation.extend(sym_memory_entries)
 
         # Join all entries into a string with newline separators
@@ -1115,1025 +1151,1092 @@ class CodexState(dict):
 
 
 class CodexInstructionEngineX86_64:
-        """
-        A class for performing symbolic execution on x86-64 machine code using Qiling.
+    """
+    A class for performing symbolic execution on x86-64 machine code using Qiling.
 
-        Args:
-            ql_instance (Qiling): An instance of the Qiling emulator.
-            debug_level (int): The level of debugging to use during execution.
-            symbolic_check_interval (int, optional): The number of instructions to execute before performing a symbolic check. Defaults to 1000.
-            strict_symbolic_check (bool, optional): Whether to perform strict symbolic checks. Defaults to True.
-        """
-        def __init__(self, ql_instance, debug_level, symbolic_check = True, strict_symbolic_check=False):
-            # Store the Qiling instance and configure Capstone disassembler and Keystone assembler
-            self.ql = ql_instance
-            self.cs = Cs(CS_ARCH_X86, CS_MODE_64)
-            self.cs.detail = True
-            self.ks = Ks(KS_ARCH_X86, KS_MODE_64)
-            self.ks.detail = True
+    Args:
+        ql_instance (Qiling): An instance of the Qiling emulator.
+        debug_level (int): The level of debugging to use during execution.
+        symbolic_check_interval (int, optional): The number of instructions to execute before performing a symbolic check. Defaults to 1000.
+        strict_symbolic_check (bool, optional): Whether to perform strict symbolic checks. Defaults to True.
+    """
 
-            # Initialize variables for tracking the last executed instruction
-            self.last_instruction_executed = None
-            self.is_last_instruction_symbolic = False
+    def __init__(
+        self, ql_instance, debug_level, symbolic_check=True, strict_symbolic_check=False
+    ):
+        # Store the Qiling instance and configure Capstone disassembler and Keystone assembler
+        self.ql = ql_instance
+        self.cs = Cs(CS_ARCH_X86, CS_MODE_64)
+        self.cs.detail = True
+        self.ks = Ks(KS_ARCH_X86, KS_MODE_64)
+        self.ks.detail = True
 
-            # Set the debug level and symbolic execution check interval
-            self.debug_level = debug_level
-            self.symbolic_check = symbolic_check
+        # Initialize variables for tracking the last executed instruction
+        self.last_instruction_executed = None
+        self.is_last_instruction_symbolic = False
 
-            # Specify whether to perform strict symbolic checks
-            self.strict_symbolic_check = strict_symbolic_check
+        # Set the debug level and symbolic execution check interval
+        self.debug_level = debug_level
+        self.symbolic_check = symbolic_check
 
-        def check_symop_div(self, insn, codex_state: CodexState):
-            if insn.mnemonic == "div":
-                for reg in SymRegisterFactory["rax"]:
-                    if reg in codex_state:
-                        log(
-                            DebugLevel.DEBUG,
-                            f"Symbolic register found in {reg.name} => {codex_state[reg.name]}",
-                            self.debug_level,
-                            ANSIColors.PURPLE,
-                        )
-                        return True
-                op1 = insn.operands[0]
-                regname = self.cs.reg_name(op1.reg)
-                if regname in codex_state:
+        # Specify whether to perform strict symbolic checks
+        self.strict_symbolic_check = strict_symbolic_check
+
+    def check_symop_div(self, insn, codex_state: CodexState):
+        if insn.mnemonic == "div":
+            for reg in SymRegisterFactory["rax"]:
+                if reg in codex_state:
                     log(
                         DebugLevel.DEBUG,
-                        f"Symbolic register found in {regname} => {codex_state[regname]}",
+                        f"Symbolic register found in {reg.name} => {codex_state[reg.name]}",
                         self.debug_level,
                         ANSIColors.PURPLE,
                     )
                     return True
-                return False
-
-        def process_mem_access(self, op, codex_state: CodexState):
-            # Return the symbolic register that is used in the mem_access instruction (ex: lea rbx, [rax + 5]) with
-            # rax symbolic
-            # if no symbolic register is used, return RealValue
-            value = RealValue(0)
-
-            if op.mem.base != 0:
-                base = self.ql.arch.regs.read(self.cs.reg_name(op.mem.base))
-                # if the register is symbolic, fetch it from the codex_state
-                if self.cs.reg_name(op.mem.base) in codex_state:
-                    value = codex_state[self.cs.reg_name(op.mem.base)].clone()
-                else:
-                    value = RealValue(base)
-
-            if op.mem.index != 0:
-                index = self.ql.arch.regs.read(self.cs.reg_name(op.mem.index))
-                if self.cs.reg_name(op.mem.index) in codex_state:
-                    if not value:
-                        value = codex_state[self.cs.reg_name(op.mem.index)].clone()
-                    else:
-                        # process in this order to avoid adding a SymValue to a RealValue
-                        value = codex_state[self.cs.reg_name(op.mem.index)].clone() + value
-                else:
-                    if not value:
-                        value = RealValue(index)
-                    else:
-                        value += RealValue(index)
-
-            if op.mem.disp != 0:
-                value += RealValue(op.mem.disp)
-
-            if op.mem.scale > 1:
-                value *= RealValue(op.mem.scale)
-
-            return value
-
-        def is_symbolic_operation(self, mem_access, insn, codex_state: CodexState):
-            # if isnn is div, we need to check if the register or eax are symbolic
-            if self.check_symop_div(insn, codex_state):
-                return True
-
-            if insn.mnemonic == "mul" and len(insn.operands) == 1 and "rax" in codex_state:
-                return True
-            
-            if insn.mnemonic == "pop":
-                stack_pointer = get_stack_pointer(self.ql)
-                if stack_pointer in codex_state:
-                    return True
-
-            # For operands in instruction, if the operand is a sym register, or a sym memory, return True
-            for op in insn.operands:
-                # Check if the operand is a register
-                if op.type == X86_OP_REG:
-                    regname = self.cs.reg_name(op.reg)
-                    # If the register is in the dictionary, set the flag
-                    if regname in codex_state:
-                        log(
-                            DebugLevel.DEBUG,
-                            f"Symbolic register found in {regname} => {codex_state[regname].sym_value}",
-                            self.debug_level,
-                            ANSIColors.PURPLE,
-                        )
-                        return True
-
-                # Check if the operand is a memory access
-                if op.type == X86_OP_MEM and mem_access in codex_state:
-                    log(
-                        DebugLevel.DEBUG,
-                        f"Symbolic memory found in {hex(mem_access)} => {codex_state[mem_access]}",
-                        self.debug_level,
-                        ANSIColors.PURPLE,
-                    )
-                    return True
-
-                elif op.type == X86_OP_MEM:
-                    # get register used in the memory access
-                    sym_access = self.process_mem_access(op, codex_state)
-                    if isinstance(sym_access, SymValue):
-                        # add sym_access to codex_state
-                        log(
-                            DebugLevel.DEBUG,
-                            f"Symbolic indirect access found => {sym_access.sym_value}",
-                            self.debug_level,
-                            ANSIColors.PURPLE,
-                        )
-                        return True
-
-            return False
-
-        def parse_insn_operands(
-            self, ql, insn, mem_access, codex_state: CodexState
-        ) -> Instruction:
-            # Parse the operands of the instruction, create symbolic values if needed, and return the Instruction object
-
-            Insn = Instruction(insn)
-            if len(Insn.cinsn.operands) == 0:
-                return Insn
-
-            # Check if the operand is a symbolic memory access and create a symbolic value
-            for op in insn.operands:
-                if op.type == X86_OP_MEM:
-                    sym_access = self.process_mem_access(op, codex_state)
-                    if isinstance(sym_access, SymValue):
-                        log(
-                            DebugLevel.DEBUG,
-                            f"Adding symbolic memory {hex(mem_access)} => {sym_access.sym_value}",
-                            self.debug_level,
-                            ANSIColors.PURPLE,
-                        )
-                        codex_state[mem_access] = sym_access
-                        break
-
-            # Process the operands
-            for i in range(min(len(Insn.cinsn.operands), 3)):
-                operand = Insn.cinsn.operands[i]
-                setattr(Insn, f"op{i+1}", operand)
-
-                if operand.type == X86_OP_REG:
-                    regname = self.cs.reg_name(operand.reg)
-                    if regname in codex_state:
-                        setattr(Insn, f"v_op{i+1}", codex_state[regname])
-                    else:
-                        setattr(Insn, f"v_op{i+1}", RealValue(ql.arch.regs.read(regname.upper())))
-
-                elif operand.type == X86_OP_IMM:
-                    setattr(Insn, f"v_op{i+1}", RealValue(operand.imm))
-
-                elif operand.type == X86_OP_MEM:
-                    
-                    if Insn.cinsn.mnemonic  in [
-                            "cmp",
-                            "test",
-                        ]:
-                        if mem_access > is_mapped(self.ql, mem_access):
-                            setattr(Insn, f"v_op{i+1}", RealValue(read_memory_int(self.ql, mem_access)))
-                        else:
-                            setattr(Insn, f"v_op{i+1}", RealValue(mem_access))
-                    
-                    
-                    elif mem_access in codex_state:
-                        log(
-                            DebugLevel.DEBUG,
-                            f"Loading a value from a previous symbolic memory write {codex_state[mem_access]}",
-                            self.debug_level,
-                            ANSIColors.PURPLE,
-                        )
-                        setattr(Insn, f"v_op{i+1}", codex_state[mem_access])
-                    else:
-                        log(
-                            DebugLevel.DEBUG,
-                            f"Instantiating v_op{i+1} RealValue",
-                            self.debug_level,
-                            ANSIColors.PURPLE,
-                        )
-                        # only the first operand of the can be instantiated as a symbolic value (mov instruction)
-                        if i == 0:
-                            setattr(Insn, f"v_op{i+1}", codex_state.new_symbolic_memory(mem_access, read_memory_int(self.ql, mem_access)))
-                        
-                        elif is_mapped(self.ql, mem_access):
-                            setattr(Insn, f"v_op{i+1}", RealValue(read_memory_int(self.ql, mem_access)))
-                        else:
-                            setattr(Insn, f"v_op{i+1}", RealValue(mem_access))
-
-                assert getattr(Insn, f"v_op{i+1}") is not None
-
-            return Insn
-
-        def make_var_substitutions(self, insn, codex_state: CodexState):
-            for varname in list(codex_state.keys()):
-                symvar = codex_state[varname]
-
-                if not isinstance(symvar, SymValue):
-                    continue
-
-                raw_repr = symvar.sym_value.__raw_repr__()
-                # check if the raw_repr is already in the codex_state
-                if len(raw_repr) > MAX_RAW_REPR_LENGTH:
-                    for new_varname, new_symvar in codex_state.items():
-                        if not isinstance(new_symvar, _SymValue):
-                            continue
-                        if new_symvar.__raw_repr__() == raw_repr:
-                            log(
-                                DebugLevel.DEBUG,
-                                f"Substituting {varname} with {new_varname}",
-                                self.debug_level,
-                                ANSIColors.PURPLE,
-                            )
-                            codex_state[varname].update(_SymValue(BitVec(str(new_varname), BINARY_ARCH_SIZE)))
-
-                # if not, then we didn't updated yet, so we create a new varname and assign it to the symvar
-                if len(raw_repr) > MAX_RAW_REPR_LENGTH:
-                    new_varname = f"var_{next(new_var_counter):05d}"
-                    codex_state[new_varname] = symvar.sym_value.clone()
-                    log(
-                        DebugLevel.DEBUG,
-                        f"Creating new varname {new_varname} for {varname}=>{symvar.sym_value}",
-                        self.debug_level,
-                        ANSIColors.PURPLE,
-                    )
-                    codex_state[varname].update(_SymValue(BitVec(str(new_varname), BINARY_ARCH_SIZE)))
-                    #TraceInst.
-
-        def _mov(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            # instanciate a new symbolic register if needed
-            # if condition is not met, then delete the symbolic register
-            if Insn.op1.type == X86_OP_REG:
-                regname = self.cs.reg_name(Insn.op1.reg)
-                if regname not in codex_state:
-                    codex_state.new_symbolic_register(regname)
-
-            # if op2 is a concrete value, then for sur the symbolic Register or memory witch stored the sym value
-            # in op1 is destroyed
-            if not isinstance(Insn.v_op2, SymValue):
-                if Insn.op1.type == X86_OP_REG:
-                    regname = self.cs.reg_name(Insn.op1.reg)
-                    codex_state.delete_symbolic_var(regname)
-                elif Insn.op1.type == X86_OP_MEM:
-                    codex_state.delete_symbolic_var(mem_access)
-                return None
-
-            # if op2 is a symbolic value, then update the symbolic register or memory
-            elif isinstance(Insn.v_op2, SymValue):
-                if Insn.op1.type == X86_OP_REG:
-                    regname = self.cs.reg_name(Insn.op1.reg)
-                    # Use to detected 'addrof' operation, ex: mov rax, [rbx + 0x1000] with rbx symbolic
-                    if self.check_direct_addrof(Insn.cinsn, mem_access) and isinstance(Insn.v_op2, SymRegister):
-                        Insn.v_op2 *= RealValue(0x1111)
-                    codex_state[regname].update(Insn.v_op2.sym_value & Insn.v_op2.size)
-                    return codex_state[regname]
-
-                elif Insn.op1.type == X86_OP_MEM:
-                    codex_state[mem_access].update(Insn.v_op2.sym_value)
-                    return codex_state[mem_access]
-
-            raise Exception("Operation {Insn.cinsn.mnemonic} not supported")
-
-        def _compute(self, Insn: Instruction, mem_access: int, codex_state: CodexState, op):
-            codex_entry = None
-
-            # special operation for mul
-            if op == "mul":
-                codex_entry = "rax"
-                if codex_entry not in codex_state:
-                    codex_state.new_symbolic_register(codex_entry)
-                codex_state[codex_entry].update((codex_state[codex_entry] * Insn.v_op1))
-
-            # create symbolic entry if needed
-            if Insn.op1.type == X86_OP_MEM:
-                if mem_access not in codex_state:
-                    codex_state.new_symbolic_memory(mem_access, read_memory_int(self.ql, mem_access))
-                codex_entry = mem_access
-            else:
-                regname = self.cs.reg_name(Insn.op1.reg)
-                if regname not in codex_state:
-                    codex_state.new_symbolic_register(regname)
-                codex_entry = regname
-
-            if op == "add":
-                codex_state[codex_entry].update((Insn.v_op1 + Insn.v_op2))
-
-            if op == "sub":
-                codex_state[codex_entry].update(Insn.v_op1 - Insn.v_op2)
-
-            if op == "xor":
-                codex_state[codex_entry].update(Insn.v_op1 ^ Insn.v_op2)
-
-            if op == "imul":
-                if Insn.v_op3 is not None:
-                    codex_state[codex_entry].update((Insn.v_op2 * Insn.v_op3))
-                if Insn.v_op2 is not None:
-                    codex_state[codex_entry].update((Insn.v_op1 * Insn.v_op2))
-                else:
-                    if "rax" in codex_state:
-                        codex_state["rax"].update((codex_state["rax"] * Insn.v_op1))
-
-            if op == "and":
-                codex_state[codex_entry].update(Insn.v_op1 & Insn.v_op2)
-
-            if op == "or":
-                codex_state[codex_entry].update(Insn.v_op1 | Insn.v_op2)
-
-            if op == "shl":
-                codex_state[codex_entry].update(Insn.v_op1 << Insn.v_op2)
-
-            if op == "shr":
-                codex_state[codex_entry].update(Insn.v_op1 >> Insn.v_op2)
-
-            if op == "ror":
-                codex_state[codex_entry].update(Insn.v_op1.ror(Insn.v_op2))
-
-            if op == "rol":
-                codex_state[codex_entry].update(Insn.v_op1.rol(Insn.v_op2))
-
-            if op == "not":
-                codex_state[codex_entry].update(Insn.v_op1._not())
-
-            # if the value is a memory address, add a marker to transform
-            # the result into  'addrof'
-            if isinstance(Insn.v_op2, RealValue) and is_mapped(self.ql, Insn.v_op2.value):
-                codex_state[codex_entry] *= RealValue(0x1111)
-            if isinstance(Insn.v_op1, RealValue) and is_mapped(self.ql, Insn.v_op1.value):
-                codex_state[codex_entry] *= RealValue(0x1111)
-
-            return codex_state[codex_entry]
-
-        def _add(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "add")
-
-        def _imul(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "imul")
-
-        def _sub(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "sub")
-
-        def _xor(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "xor")
-
-        def _and(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "and")
-
-        def _or(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "or")
-
-        def _shl(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "shl")
-
-        def _shr(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "shr")
-
-        def _ror(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "ror")
-
-        def _rol(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "rol")
-
-        def _mul(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "mul")
-
-        def _not(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            return self._compute(Insn, mem_access, codex_state, "not")
-        
-        def _push(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            stack_pointer = get_stack_pointer(self.ql)
-            codex_state[stack_pointer] = Insn.v_op1.clone()
-            
-        def _pop(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
-            stack_pointer = get_stack_pointer(self.ql)
-            reg = self.cs.reg_name(Insn.op1.reg)
-            # Delete the symbolic register
-            if reg in codex_state:
-                codex_state.delete_symbolic_var(reg)
-            # Copy the value from the stack to the register
-            if stack_pointer in codex_state:
-                codex_state[reg] = codex_state[stack_pointer]
-                codex_state.delete_symbolic_var(stack_pointer)
-                return codex_state[reg]
-                
-
-        def validate_symbolic_memory(self, codex_state):
-            # Check if we should perform the symbolic memory check based on a random interval
-            if not self.symbolic_check:
-                return
-
-            # Create dictionaries to store intermediate values
-            symbolic_reg_and_mem_expr = {}
-
-            # Copy values from ValueBookInst to locals
-            for var_name, eval_value in ValueBookInst.items():
-                globals()[var_name] = eval_value
-
-            # Sort and filter variable names starting with "var_"
-            vars_int = sorted([var_name for var_name in codex_state if var_name.startswith("var_")])
-
-            # Evaluate and store values for the filtered variables
-            # Only register new var_ variables, not already defined in the global scope
-            for var_name in vars_int:
-                if var_name in globals():
-                    continue
-                eval_value = codex_state[var_name]
-                eval_value = (
-                    eval_value.sym_value if isinstance(eval_value, SymValue) else reformat_expression(str(eval_value))
-                )
-                if isinstance(eval_value, str) and "addrof" in eval_value:
-                    return
-                globals()[var_name] = eval(str(eval_value), globals())
-
-            # Evaluate and store values for other variables
-            for var_name, eval_value in codex_state.items():
-                if not var_name.startswith("var_"):
-                    eval_value = eval_value.sym_value
-                    symbolic_reg_and_mem_expr[var_name] = eval(str(eval_value), globals())
-                    del globals()["__builtins__"]
-
-            # Check symbolic memory values
-            for var_name, eval_value in symbolic_reg_and_mem_expr.items():
-                real_value = None
-                if var_name.startswith("mem_"):
-                    real_value = read_while_ptr(self.ql, int(var_name[4:], 16))
-                        
-                elif (BINARY_ARCH == ARCH.X86 and var_name.startswith("e")) or \
-                    (BINARY_ARCH == ARCH.X86_64 and var_name.startswith("r")):
-                    with contextlib.suppress(KeyError):
-                        real_value = read_while_ptr(self.ql, self.ql.arch.regs.read(var_name.upper()))
-                        
-                if real_value is None:
-                    continue
-                
-                # apply mask setted when the memory was tainted
-                if var_name in AddressBookInst:
-                    real_value &= MaskBookInst[AddressBookInst[var_name]]
-                    
-                if eval_value != real_value:
-                    # Delete the symbolic memory
-                    codex_state.delete_symbolic_var(var_name)
-                    log(
-                        DebugLevel.ERROR,
-                        f"Found a wrong symbolic memory value, deleting it: {var_name} => {hex(real_value)}"
-                        + f"\nSymbolic Computed Value : {eval_value}",
-                        self.debug_level,
-                        ANSIColors.ERROR,
-                    )
-                    if self.strict_symbolic_check and not var_name.startswith("mem_"):
-                        raise Exception(
-                            ANSIColors.ERROR
-                            + "Found a wrong symbolic memory value. " \
-                            + "You could Disable 'strict mode' to continue the execution even with" \
-                            + "some sym mistakes."
-                            + ANSIColors.ENDC
-                        )
-
-
-        def check_resulting_operation(self, codex_state: CodexState):
-            # Get the address of the last executed instruction
-            insn_addr = self.last_instruction_executed
-            if insn_addr is None:
-                return
-
-            # Get the instruction object for the last executed instruction
-            insn = get_instruction_from_address(self.ql, insn_addr)
-
-            # Compute memory access for the last executed instruction if not already computed
-            if self.last_mem_access is None:
-                self.last_mem_access = self.compute_mem_access(insn)
-
-            # Iterate through the operands of the instruction
-            for operand in insn.operands:
-                if operand.type == X86_OP_REG:
-                    # If the operand is a register, retrieve and log its value
-                    reg_name = self.cs.reg_name(operand.reg)
-                    reg_value = hex(self.ql.arch.regs.read(reg_name.upper()))
-                    log(
-                        DebugLevel.DEBUG,
-                        f"{reg_name} => {reg_value}",
-                        self.debug_level,
-                        ANSIColors.OKBLUE,
-                    )
-                elif operand.type == X86_OP_MEM and is_mapped(self.ql, self.last_mem_access):
-                    # If the operand is a memory location, retrieve and log its value
-                    mem_value = hex(read_memory_int(self.ql, self.last_mem_access))
-                    log(
-                        DebugLevel.DEBUG,
-                        f"{hex(self.last_mem_access)} => {mem_value}",
-                        self.debug_level,
-                        ANSIColors.OKBLUE,
-                    )
-
-            # Check if the last executed instruction was symbolic
-            if self.is_last_instruction_symbolic is True:
-                return
-
-
-            # Validate symbolic memory, optionally in strict mode
-            self.validate_symbolic_memory(codex_state)
-
-        def evaluate_instruction(self, mem_access, codex_state: CodexState):
-            # Get the current instruction
-            insn = get_current_instruction(self.ql)
-            insn_addr = get_instruction_address(self.ql)
-
-            if insn_addr == self.last_instruction_executed:
-                self.is_last_instruction_symbolic = False
-                return False
-
-            self.check_resulting_operation(codex_state)
-
-            if self.debug_level == DebugLevel.DEBUG:
-                print("{}   {} {}".format(hex(insn_addr), insn.mnemonic, insn.op_str))
-
-            self.last_instruction_executed = insn_addr
-            self.last_mem_access = mem_access
-
-            # mem_access can be calculated from insn of directly
-            # read base, index, disp and scale from insn operands
-            if mem_access is None:
-                mem_access = self.compute_mem_access(insn)
-
-            # treat special operations
-            if insn.mnemonic.startswith("cdq"):
-                codex_state.delete_symbolic_var("rdx")
-
-            # check if the instruction is symbolic (at least one operand is symbolic)
-            # operands are symbolic when they are first tainted, then when the current operand
-            # depends on a tainted operand
-            if not self.is_symbolic_operation(mem_access, insn, codex_state):
-                self.is_last_instruction_symbolic = False
-                Insn = Instruction(insn)
-                return (Insn, self.get_op_values(insn, mem_access))
-
-            # check if the instruction is supported
-            if insn.mnemonic not in SUPPORTED_INSTRUCTIONS:
+            op1 = insn.operands[0]
+            regname = self.cs.reg_name(op1.reg)
+            if regname in codex_state:
                 log(
                     DebugLevel.DEBUG,
-                    f"Instruction is not supported",
-                    self.debug_level,
-                    ANSIColors.ERROR,
-                )
-                raise Exception(f"Instruction {insn.mnemonic} is not supported")
-
-            if self.debug_level == DebugLevel.INFO:
-                print("{}   {} {}".format(hex(insn_addr), insn.mnemonic, insn.op_str))
-
-            self.make_var_substitutions(insn, codex_state)
-
-            # Parse operands do a lot of things, like creating symbolic values, fetching values from memory
-            # All the results are stored in the Instruction object (v_op1, v_op2, v_op3)
-            Insn = self.parse_insn_operands(self.ql, insn, mem_access, codex_state)
-            resulting_operation = None
-
-            if "mov" in insn.mnemonic or insn.mnemonic.startswith("lea"):
-                resulting_operation = self._mov(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("add"):
-                resulting_operation = self._add(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("imul"):
-                resulting_operation = self._imul(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("sub"):
-                resulting_operation = self._sub(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("xor"):
-                resulting_operation = self._xor(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("and"):
-                resulting_operation = self._and(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("or"):
-                resulting_operation = self._or(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("shl"):
-                resulting_operation = self._shl(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("shr") or insn.mnemonic.startswith("sar"):
-                resulting_operation = self._shr(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("ror"):
-                resulting_operation = self._ror(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("rol"):
-                resulting_operation = self._rol(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("mul"):
-                resulting_operation = self._mul(Insn, mem_access, codex_state)
-
-            elif insn.mnemonic.startswith("not"):
-                resulting_operation = self._not(Insn, mem_access, codex_state)
-                
-            elif insn.mnemonic.startswith("push"):
-                resulting_operation = self._push(Insn, mem_access, codex_state)
-                
-            elif insn.mnemonic.startswith("pop"):
-                resulting_operation = self._pop(Insn, mem_access, codex_state)
-            
-            elif insn.mnemonic.startswith("cmp") or insn.mnemonic.startswith("test"):
-                self.show_op_values(insn, mem_access)
-                ask_to_continue("Found a cmp or test instruction, do you want to continue?")
-                
-
-            if resulting_operation is not None:
-                msg = resulting_operation.color.get_colored_text(
-                    f"Symbolic instruction {insn.mnemonic} executed, result: {resulting_operation.sym_value}"
-                )
-                log(DebugLevel.INFO, msg, self.debug_level, ANSIColors.PURPLE)
-            else:
-                log(
-                    DebugLevel.DEBUG,
-                    f"Symbolic operation gives no result",
+                    f"Symbolic register found in {regname} => {codex_state[regname]}",
                     self.debug_level,
                     ANSIColors.PURPLE,
                 )
-                self.show_op_values(insn, mem_access)
+                return True
+            return False
 
-            self.is_last_instruction_symbolic = True
-            # add a new line
-            return (Insn, self.get_op_values(insn, mem_access))
+    def process_mem_access(self, op, codex_state: CodexState):
+        # Return the symbolic register that is used in the mem_access instruction (ex: lea rbx, [rax + 5]) with
+        # rax symbolic
+        # if no symbolic register is used, return RealValue
+        value = RealValue(0)
 
-        def compute_mem_access(self, insn):
-            """
-            Computes the memory access from the instruction, using base, index, disp and scale.
+        if op.mem.base != 0:
+            base = self.ql.arch.regs.read(self.cs.reg_name(op.mem.base))
+            # if the register is symbolic, fetch it from the codex_state
+            if self.cs.reg_name(op.mem.base) in codex_state:
+                value = codex_state[self.cs.reg_name(op.mem.base)].clone()
+            else:
+                value = RealValue(base)
 
-            Args:
-                insn (CsInsn): The instruction to compute memory access from.
+        if op.mem.index != 0:
+            index = self.ql.arch.regs.read(self.cs.reg_name(op.mem.index))
+            if self.cs.reg_name(op.mem.index) in codex_state:
+                if not value:
+                    value = codex_state[self.cs.reg_name(op.mem.index)].clone()
+                else:
+                    # process in this order to avoid adding a SymValue to a RealValue
+                    value = codex_state[self.cs.reg_name(op.mem.index)].clone() + value
+            else:
+                if not value:
+                    value = RealValue(index)
+                else:
+                    value += RealValue(index)
 
-            Returns:
-                int: The computed memory access.
-            """
-            mem_access = 0
-            try:
-                for op in insn.operands:
-                    if op.type == X86_OP_MEM:
-                        mem_access += self.ql.arch.regs.read(self.cs.reg_name(op.mem.base)) if op.mem.base != 0 else 0
-                        mem_access += self.ql.arch.regs.read(self.cs.reg_name(op.mem.index)) if op.mem.index != 0 else 0
-                        mem_access += op.mem.disp
-                        mem_access *= op.mem.scale if op.mem.scale > 1 else 1
+        if op.mem.disp != 0:
+            value += RealValue(op.mem.disp)
 
-            except Exception as e:
+        if op.mem.scale > 1:
+            value *= RealValue(op.mem.scale)
+
+        return value
+
+    def is_symbolic_operation(self, mem_access, insn, codex_state: CodexState):
+        # if isnn is div, we need to check if the register or eax are symbolic
+        if self.check_symop_div(insn, codex_state):
+            return True
+
+        if insn.mnemonic == "mul" and len(insn.operands) == 1 and "rax" in codex_state:
+            return True
+
+        if insn.mnemonic == "pop":
+            stack_pointer = get_stack_pointer(self.ql)
+            if stack_pointer in codex_state:
+                return True
+
+        # For operands in instruction, if the operand is a sym register, or a sym memory, return True
+        for op in insn.operands:
+            # Check if the operand is a register
+            if op.type == X86_OP_REG:
+                regname = self.cs.reg_name(op.reg)
+                # If the register is in the dictionary, set the flag
+                if regname in codex_state:
+                    log(
+                        DebugLevel.DEBUG,
+                        f"Symbolic register found in {regname} => {codex_state[regname].sym_value}",
+                        self.debug_level,
+                        ANSIColors.PURPLE,
+                    )
+                    return True
+
+            # Check if the operand is a memory access
+            if op.type == X86_OP_MEM and mem_access in codex_state:
+                log(
+                    DebugLevel.DEBUG,
+                    f"Symbolic memory found in {hex(mem_access)} => {codex_state[mem_access]}",
+                    self.debug_level,
+                    ANSIColors.PURPLE,
+                )
+                return True
+
+            elif op.type == X86_OP_MEM:
+                # get register used in the memory access
+                sym_access = self.process_mem_access(op, codex_state)
+                if isinstance(sym_access, SymValue):
+                    # add sym_access to codex_state
+                    log(
+                        DebugLevel.DEBUG,
+                        f"Symbolic indirect access found => {sym_access.sym_value}",
+                        self.debug_level,
+                        ANSIColors.PURPLE,
+                    )
+                    return True
+
+        return False
+
+    def parse_insn_operands(
+        self, ql, insn, mem_access, codex_state: CodexState
+    ) -> Instruction:
+        # Parse the operands of the instruction, create symbolic values if needed, and return the Instruction object
+
+        Insn = Instruction(insn)
+        if len(Insn.cinsn.operands) == 0:
+            return Insn
+
+        # Check if the operand is a symbolic memory access and create a symbolic value
+        for op in insn.operands:
+            if op.type == X86_OP_MEM:
+                sym_access = self.process_mem_access(op, codex_state)
+                if isinstance(sym_access, SymValue):
+                    log(
+                        DebugLevel.DEBUG,
+                        f"Adding symbolic memory {hex(mem_access)} => {sym_access.sym_value}",
+                        self.debug_level,
+                        ANSIColors.PURPLE,
+                    )
+                    codex_state[mem_access] = sym_access
+                    break
+
+        # Process the operands
+        for i in range(min(len(Insn.cinsn.operands), 3)):
+            operand = Insn.cinsn.operands[i]
+            setattr(Insn, f"op{i+1}", operand)
+
+            if operand.type == X86_OP_REG:
+                regname = self.cs.reg_name(operand.reg)
+                if regname in codex_state:
+                    setattr(Insn, f"v_op{i+1}", codex_state[regname])
+                else:
+                    setattr(
+                        Insn,
+                        f"v_op{i+1}",
+                        RealValue(ql.arch.regs.read(regname.upper())),
+                    )
+
+            elif operand.type == X86_OP_IMM:
+                setattr(Insn, f"v_op{i+1}", RealValue(operand.imm))
+
+            elif operand.type == X86_OP_MEM:
+                if Insn.cinsn.mnemonic in [
+                    "cmp",
+                    "test",
+                ]:
+                    if mem_access > is_mapped(self.ql, mem_access):
+                        setattr(
+                            Insn,
+                            f"v_op{i+1}",
+                            RealValue(read_memory_int(self.ql, mem_access)),
+                        )
+                    else:
+                        setattr(Insn, f"v_op{i+1}", RealValue(mem_access))
+
+                elif mem_access in codex_state:
+                    log(
+                        DebugLevel.DEBUG,
+                        f"Loading a value from a previous symbolic memory write {codex_state[mem_access]}",
+                        self.debug_level,
+                        ANSIColors.PURPLE,
+                    )
+                    setattr(Insn, f"v_op{i+1}", codex_state[mem_access])
+                else:
+                    log(
+                        DebugLevel.DEBUG,
+                        f"Instantiating v_op{i+1} RealValue",
+                        self.debug_level,
+                        ANSIColors.PURPLE,
+                    )
+                    # only the first operand of the can be instantiated as a symbolic value (mov instruction)
+                    if i == 0:
+                        setattr(
+                            Insn,
+                            f"v_op{i+1}",
+                            codex_state.new_symbolic_memory(
+                                mem_access, read_memory_int(self.ql, mem_access)
+                            ),
+                        )
+
+                    elif is_mapped(self.ql, mem_access):
+                        setattr(
+                            Insn,
+                            f"v_op{i+1}",
+                            RealValue(read_memory_int(self.ql, mem_access)),
+                        )
+                    else:
+                        setattr(Insn, f"v_op{i+1}", RealValue(mem_access))
+
+            assert getattr(Insn, f"v_op{i+1}") is not None
+
+        return Insn
+
+    def make_var_substitutions(self, insn, codex_state: CodexState):
+        for varname in list(codex_state.keys()):
+            symvar = codex_state[varname]
+
+            if not isinstance(symvar, SymValue):
+                continue
+
+            raw_repr = symvar.sym_value.__raw_repr__()
+            # check if the raw_repr is already in the codex_state
+            if len(raw_repr) > MAX_RAW_REPR_LENGTH:
+                for new_varname, new_symvar in codex_state.items():
+                    if not isinstance(new_symvar, _SymValue):
+                        continue
+                    if new_symvar.__raw_repr__() == raw_repr:
+                        log(
+                            DebugLevel.DEBUG,
+                            f"Substituting {varname} with {new_varname}",
+                            self.debug_level,
+                            ANSIColors.PURPLE,
+                        )
+                        codex_state[varname].update(
+                            _SymValue(BitVec(str(new_varname), BINARY_ARCH_SIZE))
+                        )
+
+            # if not, then we didn't updated yet, so we create a new varname and assign it to the symvar
+            if len(raw_repr) > MAX_RAW_REPR_LENGTH:
+                new_varname = f"var_{next(new_var_counter):05d}"
+                codex_state[new_varname] = symvar.sym_value.clone()
+                log(
+                    DebugLevel.DEBUG,
+                    f"Creating new varname {new_varname} for {varname}=>{symvar.sym_value}",
+                    self.debug_level,
+                    ANSIColors.PURPLE,
+                )
+                codex_state[varname].update(
+                    _SymValue(BitVec(str(new_varname), BINARY_ARCH_SIZE))
+                )
+                # TraceInst.
+
+    def _mov(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        # instanciate a new symbolic register if needed
+        # if condition is not met, then delete the symbolic register
+        if Insn.op1.type == X86_OP_REG:
+            regname = self.cs.reg_name(Insn.op1.reg)
+            if regname not in codex_state:
+                codex_state.new_symbolic_register(regname)
+
+        # if op2 is a concrete value, then for sur the symbolic Register or memory witch stored the sym value
+        # in op1 is destroyed
+        if not isinstance(Insn.v_op2, SymValue):
+            if Insn.op1.type == X86_OP_REG:
+                regname = self.cs.reg_name(Insn.op1.reg)
+                codex_state.delete_symbolic_var(regname)
+            elif Insn.op1.type == X86_OP_MEM:
+                codex_state.delete_symbolic_var(mem_access)
+            return None
+
+        # if op2 is a symbolic value, then update the symbolic register or memory
+        elif isinstance(Insn.v_op2, SymValue):
+            if Insn.op1.type == X86_OP_REG:
+                regname = self.cs.reg_name(Insn.op1.reg)
+                # Use to detected 'addrof' operation, ex: mov rax, [rbx + 0x1000] with rbx symbolic
+                if self.check_direct_addrof(Insn.cinsn, mem_access) and isinstance(
+                    Insn.v_op2, SymRegister
+                ):
+                    Insn.v_op2 *= RealValue(0x1111)
+                codex_state[regname].update(Insn.v_op2.sym_value & Insn.v_op2.size)
+                return codex_state[regname]
+
+            elif Insn.op1.type == X86_OP_MEM:
+                codex_state[mem_access].update(Insn.v_op2.sym_value)
+                return codex_state[mem_access]
+
+        raise Exception("Operation {Insn.cinsn.mnemonic} not supported")
+
+    def _compute(self, Insn: Instruction, mem_access: int, codex_state: CodexState, op):
+        codex_entry = None
+
+        # special operation for mul
+        if op == "mul":
+            codex_entry = "rax"
+            if codex_entry not in codex_state:
+                codex_state.new_symbolic_register(codex_entry)
+            codex_state[codex_entry].update((codex_state[codex_entry] * Insn.v_op1))
+
+        # create symbolic entry if needed
+        if Insn.op1.type == X86_OP_MEM:
+            if mem_access not in codex_state:
+                codex_state.new_symbolic_memory(
+                    mem_access, read_memory_int(self.ql, mem_access)
+                )
+            codex_entry = mem_access
+        else:
+            regname = self.cs.reg_name(Insn.op1.reg)
+            if regname not in codex_state:
+                codex_state.new_symbolic_register(regname)
+            codex_entry = regname
+
+        if op == "add":
+            codex_state[codex_entry].update((Insn.v_op1 + Insn.v_op2))
+
+        if op == "sub":
+            codex_state[codex_entry].update(Insn.v_op1 - Insn.v_op2)
+
+        if op == "xor":
+            codex_state[codex_entry].update(Insn.v_op1 ^ Insn.v_op2)
+
+        if op == "imul":
+            if Insn.v_op3 is not None:
+                codex_state[codex_entry].update((Insn.v_op2 * Insn.v_op3))
+            if Insn.v_op2 is not None:
+                codex_state[codex_entry].update((Insn.v_op1 * Insn.v_op2))
+            else:
+                if "rax" in codex_state:
+                    codex_state["rax"].update((codex_state["rax"] * Insn.v_op1))
+
+        if op == "and":
+            codex_state[codex_entry].update(Insn.v_op1 & Insn.v_op2)
+
+        if op == "or":
+            codex_state[codex_entry].update(Insn.v_op1 | Insn.v_op2)
+
+        if op == "shl":
+            codex_state[codex_entry].update(Insn.v_op1 << Insn.v_op2)
+
+        if op == "shr":
+            codex_state[codex_entry].update(Insn.v_op1 >> Insn.v_op2)
+
+        if op == "ror":
+            codex_state[codex_entry].update(Insn.v_op1.ror(Insn.v_op2))
+
+        if op == "rol":
+            codex_state[codex_entry].update(Insn.v_op1.rol(Insn.v_op2))
+
+        if op == "not":
+            codex_state[codex_entry].update(Insn.v_op1._not())
+
+        # if the value is a memory address, add a marker to transform
+        # the result into  'addrof'
+        if isinstance(Insn.v_op2, RealValue) and is_mapped(self.ql, Insn.v_op2.value):
+            codex_state[codex_entry] *= RealValue(0x1111)
+        if isinstance(Insn.v_op1, RealValue) and is_mapped(self.ql, Insn.v_op1.value):
+            codex_state[codex_entry] *= RealValue(0x1111)
+
+        return codex_state[codex_entry]
+
+    def _add(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "add")
+
+    def _imul(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "imul")
+
+    def _sub(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "sub")
+
+    def _xor(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "xor")
+
+    def _and(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "and")
+
+    def _or(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "or")
+
+    def _shl(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "shl")
+
+    def _shr(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "shr")
+
+    def _ror(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "ror")
+
+    def _rol(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "rol")
+
+    def _mul(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "mul")
+
+    def _not(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        return self._compute(Insn, mem_access, codex_state, "not")
+
+    def _push(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        stack_pointer = get_stack_pointer(self.ql)
+        codex_state[stack_pointer] = Insn.v_op1.clone()
+
+    def _pop(self, Insn: Instruction, mem_access: int, codex_state: CodexState):
+        stack_pointer = get_stack_pointer(self.ql)
+        reg = self.cs.reg_name(Insn.op1.reg)
+        # Delete the symbolic register
+        if reg in codex_state:
+            codex_state.delete_symbolic_var(reg)
+        # Copy the value from the stack to the register
+        if stack_pointer in codex_state:
+            codex_state[reg] = codex_state[stack_pointer]
+            codex_state.delete_symbolic_var(stack_pointer)
+            return codex_state[reg]
+
+    def validate_symbolic_memory(self, codex_state):
+        # Check if we should perform the symbolic memory check based on a random interval
+        if not self.symbolic_check:
+            return
+
+        # Create dictionaries to store intermediate values
+        symbolic_reg_and_mem_expr = {}
+
+        # Copy values from ValueBookInst to locals
+        for var_name, eval_value in ValueBookInst.items():
+            globals()[var_name] = eval_value
+
+        # Sort and filter variable names starting with "var_"
+        vars_int = sorted(
+            [var_name for var_name in codex_state if var_name.startswith("var_")]
+        )
+
+        # Evaluate and store values for the filtered variables
+        # Only register new var_ variables, not already defined in the global scope
+        for var_name in vars_int:
+            if var_name in globals():
+                continue
+            eval_value = codex_state[var_name]
+            eval_value = (
+                eval_value.sym_value
+                if isinstance(eval_value, SymValue)
+                else reformat_expression(str(eval_value))
+            )
+            if isinstance(eval_value, str) and "addrof" in eval_value:
+                return
+            globals()[var_name] = eval(str(eval_value), globals())
+
+        # Evaluate and store values for other variables
+        for var_name, eval_value in codex_state.items():
+            if not var_name.startswith("var_"):
+                eval_value = eval_value.sym_value
+                symbolic_reg_and_mem_expr[var_name] = eval(str(eval_value), globals())
+                del globals()["__builtins__"]
+
+        # Check symbolic memory values
+        for var_name, eval_value in symbolic_reg_and_mem_expr.items():
+            real_value = None
+            if var_name.startswith("mem_"):
+                real_value = read_while_ptr(self.ql, int(var_name[4:], 16))
+
+            elif (BINARY_ARCH == ARCH.X86 and var_name.startswith("e")) or (
+                BINARY_ARCH == ARCH.X86_64 and var_name.startswith("r")
+            ):
+                with contextlib.suppress(KeyError):
+                    real_value = read_while_ptr(
+                        self.ql, self.ql.arch.regs.read(var_name.upper())
+                    )
+
+            if real_value is None:
+                continue
+
+            # apply mask setted when the memory was tainted
+            if var_name in AddressBookInst:
+                real_value &= MaskBookInst[AddressBookInst[var_name]]
+
+            if eval_value != real_value:
+                # Delete the symbolic memory
+                codex_state.delete_symbolic_var(var_name)
                 log(
                     DebugLevel.ERROR,
-                    f"Exception occurred while computing memory access: {e}",
+                    f"Found a wrong symbolic memory value, deleting it: {var_name} => {hex(real_value)}"
+                    + f"\nSymbolic Computed Value : {eval_value}",
                     self.debug_level,
                     ANSIColors.ERROR,
                 )
-                raise e
+                if self.strict_symbolic_check and not var_name.startswith("mem_"):
+                    raise Exception(
+                        ANSIColors.ERROR
+                        + "Found a wrong symbolic memory value. "
+                        + "You could Disable 'strict mode' to continue the execution even with"
+                        + "some sym mistakes."
+                        + ANSIColors.ENDC
+                    )
 
-            return mem_access
+    def check_resulting_operation(self, codex_state: CodexState):
+        # Get the address of the last executed instruction
+        insn_addr = self.last_instruction_executed
+        if insn_addr is None:
+            return
 
+        # Get the instruction object for the last executed instruction
+        insn = get_instruction_from_address(self.ql, insn_addr)
 
-        def get_op_values(self, insn, mem_access):
-            """
-            Get the value of the operands.
+        # Compute memory access for the last executed instruction if not already computed
+        if self.last_mem_access is None:
+            self.last_mem_access = self.compute_mem_access(insn)
 
-            Args:
-                insn: An instruction object.
-                mem_access: A memory access object.
-
-            Returns:
-                op_values: A dictionary containing operand values.
-            """
-            op_values = {}
-            # Get the value of the operands
-            for op in insn.operands:
-                if op.type == X86_OP_REG:
-                    regname = self.cs.reg_name(op.reg)
-                    reg_value = self.ql.arch.regs.read(regname.upper())
-                    reg_ptr_value = ""
-                    if is_mapped(self.ql, reg_value):
-                        reg_ptr_value = hex(read_memory_int(self.ql, reg_value))
-                    op_values[f"{regname}"] = hex(reg_value) + " " + reg_ptr_value
-                elif op.type == X86_OP_MEM and is_mapped(self.ql, mem_access):
-                    mem_value = read_memory_int(self.ql, mem_access)
-                    op_values[f"{hex(mem_access)}"] = hex(mem_value)
-            return op_values
-
-        def show_op_values(self, insn, mem_access):
-            """
-            Display the value of the operands.
-
-            Args:
-                insn: An instruction object.
-                mem_access: A memory access object.
-
-            Returns:
-                None
-            """
-            op_values = self.get_op_values(insn, mem_access)
-            # Print the values of the operands
-            for op_name, op_value in op_values.items():
+        # Iterate through the operands of the instruction
+        for operand in insn.operands:
+            if operand.type == X86_OP_REG:
+                # If the operand is a register, retrieve and log its value
+                reg_name = self.cs.reg_name(operand.reg)
+                reg_value = hex(self.ql.arch.regs.read(reg_name.upper()))
                 log(
                     DebugLevel.DEBUG,
-                    f"{op_name} = {op_value}",
+                    f"{reg_name} => {reg_value}",
+                    self.debug_level,
+                    ANSIColors.OKBLUE,
+                )
+            elif operand.type == X86_OP_MEM and is_mapped(
+                self.ql, self.last_mem_access
+            ):
+                # If the operand is a memory location, retrieve and log its value
+                mem_value = hex(read_memory_int(self.ql, self.last_mem_access))
+                log(
+                    DebugLevel.DEBUG,
+                    f"{hex(self.last_mem_access)} => {mem_value}",
                     self.debug_level,
                     ANSIColors.OKBLUE,
                 )
 
+        # Check if the last executed instruction was symbolic
+        if self.is_last_instruction_symbolic is True:
+            return
 
-        def check_direct_addrof(self, insn, mem_access):
-            # check if the instruction is a mov or lea with a memory access that
-            # do a direct computation of the memory address
-            if insn.operands[1].mem.scale < 2 and insn.operands[1].mem.disp == 0 and insn.operands[1].mem.index == 0:
-                return False
+        # Validate symbolic memory, optionally in strict mode
+        self.validate_symbolic_memory(codex_state)
 
-            if "lea" in insn.mnemonic and is_mapped(self.ql, mem_access):
-                return True
+    def evaluate_instruction(self, mem_access, codex_state: CodexState):
+        # Get the current instruction
+        insn = get_current_instruction(self.ql)
+        insn_addr = get_instruction_address(self.ql)
 
+        if insn_addr == self.last_instruction_executed:
+            self.is_last_instruction_symbolic = False
             return False
+
+        self.check_resulting_operation(codex_state)
+
+        if self.debug_level == DebugLevel.DEBUG:
+            print("{}   {} {}".format(hex(insn_addr), insn.mnemonic, insn.op_str))
+
+        self.last_instruction_executed = insn_addr
+        self.last_mem_access = mem_access
+
+        # mem_access can be calculated from insn of directly
+        # read base, index, disp and scale from insn operands
+        if mem_access is None:
+            mem_access = self.compute_mem_access(insn)
+
+        # treat special operations
+        if insn.mnemonic.startswith("cdq"):
+            codex_state.delete_symbolic_var("rdx")
+
+        # check if the instruction is symbolic (at least one operand is symbolic)
+        # operands are symbolic when they are first tainted, then when the current operand
+        # depends on a tainted operand
+        if not self.is_symbolic_operation(mem_access, insn, codex_state):
+            self.is_last_instruction_symbolic = False
+            Insn = Instruction(insn)
+            return (Insn, self.get_op_values(insn, mem_access))
+
+        # check if the instruction is supported
+        if insn.mnemonic not in SUPPORTED_INSTRUCTIONS:
+            log(
+                DebugLevel.DEBUG,
+                f"Instruction is not supported",
+                self.debug_level,
+                ANSIColors.ERROR,
+            )
+            raise Exception(f"Instruction {insn.mnemonic} is not supported")
+
+        if self.debug_level == DebugLevel.INFO:
+            print("{}   {} {}".format(hex(insn_addr), insn.mnemonic, insn.op_str))
+
+        self.make_var_substitutions(insn, codex_state)
+
+        # Parse operands do a lot of things, like creating symbolic values, fetching values from memory
+        # All the results are stored in the Instruction object (v_op1, v_op2, v_op3)
+        Insn = self.parse_insn_operands(self.ql, insn, mem_access, codex_state)
+        resulting_operation = None
+
+        if "mov" in insn.mnemonic or insn.mnemonic.startswith("lea"):
+            resulting_operation = self._mov(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("add"):
+            resulting_operation = self._add(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("imul"):
+            resulting_operation = self._imul(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("sub"):
+            resulting_operation = self._sub(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("xor"):
+            resulting_operation = self._xor(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("and"):
+            resulting_operation = self._and(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("or"):
+            resulting_operation = self._or(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("shl"):
+            resulting_operation = self._shl(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("shr") or insn.mnemonic.startswith("sar"):
+            resulting_operation = self._shr(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("ror"):
+            resulting_operation = self._ror(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("rol"):
+            resulting_operation = self._rol(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("mul"):
+            resulting_operation = self._mul(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("not"):
+            resulting_operation = self._not(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("push"):
+            resulting_operation = self._push(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("pop"):
+            resulting_operation = self._pop(Insn, mem_access, codex_state)
+
+        elif insn.mnemonic.startswith("cmp") or insn.mnemonic.startswith("test"):
+            self.show_op_values(insn, mem_access)
+            ask_to_continue("Found a cmp or test instruction, do you want to continue?")
+
+        if resulting_operation is not None:
+            msg = resulting_operation.color.get_colored_text(
+                f"Symbolic instruction {insn.mnemonic} executed, result: {resulting_operation.sym_value}"
+            )
+            log(DebugLevel.INFO, msg, self.debug_level, ANSIColors.PURPLE)
+        else:
+            log(
+                DebugLevel.DEBUG,
+                f"Symbolic operation gives no result",
+                self.debug_level,
+                ANSIColors.PURPLE,
+            )
+            self.show_op_values(insn, mem_access)
+
+        self.is_last_instruction_symbolic = True
+        # add a new line
+        return (Insn, self.get_op_values(insn, mem_access))
+
+    def compute_mem_access(self, insn):
+        """
+        Computes the memory access from the instruction, using base, index, disp and scale.
+
+        Args:
+            insn (CsInsn): The instruction to compute memory access from.
+
+        Returns:
+            int: The computed memory access.
+        """
+        mem_access = 0
+        try:
+            for op in insn.operands:
+                if op.type == X86_OP_MEM:
+                    mem_access += (
+                        self.ql.arch.regs.read(self.cs.reg_name(op.mem.base))
+                        if op.mem.base != 0
+                        else 0
+                    )
+                    mem_access += (
+                        self.ql.arch.regs.read(self.cs.reg_name(op.mem.index))
+                        if op.mem.index != 0
+                        else 0
+                    )
+                    mem_access += op.mem.disp
+                    mem_access *= op.mem.scale if op.mem.scale > 1 else 1
+
+        except Exception as e:
+            log(
+                DebugLevel.ERROR,
+                f"Exception occurred while computing memory access: {e}",
+                self.debug_level,
+                ANSIColors.ERROR,
+            )
+            raise e
+
+        return mem_access
+
+    def get_op_values(self, insn, mem_access):
+        """
+        Get the value of the operands.
+
+        Args:
+            insn: An instruction object.
+            mem_access: A memory access object.
+
+        Returns:
+            op_values: A dictionary containing operand values.
+        """
+        op_values = {}
+        # Get the value of the operands
+        for op in insn.operands:
+            if op.type == X86_OP_REG:
+                regname = self.cs.reg_name(op.reg)
+                reg_value = self.ql.arch.regs.read(regname.upper())
+                reg_ptr_value = ""
+                if is_mapped(self.ql, reg_value):
+                    reg_ptr_value = hex(read_memory_int(self.ql, reg_value))
+                op_values[f"{regname}"] = hex(reg_value) + " " + reg_ptr_value
+            elif op.type == X86_OP_MEM and is_mapped(self.ql, mem_access):
+                mem_value = read_memory_int(self.ql, mem_access)
+                op_values[f"{hex(mem_access)}"] = hex(mem_value)
+        return op_values
+
+    def show_op_values(self, insn, mem_access):
+        """
+        Display the value of the operands.
+
+        Args:
+            insn: An instruction object.
+            mem_access: A memory access object.
+
+        Returns:
+            None
+        """
+        op_values = self.get_op_values(insn, mem_access)
+        # Print the values of the operands
+        for op_name, op_value in op_values.items():
+            log(
+                DebugLevel.DEBUG,
+                f"{op_name} = {op_value}",
+                self.debug_level,
+                ANSIColors.OKBLUE,
+            )
+
+    def check_direct_addrof(self, insn, mem_access):
+        # check if the instruction is a mov or lea with a memory access that
+        # do a direct computation of the memory address
+        if (
+            insn.operands[1].mem.scale < 2
+            and insn.operands[1].mem.disp == 0
+            and insn.operands[1].mem.index == 0
+        ):
+            return False
+
+        if "lea" in insn.mnemonic and is_mapped(self.ql, mem_access):
+            return True
+
+        return False
 
 
 class CodexSourceForge:
     pass
 
 
-
 class CodexRebirth:
-        """
-        The CodexRebirth class is responsible for managing the Codex state and providing an interface for interacting with
-        the Codex instruction engine.
+    """
+    The CodexRebirth class is responsible for managing the Codex state and providing an interface for interacting with
+    the Codex instruction engine.
 
-        :param ql_instance: The Qiling instance to use for emulation.
-        :param debug_level: The debug level to use for logging. Defaults to DebugLevel.INFO.
-        :param args: Additional arguments to pass to the CodexInstructionEngine.
-        :param kwargs: Additional keyword arguments to pass to the CodexInstructionEngine.
-        """
+    :param ql_instance: The Qiling instance to use for emulation.
+    :param debug_level: The debug level to use for logging. Defaults to DebugLevel.INFO.
+    :param args: Additional arguments to pass to the CodexInstructionEngine.
+    :param kwargs: Additional keyword arguments to pass to the CodexInstructionEngine.
+    """
 
-        def __init__(self, ql_instance, debug_level=DebugLevel.INFO, *args, **kwargs):
-            # Set the debug level and create a CodexState instance
-            self.debug_level = debug_level
-            self.codex_state = CodexState()
+    def __init__(self, ql_instance, debug_level=DebugLevel.INFO, *args, **kwargs):
+        # Set the debug level and create a CodexState instance
+        self.debug_level = debug_level
+        self.codex_state = CodexState()
 
-            # Store the Qiling instance
-            self.ql = ql_instance
+        # Store the Qiling instance
+        self.ql = ql_instance
 
-            # Check if the architecture is 32-bit or 64-bit
-            if ql_instance.arch.type == QL_ARCH.X8664:
-                self.cs = Cs(CS_ARCH_X86, CS_MODE_64)
-                self.ks = Ks(KS_ARCH_X86, KS_MODE_64)
-                self.instruction_engine = CodexInstructionEngineX86_64(ql_instance, debug_level, *args, **kwargs)
-            elif ql_instance.arch.type == QL_ARCH.X86:
-                self.cs = Cs(CS_ARCH_X86, CS_MODE_32)
-                self.ks = Ks(KS_ARCH_X86, KS_MODE_32)
-                self.instruction_engine = CodexInstructionEngineX86_64(ql_instance, debug_level, *args, **kwargs)
-        
+        # Check if the architecture is 32-bit or 64-bit
+        if ql_instance.arch.type == QL_ARCH.X8664:
+            self.cs = Cs(CS_ARCH_X86, CS_MODE_64)
+            self.ks = Ks(KS_ARCH_X86, KS_MODE_64)
+            self.instruction_engine = CodexInstructionEngineX86_64(
+                ql_instance, debug_level, *args, **kwargs
+            )
+        elif ql_instance.arch.type == QL_ARCH.X86:
+            self.cs = Cs(CS_ARCH_X86, CS_MODE_32)
+            self.ks = Ks(KS_ARCH_X86, KS_MODE_32)
+            self.instruction_engine = CodexInstructionEngineX86_64(
+                ql_instance, debug_level, *args, **kwargs
+            )
 
-            # Find the base and end address of the text section
-            self.text_base = ql_instance.loader.images[0].base
-            self.text_end = ql_instance.loader.images[0].end
+        # Find the base and end address of the text section
+        self.text_base = ql_instance.loader.images[0].base
+        self.text_end = ql_instance.loader.images[0].end
 
-            # Create an empty dictionary for callbacks
-            self.callbacks = {}
+        # Create an empty dictionary for callbacks
+        self.callbacks = {}
 
-            # Initialize start and end addresses for emulation
-            self.addr_emu_start = None
-            self.addr_emu_end = None
+        # Initialize start and end addresses for emulation
+        self.addr_emu_start = None
+        self.addr_emu_end = None
 
-            # Allow exporting the address book and codex dump
-            self.address_book = AddressBookInst
-            
-            # Allow exporting the TraceInst
-            self.trace_inst = TraceInst
+        # Allow exporting the address book and codex dump
+        self.address_book = AddressBookInst
 
-            # Initialize the count of executed instructions
-            self.insn_executed_count = 0
+        # Allow exporting the TraceInst
+        self.trace_inst = TraceInst
 
-        def check_instruction_scope(self, ql):
-            if ql.arch.type == QL_ARCH.X8664:
-                pc = ql.arch.regs.rip
+        # Initialize the count of executed instructions
+        self.insn_executed_count = 0
+
+    def check_instruction_scope(self, ql):
+        if ql.arch.type == QL_ARCH.X8664:
+            pc = ql.arch.regs.rip
+        else:
+            pc = ql.arch.regs.eip
+
+        if pc < self.text_base or pc >= self.text_end:
+            return False
+        return True
+
+    def display_register_stack_dump(self):
+        # Display register values
+        print("Register Values:")
+        for reg_id in CS_UC_REGS.keys():
+            reg_name = self.cs.reg_name(reg_id)
+            with suppress(Exception):
+                reg_value = self.ql.arch.regs.read(reg_name)
+                print(f"{reg_name}= 0x{reg_value:016X}")
+
+        # Display stack values from the current stack pointer
+        print("Stack Values:")
+        pc = get_instruction_address(self.ql)
+        for i in range(0, 0x200, 8):
+            offset = pc - i
+            with suppress(Exception):
+                stack_value = read_memory_int(self.ql, offset)
+                print(f"{hex(offset)} = 0x{stack_value:016X}")
+
+    def register_callback(self, address: int, fn: callable):
+        assert isinstance(address, int)
+        assert callable(fn)
+        self.callbacks[address] = fn
+
+    def taint_memory(self, address: int, name: str, value: int, mask=BINARY_MAX_MASK):
+        assert (
+            isinstance(address, int)
+            and isinstance(name, str)
+            and isinstance(value, int)
+            and isinstance(mask, int)
+        )
+        self.codex_state.new_symbolic_memory(address, name)
+        self.set_var_name(address, name)
+        self.set_var_value(name, value)
+        self.set_mask(name, mask)
+
+    def taint_register(self, reg: str, name: str, value: int, mask=BINARY_MAX_MASK):
+        assert (
+            isinstance(reg, str)
+            and isinstance(name, str)
+            and isinstance(value, int)
+            and isinstance(mask, int)
+        )
+        self.codex_state.new_symbolic_register(reg)
+        self.set_var_name(reg, name)
+        self.set_var_value(name, value)
+        self.set_mask(name, mask)
+
+    def memory_write_hook(
+        self, ql: Qiling, access: int, address: int, size: int, value: int
+    ):
+        assert access == UC_MEM_WRITE
+        # process instruction only if it is in the text section
+        if not self.check_instruction_scope(ql):
+            return
+
+        insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
+        result = self.instruction_engine.evaluate_instruction(address, self.codex_state)
+        if isinstance(result, tuple):
+            Insn, op_values = result
+            return TraceInst.register(
+                insn_addr, Insn, self.insn_executed_count, True, op_values
+            )
+
+    def memory_read_hook(
+        self, ql: Qiling, access: int, address: int, size: int, value: int
+    ):
+        assert access == UC_MEM_READ
+        # process instruction only if it is in the text section
+        if not self.check_instruction_scope(ql):
+            return
+
+        insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
+        result = self.instruction_engine.evaluate_instruction(address, self.codex_state)
+        if isinstance(result, tuple):
+            Insn, op_values = result
+            return TraceInst.register(
+                insn_addr, Insn, self.insn_executed_count, True, op_values
+            )
+
+    def code_execution_hook(self, ql: Qiling, address: int, size):
+        # Increment the instruction executed count
+        self.insn_executed_count += 1
+
+        # Get the current instruction and its address
+        insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
+
+        # Check if there's a registered callback for the current address
+        if insn_addr in self.callbacks:
+            # Execute the callback with the Qiling instance as an argument
+            self.callbacks[insn_addr](self)
+
+        # Check if the instruction is a call instruction
+        if insn.mnemonic.startswith("call"):
+            # Get the address of the function being called
+            if insn.operands[0].type == X86_OP_IMM:
+                fn_addr = insn.operands[0].imm
+                if fn_addr in self.callbacks:
+                    # Execute the callback associated with the function address
+                    self.callbacks[fn_addr](ql)
+
+        # Check if the instruction is within the text section
+        if not self.check_instruction_scope(ql):
+            log(
+                DebugLevel.DEBUG,
+                f"Instruction not in text section {hex(insn_addr)}",
+                self.debug_level,
+                ANSIColors.ERROR,
+            )
+            Insn = Instruction(insn)
+            return TraceInst.register(
+                insn_addr,
+                Insn,
+                False,
+                self.insn_executed_count,
+                self.instruction_engine.get_op_values(insn, None),
+            )
+
+        # Check if we have reached the user-defined end address for emulation
+        if insn_addr == self.addr_emu_end:
+            log(
+                DebugLevel.INFO,
+                f"Reached end of emulation",
+                self.debug_level,
+                ANSIColors.OKGREEN,
+            )
+            return
+
+        # If the instruction involves memory access, delegate to dedicated functions (mem_read, mem_write)
+        if check_memory_access(insn):
+            return
+
+        # Evaluate the instruction with the current codex state
+        result = self.instruction_engine.evaluate_instruction(None, self.codex_state)
+        if isinstance(result, tuple):
+            Insn, op_values = result
+            return TraceInst.register(
+                insn_addr, Insn, self.insn_executed_count, True, op_values
+            )
+
+    def set_emu_start(self, address: int):
+        self.addr_emu_start = address
+
+    def set_emu_end(self, address: int):
+        self.addr_emu_end = address
+
+    def set_register(self, register: str, value: int):
+        self.ql.arch.regs.write(register, value)
+
+    def get_register(self, register: str):
+        return self.ql.arch.regs.read(register)
+
+    def set_memory(self, address: int, value: bytes):
+        assert isinstance(value, bytes)
+        self.ql.mem.write(address, value)
+
+    def set_var_name(self, addr_or_reg, name: str):
+        # real_name can be a register or a memory address
+        if isinstance(addr_or_reg, int):
+            AddressBookInst["mem_{}".format(hex(addr_or_reg))] = name
+        else:
+            AddressBookInst[addr_or_reg] = name
+
+    def set_var_value(self, name, value: int):
+        ValueBookInst[name] = value
+
+    def set_mask(self, name, mask: int):
+        MaskBookInst[name] = mask
+
+    def show_codex(self):
+        print(self.codex_state)
+
+    def run_emulation(self):
+        # Configure the disassembler for detailed information
+        disassembler = self.ql.arch.disassembler
+        disassembler.detail = True
+
+        # Set up memory read, memory write, and code hooks
+        self.ql.hook_mem_read(self.memory_read_hook)
+        self.ql.hook_mem_write(self.memory_write_hook)
+        self.ql.hook_code(self.code_execution_hook)
+
+        # Display register and stack dump before emulation starts
+        self.display_register_stack_dump()
+
+        # Start measuring emulation time
+        start_time = time.time()
+
+        try:
+            # Start Qiling engine emulation within the specified address range
+            if self.addr_emu_start and self.addr_emu_end:
+                self.ql.run(self.addr_emu_start, self.addr_emu_end)
+            elif self.addr_emu_start:
+                self.ql.run(self.addr_emu_start)
             else:
-                pc = ql.arch.regs.eip
+                self.ql.run()
 
-            if pc < self.text_base or pc >= self.text_end:
-                return False
-            return True
-        
-        def display_register_stack_dump(self):
-            # Display register values
-            print("Register Values:")
-            for reg_id in CS_UC_REGS.keys():
-                reg_name = self.cs.reg_name(reg_id)
-                with suppress(Exception):
-                    reg_value = self.ql.arch.regs.read(reg_name)
-                    print(f"{reg_name}= 0x{reg_value:016X}")
+        except unicorn.UcError as e:
+            log(
+                DebugLevel.ERROR,
+                f"Exception occurred while emulating: {str(e)}",
+                self.debug_level,
+                ANSIColors.ERROR,
+            )
 
-            # Display stack values from the current stack pointer
-            print("Stack Values:")
-            pc = get_instruction_address(self.ql)
-            for i in range(0, 0x200, 8):
-                offset = pc - i
-                with suppress(Exception):
-                    stack_value = read_memory_int(self.ql, offset)
-                    print(f"{hex(offset)} = 0x{stack_value:016X}")
+        end_time = time.time()
+        emulation_time = end_time - start_time
+        instructions_per_second = self.insn_executed_count / emulation_time
 
-        def register_callback(self, address: int, fn: callable):
-            assert isinstance(address, int)
-            assert callable(fn)
-            self.callbacks[address] = fn
-
-        def taint_memory(self, address: int, name: str, value: int, mask=BINARY_MAX_MASK):
-            assert isinstance(address, int) and isinstance(name, str) and isinstance(value, int) and isinstance(mask, int)
-            self.codex_state.new_symbolic_memory(address, name)
-            self.set_var_name(address, name)
-            self.set_var_value(name, value)
-            self.set_mask(name, mask)
-
-        def taint_register(self, reg: str, name: str, value: int, mask=BINARY_MAX_MASK):
-            assert isinstance(reg, str) and isinstance(name, str) and isinstance(value, int) and isinstance(mask, int)
-            self.codex_state.new_symbolic_register(reg)
-            self.set_var_name(reg, name)
-            self.set_var_value(name, value)
-            self.set_mask(name, mask)
-
-        def memory_write_hook(self, ql: Qiling, access: int, address: int, size: int, value: int):
-            assert access == UC_MEM_WRITE
-            # process instruction only if it is in the text section
-            if not self.check_instruction_scope(ql):
-                return
-
-            insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
-            result = self.instruction_engine.evaluate_instruction(address, self.codex_state)
-            if isinstance(result, tuple):
-                Insn, op_values = result
-                return TraceInst.register(insn_addr, Insn, self.insn_executed_count, True, op_values)
-
-        def memory_read_hook(self, ql: Qiling, access: int, address: int, size: int, value: int):
-            assert access == UC_MEM_READ
-            # process instruction only if it is in the text section
-            if not self.check_instruction_scope(ql):
-                return
-            
-            insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
-            result = self.instruction_engine.evaluate_instruction(address, self.codex_state)
-            if isinstance(result, tuple):
-                Insn, op_values = result
-                return TraceInst.register(insn_addr, Insn, self.insn_executed_count, True, op_values)
-
-        def code_execution_hook(self, ql: Qiling, address: int, size):
-            # Increment the instruction executed count
-            self.insn_executed_count += 1
-
-            # Get the current instruction and its address
-            insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
-
-
-            # Check if there's a registered callback for the current address
-            if insn_addr in self.callbacks:
-                # Execute the callback with the Qiling instance as an argument
-                self.callbacks[insn_addr](self)
-
-            # Check if the instruction is a call instruction
-            if insn.mnemonic.startswith("call"):
-                # Get the address of the function being called
-                if insn.operands[0].type == X86_OP_IMM:
-                    fn_addr = insn.operands[0].imm
-                    if fn_addr in self.callbacks:
-                        # Execute the callback associated with the function address
-                        self.callbacks[fn_addr](ql)
-
-            # Check if the instruction is within the text section
-            if not self.check_instruction_scope(ql):
-                log(
-                    DebugLevel.DEBUG,
-                    f"Instruction not in text section {hex(insn_addr)}",
-                    self.debug_level,
-                    ANSIColors.ERROR,
-                )
-                Insn = Instruction(insn)
-                return TraceInst.register(insn_addr, Insn, False, self.insn_executed_count, self.instruction_engine.get_op_values(insn, None))
-
-            # Check if we have reached the user-defined end address for emulation
-            if insn_addr == self.addr_emu_end:
-                log(
-                    DebugLevel.INFO,
-                    f"Reached end of emulation",
-                    self.debug_level,
-                    ANSIColors.OKGREEN,
-                )
-                return
-
-            # If the instruction involves memory access, delegate to dedicated functions (mem_read, mem_write)
-            if check_memory_access(insn):
-                return
-
-            # Evaluate the instruction with the current codex state
-            result = self.instruction_engine.evaluate_instruction(None, self.codex_state)
-            if isinstance(result, tuple):
-                Insn, op_values = result
-                return TraceInst.register(insn_addr, Insn, self.insn_executed_count, True, op_values)
-            
-        def set_emu_start(self, address: int):
-            self.addr_emu_start = address
-
-        def set_emu_end(self, address: int):
-            self.addr_emu_end = address
-
-        def set_register(self, register: str, value: int):
-            self.ql.arch.regs.write(register, value)
-            
-        def get_register(self, register: str):
-            return self.ql.arch.regs.read(register)
-
-        def set_memory(self, address: int, value: bytes):
-            assert isinstance(value, bytes)
-            self.ql.mem.write(address, value)
-
-        def set_var_name(self, addr_or_reg, name: str):
-            # real_name can be a register or a memory address
-            if isinstance(addr_or_reg, int):
-                AddressBookInst["mem_{}".format(hex(addr_or_reg))] = name
-            else:
-                AddressBookInst[addr_or_reg] = name
-
-        def set_var_value(self, name, value: int):
-            ValueBookInst[name] = value
-            
-        def set_mask(self, name, mask: int):
-            MaskBookInst[name] = mask
-
-        def show_codex(self):
-            print(self.codex_state)
-
-        def run_emulation(self):
-            # Configure the disassembler for detailed information
-            disassembler = self.ql.arch.disassembler
-            disassembler.detail = True
-
-            # Set up memory read, memory write, and code hooks
-            self.ql.hook_mem_read(self.memory_read_hook)
-            self.ql.hook_mem_write(self.memory_write_hook)
-            self.ql.hook_code(self.code_execution_hook)
-
-            # Display register and stack dump before emulation starts
-            self.display_register_stack_dump()
-
-            # Start measuring emulation time
-            start_time = time.time()
-
-            try:
-                # Start Qiling engine emulation within the specified address range
-                if self.addr_emu_start and self.addr_emu_end:
-                    self.ql.run(self.addr_emu_start, self.addr_emu_end)
-                elif self.addr_emu_start:
-                    self.ql.run(self.addr_emu_start)
-                else:
-                    self.ql.run()
-
-            except unicorn.UcError as e:
-                log(
-                    DebugLevel.ERROR,
-                    f"Exception occurred while emulating: {str(e)}",
-                    self.debug_level,
-                    ANSIColors.ERROR,
-                )
-
-            end_time = time.time()
-            emulation_time = end_time - start_time
-            instructions_per_second = self.insn_executed_count / emulation_time
-
-            # Create a separator line for output formatting
-            separator_line = "=" * 80
-            output = textwrap.dedent(
-                f"""
+        # Create a separator line for output formatting
+        separator_line = "=" * 80
+        output = textwrap.dedent(
+            f"""
             {separator_line}
             Emulation time: {emulation_time:.1f} seconds
             {self.insn_executed_count} instructions executed
             Instructions per second: {instructions_per_second:.1f}
             {separator_line}
             """
-            )
+        )
 
-            # Log emulation results
-            log(DebugLevel.ERROR, output, self.debug_level, ANSIColors.OKGREEN)
-            log(
-                DebugLevel.INFO,
-                f"Emulation finished",
-                self.debug_level,
-                ANSIColors.OKGREEN,
-            )
-            log(
-                DebugLevel.INFO,
-                f"Validating and dumping codex",
-                self.debug_level,
-                ANSIColors.OKGREEN,
-            )
+        # Log emulation results
+        log(DebugLevel.ERROR, output, self.debug_level, ANSIColors.OKGREEN)
+        log(
+            DebugLevel.INFO,
+            f"Emulation finished",
+            self.debug_level,
+            ANSIColors.OKGREEN,
+        )
+        log(
+            DebugLevel.INFO,
+            f"Validating and dumping codex",
+            self.debug_level,
+            ANSIColors.OKGREEN,
+        )
 
-            # Pause for 2 seconds
-            time.sleep(2)
+        # Pause for 2 seconds
+        time.sleep(2)
 
-            # Validate symbolic memory and codex
-            self.instruction_engine.validate_symbolic_memory(self.codex_state)
+        # Validate symbolic memory and codex
+        self.instruction_engine.validate_symbolic_memory(self.codex_state)
 
-            return True
-
-
+        return True
