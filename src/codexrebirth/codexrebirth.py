@@ -31,9 +31,8 @@ from z3 import (
     Extract,
     set_option,
     simplify,
-    RotateRight,
-    RotateLeft,
 )
+import z3
 import sys
 import time
 import itertools
@@ -304,13 +303,14 @@ def binary_subtraction(X, Y):
     result = (X + Y_complement) & BINARY_MAX_MASK
     return result
 
-
+# Must only be used with 'eval' function to evaluate the expression
 def RotateLeft(x, n):
-    return ((x << n) | (x >> (BINARY_ARCH_SIZE//8 - n))) & BINARY_MAX_MASK
+    return ((x << n) | (x >> (BINARY_ARCH_SIZE - n))) & BINARY_MAX_MASK
 
 
+# Must only be used with 'eval' function to evaluate the expression
 def RotateRight(x, n):
-    return ((x >> n) | (x << (BINARY_ARCH_SIZE//8 - n))) & BINARY_MAX_MASK
+    return ((x >> n) | (x << (BINARY_ARCH_SIZE - n))) & BINARY_MAX_MASK
 
 
 def read_memory_int(ql, address):
@@ -619,12 +619,12 @@ class RealValue:
 
     def ror(self, other):
         other = other.clone()
-        other.sym_value.value = RotateRight(other.sym_value.value, self.sym_value.value)
+        other.sym_value.value = z3.RotateRight(other.sym_value.value, self.sym_value.value)
         return other
 
     def rol(self, other):
         other = other.clone()
-        other.sym_value.value = RotateLeft(other.sym_value.value, self.sym_value.value)
+        other.sym_value.value = z3.RotateLeft(other.sym_value.value, self.sym_value.value)
         return other
 
     def _not(self):
@@ -711,11 +711,11 @@ class SymMemory(SymValue):
         return self
 
     def ror(self, other):
-        self.sym_value.value = RotateRight(self.sym_value.value, other.sym_value.value)
+        self.sym_value.value = z3.RotateRight(self.sym_value.value, other.sym_value.value)
         return self
 
     def rol(self, other):
-        self.sym_value.value = RotateLeft(self.sym_value.value, other.sym_value.value)
+        self.sym_value.value = z3.RotateLeft(self.sym_value.value, other.sym_value.value)
         return self
 
     def _not(self):
@@ -876,10 +876,10 @@ class SymRegister(SymValue):
         return self.update(self.sym_value)
 
     def ror(self, other):
-        return self.update(_SymValue(RotateRight(self.sym_value.value, other.sym_value.value)))
+        return self.update(_SymValue(z3.RotateRight(self.sym_value.value, other.sym_value.value)))
 
     def rol(self, other):
-        return self.update(_SymValue(RotateLeft(self.sym_value.value, other.sym_value.value)))
+        return self.update(_SymValue(z3.RotateLeft(self.sym_value.value, other.sym_value.value)))
 
     def _not(self):
         self.sym_value.value = ~self.sym_value.value & BINARY_MAX_MASK
@@ -1941,13 +1941,15 @@ class CodexRebirth:
             assert callable(fn)
             self.callbacks[address] = fn
 
-        def taint_memory(self, address: int, name, value: int, mask=BINARY_MAX_MASK):
+        def taint_memory(self, address: int, name: str, value: int, mask=BINARY_MAX_MASK):
+            assert isinstance(address, int) and isinstance(name, str) and isinstance(value, int) and isinstance(mask, int)
             self.codex_state.new_symbolic_memory(address, name)
             self.set_var_name(address, name)
             self.set_var_value(name, value)
             self.set_mask(name, mask)
 
-        def taint_register(self, reg: str, name, value: int, mask=BINARY_MAX_MASK):
+        def taint_register(self, reg: str, name: str, value: int, mask=BINARY_MAX_MASK):
+            assert isinstance(reg, str) and isinstance(name, str) and isinstance(value, int) and isinstance(mask, int)
             self.codex_state.new_symbolic_register(reg)
             self.set_var_name(reg, name)
             self.set_var_value(name, value)
@@ -2038,9 +2040,12 @@ class CodexRebirth:
 
         def set_register(self, register: str, value: int):
             self.ql.arch.regs.write(register, value)
+            
+        def get_register(self, register: str):
+            return self.ql.arch.regs.read(register)
 
-        def set_memory(self, address: int, value: bytearray):
-            assert isinstance(value, bytearray)
+        def set_memory(self, address: int, value: bytes):
+            assert isinstance(value, bytes)
             self.ql.mem.write(address, value)
 
         def set_var_name(self, addr_or_reg, name: str):

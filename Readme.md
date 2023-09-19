@@ -28,6 +28,7 @@ Check the examples in this order:
 - examples/tigress/siphash24
 - examples/tigress/mix2, examples of variable destruction
 - examples/tigress/indirect_load, an example of indirect variable loading
+- examples/tigress/sample14, long string input of size 48, function is not obfuscated
 
 ## Key Points for Usage
 

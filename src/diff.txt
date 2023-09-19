@@ -1,0 +1,157 @@
+diff --git a/Readme.md b/Readme.md
+index ef7f54a..49f9f01 100644
+--- a/Readme.md
++++ b/Readme.md
+@@ -28,6 +28,7 @@ Check the examples in this order:
+ - examples/tigress/siphash24
+ - examples/tigress/mix2, examples of variable destruction
+ - examples/tigress/indirect_load, an example of indirect variable loading
++- examples/tigress/sample14, long string input of size 48, function is not obfuscated
+ 
+ ## Key Points for Usage
+ 
+diff --git a/examples/tigress/solves/result/Mix.md b/examples/tigress/solves/result/Mix.md
+deleted file mode 100644
+index ba2c854..0000000
+--- a/examples/tigress/solves/result/Mix.md
++++ /dev/null
+@@ -1,3786 +0,0 @@
+-Output 1 
+-
+-
+-
+-
+-
+-
+-
+-```
+-1:45:17  rbp => 0x80000000ddf8
+-
+-11:45:17  0x80000000ddf0 => 0xc6ecf67690fc3d6e
+-0x55555555598b   cmp rax, qword ptr [rbp - 0x18]
+-11:45:17  Symbolic register found in rax => 0xc6ecf67690fc1fd6 ^ var_00002
+-11:45:17  rax = 0xc6ecf67690fc3d6e 
+-11:45:17  0x80000000dde0 = 0x1234567ab13ef57
+-``
+\ No newline at end of file
+diff --git a/examples/tigress/solves/run/sipash24.py b/examples/tigress/solves/run/sipash24.py
+index 0bdae3b..a4255ff 100644
+--- a/examples/tigress/solves/run/sipash24.py
++++ b/examples/tigress/solves/run/sipash24.py
+@@ -20,7 +20,7 @@ if __name__ == "__main__":
+     # we disable strict_symbolic_check because we want to run the emulation even if we find a 
+     # incorrect symbolic value
+     # But in case of debugging, you should enable it and also set symbolic_check_interval to a low value
+-    c0dex = CodexRebirth(ql, debug_level,  strict_symbolic_check=False, symbolic_check = False)
++    c0dex = CodexRebirth(ql, debug_level,  strict_symbolic_check=False)
+     c0dex.set_register("rdi", 9888)
+     c0dex.taint_register("rdi",  "num", 9888)
+     
+diff --git a/src/codexrebirth/codexrebirth.py b/src/codexrebirth/codexrebirth.py
+index a078a57..9730cdc 100644
+--- a/src/codexrebirth/codexrebirth.py
++++ b/src/codexrebirth/codexrebirth.py
+@@ -31,9 +31,8 @@ from z3 import (
+     Extract,
+     set_option,
+     simplify,
+-    RotateRight,
+-    RotateLeft,
+ )
++import z3
+ import sys
+ import time
+ import itertools
+@@ -304,13 +303,14 @@ def binary_subtraction(X, Y):
+     result = (X + Y_complement) & BINARY_MAX_MASK
+     return result
+ 
+-
++# Must only be used with 'eval' function to evaluate the expression
+ def RotateLeft(x, n):
+-    return ((x << n) | (x >> (BINARY_ARCH_SIZE//8 - n))) & BINARY_MAX_MASK
++    return ((x << n) | (x >> (BINARY_ARCH_SIZE - n))) & BINARY_MAX_MASK
+ 
+ 
++# Must only be used with 'eval' function to evaluate the expression
+ def RotateRight(x, n):
+-    return ((x >> n) | (x << (BINARY_ARCH_SIZE//8 - n))) & BINARY_MAX_MASK
++    return ((x >> n) | (x << (BINARY_ARCH_SIZE - n))) & BINARY_MAX_MASK
+ 
+ 
+ def read_memory_int(ql, address):
+@@ -619,12 +619,12 @@ class RealValue:
+ 
+     def ror(self, other):
+         other = other.clone()
+-        other.sym_value.value = RotateRight(other.sym_value.value, self.sym_value.value)
++        other.sym_value.value = z3.RotateRight(other.sym_value.value, self.sym_value.value)
+         return other
+ 
+     def rol(self, other):
+         other = other.clone()
+-        other.sym_value.value = RotateLeft(other.sym_value.value, self.sym_value.value)
++        other.sym_value.value = z3.RotateLeft(other.sym_value.value, self.sym_value.value)
+         return other
+ 
+     def _not(self):
+@@ -711,11 +711,11 @@ class SymMemory(SymValue):
+         return self
+ 
+     def ror(self, other):
+-        self.sym_value.value = RotateRight(self.sym_value.value, other.sym_value.value)
++        self.sym_value.value = z3.RotateRight(self.sym_value.value, other.sym_value.value)
+         return self
+ 
+     def rol(self, other):
+-        self.sym_value.value = RotateLeft(self.sym_value.value, other.sym_value.value)
++        self.sym_value.value = z3.RotateLeft(self.sym_value.value, other.sym_value.value)
+         return self
+ 
+     def _not(self):
+@@ -876,10 +876,10 @@ class SymRegister(SymValue):
+         return self.update(self.sym_value)
+ 
+     def ror(self, other):
+-        return self.update(_SymValue(RotateRight(self.sym_value.value, other.sym_value.value)))
++        return self.update(_SymValue(z3.RotateRight(self.sym_value.value, other.sym_value.value)))
+ 
+     def rol(self, other):
+-        return self.update(_SymValue(RotateLeft(self.sym_value.value, other.sym_value.value)))
++        return self.update(_SymValue(z3.RotateLeft(self.sym_value.value, other.sym_value.value)))
+ 
+     def _not(self):
+         self.sym_value.value = ~self.sym_value.value & BINARY_MAX_MASK
+@@ -1941,13 +1941,15 @@ class CodexRebirth:
+             assert callable(fn)
+             self.callbacks[address] = fn
+ 
+-        def taint_memory(self, address: int, name, value: int, mask=BINARY_MAX_MASK):
++        def taint_memory(self, address: int, name: str, value: int, mask=BINARY_MAX_MASK):
++            assert isinstance(address, int) and isinstance(name, str) and isinstance(value, int) and isinstance(mask, int)
+             self.codex_state.new_symbolic_memory(address, name)
+             self.set_var_name(address, name)
+             self.set_var_value(name, value)
+             self.set_mask(name, mask)
+ 
+-        def taint_register(self, reg: str, name, value: int, mask=BINARY_MAX_MASK):
++        def taint_register(self, reg: str, name: str, value: int, mask=BINARY_MAX_MASK):
++            assert isinstance(reg, str) and isinstance(name, str) and isinstance(value, int) and isinstance(mask, int)
+             self.codex_state.new_symbolic_register(reg)
+             self.set_var_name(reg, name)
+             self.set_var_value(name, value)
+@@ -2038,9 +2040,12 @@ class CodexRebirth:
+ 
+         def set_register(self, register: str, value: int):
+             self.ql.arch.regs.write(register, value)
++            
++        def get_register(self, register: str):
++            return self.ql.arch.regs.read(register)
+ 
+-        def set_memory(self, address: int, value: bytearray):
+-            assert isinstance(value, bytearray)
++        def set_memory(self, address: int, value: bytes):
++            assert isinstance(value, bytes)
+             self.ql.mem.write(address, value)
+ 
+         def set_var_name(self, addr_or_reg, name: str):
