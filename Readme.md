@@ -7,7 +7,7 @@ The CodexRebirth project aims to simplify the reverse engineering of obfuscated 
 CodexRebirth has two modes of operation:
 
 - Command line
-- IDA Plugin
+- IDA Plugin (Not yet available)
 
 Using the IDA plugin is recommended as it greatly facilitates the analysis setup and allows for more efficient result examination. It helps navigate effectively to trace the path.
 
