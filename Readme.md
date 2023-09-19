@@ -15,7 +15,9 @@ Using the IDA plugin is recommended as it greatly facilitates the analysis setup
 
 ```bash
 git clone git@github.com:AntoineBlaud/TheCodexRebirth.git
-cd TheCodexRebirth/build & python3 setup.py install
+cd TheCodexRebirth/src
+python3 setup.py sdist bdist_wheel 
+pip3 install . 
 ```
 
 ## USAGE
