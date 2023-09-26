@@ -5,7 +5,14 @@ The CodexRebirth project aims to simplify the reverse engineering of obfuscated 
 With the IDA plugin, the program segments are automatically mapped in qiling, so you will have a exact copy of the program in memory. The plugin will then automatically set the registers and memory to the values of the registers and memory at the beginning of the function to analyze. It will then execute the function and analyze the instructions one by one. After that you can navigate through the results. 
 
 
+#### IDA Plugin Result View:
+
 ![ida_plugin](./doc/imgs/ida_plugin.gif)
+
+
+#### Command Line Result View:
+
+![command_line](./doc/imgs/command_line.png)
 
 **If you are looking at this project out of curiosity, I suggest trying to understand the algorithm protected by Tigress in the `examples/tigress/src-tigress-protected` directory, or even better, attempting to do so from the compiled version. The purpose of this project is precisely to combat this kind of protection.**
 
@@ -71,7 +78,7 @@ Check the examples in this order:
 
 - Having `symbolic_check` disabled allow to speed up execution to 2500 instructions per second instead of 340 (metrics obtained with Python 3.11 and a CPU Ryzen 5900HX 3.3GHz-4.6GHz)
 
-- The CodexRebirth library is slower when running in IDA. According to the tests, it's **5 times slower** than in my wsl instance. 
+- The CodexRebirth library is slower when running in IDA. According to the tests, it's **5 times slower** than on my WSL instance. 
 
 - For memory strings, you should use `taint_memory` with a byte step size of 1 or `sizeof(int)` depending on their usage. If the string is read by moving 4 or 8 bytes at a time, and you set the memory step size to 1, it will not work correctly. Have a look on the `examples/ida_plugin/controller_template.py` function `taint_memory_with_string` for a good starting point.
 
