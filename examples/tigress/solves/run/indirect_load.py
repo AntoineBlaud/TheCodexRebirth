@@ -5,7 +5,7 @@ from superglobals import setglobal
 import sys 
 
 setglobal('BINARY_ARCH', 'x64')
-from codexrebirth import CodexRebirth, DebugLevel
+from codexrebirth.core import CodexRebirth, DebugLevel
 
 
 ##############################################################################################
@@ -24,5 +24,5 @@ if __name__ == "__main__":
     c0dex.set_emu_start(0x000055555555516C)
     c0dex.run_emulation()
     
-    print(c0dex.codex_state)
+    print(c0dex.state)
    

@@ -5,7 +5,7 @@ from superglobals import setglobal
 import sys 
 
 setglobal('BINARY_ARCH', 'x64')
-from codexrebirth import CodexRebirth, DebugLevel
+from codexrebirth.core import CodexRebirth, DebugLevel
 
 ##############################################################################################
 # IMPORTANT: address depend of you system, you need to change the address and disable aslr 
@@ -78,5 +78,5 @@ if __name__ == "__main__":
    
     c0dex.run_emulation()
     
-    print(c0dex.codex_state)
+    print(c0dex.state)
    

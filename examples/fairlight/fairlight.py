@@ -7,7 +7,7 @@ from sys import argv
 # Set global variable 'BINARY_ARCH' to 2
 setglobal('BINARY_ARCH', "x64")
 
-from codexrebirth import CodexRebirth, DebugLevel
+from codexrebirth.core import CodexRebirth, DebugLevel
 
 ##############################################################################################
 # IMPORTANT: address depend of you system, you need to change the address and disable aslr 
@@ -176,4 +176,4 @@ register(codex, "secret_valueBB")
 codex.run_emulation()
 
 # Print the CodexRebirth state
-print(codex.codex_state)
+print(codex.state)

@@ -15,6 +15,8 @@ setup(
         'unicorn',
         'qiling',
         'keystone-engine',
-        'z3-solver'
+        'z3-solver',
+        'superglobals',
+        "easygui"
     ]
 )    

@@ -5,7 +5,7 @@ from superglobals import setglobal
 import sys 
 
 setglobal('BINARY_ARCH', 'x64')
-from codexrebirth import *
+from codexrebirth.core import *
 
 ##############################################################################################
 # IMPORTANT: address depend of you system, you need to change the address and disable aslr 
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # we disable strict_symbolic_check because we want to run the emulation even if we find a 
     # incorrect symbolic value
     # But in case of debugging, you should enable it and also set symbolic_check_interval to a low value
-    c0dex = CodexRebirth(ql, debug_level,  strict_symbolic_check=False)
+    c0dex = CodexRebirth(ql, debug_level, symbolic_check=False, strict_symbolic_check=False)
     c0dex.set_register("rdi", 9888)
     c0dex.taint_register("rdi",  "num", 9888)
     
@@ -29,6 +29,6 @@ if __name__ == "__main__":
    
     c0dex.run_emulation()
     
-    print(c0dex.codex_state)
+    print(c0dex.state)
    
    
