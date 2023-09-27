@@ -17,6 +17,7 @@ setup(
         'keystone-engine',
         'z3-solver',
         'superglobals',
-        "easygui"
+        "easygui",
+        "python3-tk"
     ]
 )    
