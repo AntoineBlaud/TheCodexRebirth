@@ -18,6 +18,5 @@ setup(
         'z3-solver',
         'superglobals',
         "easygui",
-        "python3-tk"
     ]
 )    

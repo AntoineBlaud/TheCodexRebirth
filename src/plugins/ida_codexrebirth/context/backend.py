@@ -200,8 +200,11 @@ class CodexRebirthBackendContext:
         for start, end, size, name in to_map:
             print(hex(start), hex(end), hex(size), name)
             ql.mem.map(start, size)
-            data = ida_bytes.get_bytes(start, size)
-            ql.mem.write(start, data)
+            if abs(size) < 0xFFFFFF:
+                data = ida_bytes.get_bytes(start, size)
+                ql.mem.write(start, data)
+            else:
+                print("Segment too large to map")
             
             #  update the start and end address of the text segment
             if ".text" in name:
@@ -234,6 +237,7 @@ class CodexRebirthBackendContext:
         for regname in get_regs_name():
             val = get_reg_value(regname)
             self.codex_backend.set_register(regname, val)
+            print(regname, hex(val))
 
         try:
             # Run the emulation.

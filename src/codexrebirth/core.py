@@ -951,6 +951,7 @@ if BINARY_ARCH in (ARCH.X86_64, ARCH.X86):
             "test",
             "push",
             "pop",
+            "sete"
         ]
     )
 
