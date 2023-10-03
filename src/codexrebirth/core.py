@@ -360,6 +360,12 @@ class AddressBook(dict):
 
     def __repr__(self) -> str:
         return super().__repr__()
+    
+    def clone(self):
+        clone = AddressBook()
+        for key in self:
+            clone[key] = self[key]
+        return clone
 
 
 # Instanciate the AddressBook class, used to store the name of the symbolic variables
@@ -461,6 +467,10 @@ class TraceEntry:
 
     def __repr__(self) -> str:
         return f"{self.Insn}, {self.is_symbolic}"
+    
+    def clone(self):
+        clone = TraceEntry(self.Insn.clone(), self.is_symbolic)
+        return clone
 
 
 class Trace(dict):
@@ -482,6 +492,15 @@ class Trace(dict):
             for counter in self[addr]:
                 res += f"\t{counter}: {self[addr][counter].Insn, self[addr][counter].is_symbolic}\n"
         return res
+    
+    def clone(self):
+        clone = Trace()
+        clone.counter = self.counter
+        for addr in self:
+            clone[addr] = {}
+            for counter in self[addr]:
+                clone[addr][counter] = self[addr][counter].clone()
+        return clone
 
 
 # instanciante the CodexDump class, used to register all instructions that have been executed
@@ -1169,6 +1188,13 @@ class CodexState(dict):
 
         # Join all entries into a string with newline separators
         return "\n".join(representation)
+    
+    def clone(self):
+        clone = CodexState()
+        for key, value in self.items():
+            clone[key] = value.clone()
+        return clone
+        
 
 
 class CodexInstructionEngineX86_64:
@@ -2013,13 +2039,18 @@ class  CodexRebirth:
         self.addr_emu_end = None
 
         # Allow exporting the address book and codex dump
-        self.address_book = AddressBookInst
+        self.address_book = AddressBook()
 
         # Allow exporting the TraceInst
-        self.trace_records = TraceInst
+        self.trace_records = Trace()
 
         # Initialize the count of executed instructions
         self.insn_executed_count = 0
+        
+        #Configure the disassembler for detailed information
+        disassembler = self.ql.arch.disassembler
+        disassembler.detail = True
+
 
     def check_instruction_scope(self, ql):
         if ql.arch.type == QL_ARCH.X8664:
@@ -2115,6 +2146,10 @@ class  CodexRebirth:
             # Get the current instruction and its address
             insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
 
+            # Check if we have reached the user-defined end address for emulation
+            if insn_addr == self.addr_emu_end:
+                raise UserStoppedExecution("Reached user-defined end address")
+
             # Check if there's a registered callback for the current address
             if insn_addr in self.callbacks:
                 # Execute the callback with the Qiling instance as an argument
@@ -2143,16 +2178,6 @@ class  CodexRebirth:
                     Insn,
                     False,
                 )
-
-            # Check if we have reached the user-defined end address for emulation
-            if insn_addr == self.addr_emu_end:
-                log(
-                    DebugLevel.INFO,
-                    f"Reached end of emulation",
-                    self.debug_level,
-                    ANSIColors.OKGREEN,
-                )
-                return
 
             # If the instruction involves memory access, delegate to dedicated functions (mem_read, mem_write)
             if check_memory_access(insn):
@@ -2200,11 +2225,52 @@ class  CodexRebirth:
 
     def show_codex(self):
         print(self.state)
-
+        
+    def clone(self):
+        # must be callled only for IDA
+        
+        # delete current ql hooks
+        self.ql.clear_hooks()
+        self.ql.clear_ql_hooks()
+        
+        new_instance = CodexRebirth(self.ql, self.debug_level)
+        
+        # Copy the state of CodexState
+        new_instance.state = self.state.clone()
+        
+        # Copy architecture-specific attributes
+        new_instance.cs = self.cs
+        new_instance.ks = self.ks
+        new_instance.instruction_engine = self.instruction_engine
+        
+        # Copy text section attributes
+        new_instance.text_base = self.text_base
+        new_instance.text_end = self.text_end
+        
+        # Copy the callbacks dictionary
+        new_instance.callbacks = self.callbacks
+        
+        # Copy emulation start and end addresses
+        new_instance.addr_emu_start = self.addr_emu_start
+        new_instance.addr_emu_end = self.addr_emu_end
+        
+        # Copy address book and trace records
+        new_instance.address_book = self.address_book.clone()
+        new_instance.trace_records = self.trace_records.clone()
+        
+        # Copy executed instructions count
+        new_instance.insn_executed_count = self.insn_executed_count
+        
+        return new_instance
+    
+    
     def run_emulation(self):
-        # Configure the disassembler for detailed information
-        disassembler = self.ql.arch.disassembler
-        disassembler.detail = True
+        
+        global AddressBookInst, TraceInst
+        
+        AddressBookInst = self.address_book
+        TraceInst = self.trace_records
+        
 
         # Set up memory read, memory write, and code hooks
         self.ql.hook_mem_read(self.memory_read_hook)
@@ -2219,14 +2285,12 @@ class  CodexRebirth:
 
         try:
             # Start Qiling engine emulation within the specified address range
-            if self.addr_emu_start and self.addr_emu_end:
-                self.ql.run(self.addr_emu_start, self.addr_emu_end)
-            elif self.addr_emu_start:
+            if self.addr_emu_start:
                 self.ql.run(self.addr_emu_start)
             else:
                 self.ql.run()
 
-        except unicorn.UcError as e:
+        except (unicorn.UcError, UserStoppedExecution) as e:
             log(
                 DebugLevel.ERROR,
                 f"Exception occurred while emulating: {str(e)}",
@@ -2249,7 +2313,6 @@ class  CodexRebirth:
             {separator_line}
             """
         )
-
         # Log emulation results
         log(DebugLevel.ERROR, output, self.debug_level, ANSIColors.OKGREEN)
         log(
@@ -2265,8 +2328,8 @@ class  CodexRebirth:
             ANSIColors.OKGREEN,
         )
 
-        # Pause for 2 seconds
-        time.sleep(2)
+        # Pause for 1 seconds
+        time.sleep(1)
 
         # Validate symbolic memory and codex
         self.instruction_engine.validate_symbolic_memory(self.state)

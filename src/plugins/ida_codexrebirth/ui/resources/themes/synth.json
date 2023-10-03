@@ -88,7 +88,10 @@
 
         "arrow_prev": "true_red",
         "arrow_next": "blue",
-        "arrow_idle": "gray"
+        "arrow_idle": "gray",
+
+        "icon" : "red",
+        "end_address": "orange"
     }
 }
 

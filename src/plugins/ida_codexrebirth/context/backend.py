@@ -12,24 +12,32 @@ import ida_kernwin
 import ida_bytes
 from ida_codexrebirth.util.misc import ask_file, msgbox, get_ea, get_regs_name, get_reg_value
 from codexrebirth.exceptions import UserStoppedExecution
+from ida_codexrebirth.util.misc import show_msgbox
 
 
 
 class CodexRebirthBackendContext:
     def __init__(self):
-        self.codex_backend = None
+        self.sym_engine = None
         self.controller = None
-
-    def run(self):
-        # Check if the debugger is active; otherwise, there's no need to map segments.
-        if not ida_dbg.is_debugger_on():
-            raise Exception("Debugger is not active")
+        
+        self.is_initialized = False
+        
         # Create a temporary log file for debugging.
         self.log_file = self.setup_logger()
         
         # Redirect standard input to /dev/null (suppress user input).
         sys.stdin = open(os.devnull, 'r')
-    
+        
+        
+
+    def initialize(self):
+        
+        self.is_initialized = False
+        
+        print("="*80)
+        print("Initializing CodexRebirth context (can take a while, please be patient)...")
+        print("="*80)
         # Show a message box to the user.
         self.show_message_box()
 
@@ -43,7 +51,17 @@ class CodexRebirthBackendContext:
         binary_path = self.get_binary_path()
 
         # Initialize the backend for emulation.
-        self.codex_backend = self.initialize_backend(binary_path)
+        self.sym_engine = self.initialize_symbolic_engine(binary_path)
+        
+        self.is_initialized = True
+        
+        
+    def run_emulation(self):
+        
+        
+        # Check if the debugger is active; otherwise, there's no need to map segments.
+        if not ida_dbg.is_debugger_on():
+            show_msgbox("Please start the debugger before running the emulation")
 
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_qiling()
@@ -52,7 +70,16 @@ class CodexRebirthBackendContext:
         self.register_callbacks()
 
         # Set up the emulation environment.
-        self.setup_emulation()
+        self.map_registers()
+        
+        
+        # Run the emulation.
+        try:
+            # Run the emulation.
+            self.sym_engine.run_emulation()
+        except UserStoppedExecution:
+            pass
+
 
     def setup_logger(self):
         return tempfile.NamedTemporaryFile(prefix="cr_trace", suffix=".txt", dir=os.path.expanduser("~\\Downloads"), delete=False, mode="w")
@@ -108,7 +135,7 @@ class CodexRebirthBackendContext:
         """
         return os.path.join(os.getcwd(), idaapi.get_input_file_path())
 
-    def initialize_backend(self, binary_path):
+    def initialize_symbolic_engine(self, binary_path):
         """
         Initialize the backend for emulation.
 
@@ -136,7 +163,7 @@ class CodexRebirthBackendContext:
 
         """
         if self.controller:
-            return getattr(self.controller, "configure_and_register_callbacks", None)(self.codex_backend)
+            return getattr(self.controller, "configure_and_register_callbacks", None)(self.sym_engine)
         return None
 
 
@@ -152,7 +179,7 @@ class CodexRebirthBackendContext:
         Returns:
             None
         """
-        ql = self.codex_backend.ql
+        ql = self.sym_engine.ql
 
 
         # Clear existing memory mappings in Qiling.
@@ -208,10 +235,10 @@ class CodexRebirthBackendContext:
             
             #  update the start and end address of the text segment
             if ".text" in name:
-                self.codex_backend.text_start = start
-                self.codex_backend.text_end = end
+                self.sym_engine.text_start = start
+                self.sym_engine.text_end = end
 
-    def setup_emulation(self):
+    def map_registers(self):
         """
         Set up the emulation environment based
 
@@ -225,25 +252,12 @@ class CodexRebirthBackendContext:
 
         # Get the current execution address as the emulation start.
         emu_start = get_ea()[0]
-        self.codex_backend.set_emu_start(emu_start)
-        print("emu start", hex(emu_start))
-        
-        # Get the end address of the current function as the emulation end.
-        emu_end = idc.get_func_attr(emu_start, idc.FUNCATTR_END)
-        self.codex_backend.set_emu_end(emu_end)
-
-
+        self.sym_engine.set_emu_start(emu_start)
+ 
         # Set register values based on the current state.
         for regname in get_regs_name():
             val = get_reg_value(regname)
-            self.codex_backend.set_register(regname, val)
+            self.sym_engine.set_register(regname, val)
             print(regname, hex(val))
-
-        try:
-            # Run the emulation.
-            self.codex_backend.run_emulation()
-        except UserStoppedExecution:
-            pass
-
 
 

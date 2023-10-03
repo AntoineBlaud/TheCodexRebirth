@@ -33,7 +33,7 @@
         "light_blue":     [ 33, 159, 255],
         "blue":           [ 30, 136, 229],
         "dark_blue":      [ 58,  58, 128],
-        "light_pink":     [200, 17, 217]
+        "light_pink":     [200, 17, 217],
 
     },
 
@@ -90,6 +90,9 @@
 
         "arrow_prev": "lightest_red",
         "arrow_next": "light_blue",
-        "arrow_idle": "light_gray"
+        "arrow_idle": "light_gray",
+
+        "icon" : "red",
+        "end_address": "orange"
     }
 }

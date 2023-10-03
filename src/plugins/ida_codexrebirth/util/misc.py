@@ -4,6 +4,8 @@ import struct
 import weakref
 import threading
 import idaapi
+import idautils
+import idc
 
 #------------------------------------------------------------------------------
 # Plugin Util
@@ -225,3 +227,19 @@ def remove_line(string, n):
         return string
     lines.pop(n)
     return '\n'.join(lines)
+
+def show_msgbox(text, title="Codex Rebirth"):
+    """
+    Show a message box.
+    """
+    from PyQt5.QtWidgets import QMessageBox
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Information)
+    msg.setText(text)
+    msg.setWindowTitle(title)
+    msg.exec_()
+    
+def delete_all_comments():
+    for ea in idautils.Functions():
+        for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
+            idc.set_cmt(head, "", 0)

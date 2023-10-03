@@ -11,11 +11,13 @@ import idaapi
 
 from ida_codexrebirth.util.qt import *
 from ida_codexrebirth.ui.palette import PluginPalette
-from ida_codexrebirth.util.misc import remove_line
+from ida_codexrebirth.util.misc import remove_line, show_msgbox, delete_all_comments
 
 from ida_codexrebirth.ui.trace_view import TraceDock
 from ida_codexrebirth.trace.reader import TraceReader
 from ida_codexrebirth.context.backend import CodexRebirthBackendContext
+import time
+from PyQt5.QtWidgets import QMessageBox
 
 
 #------------------------------------------------------------------------------
@@ -24,29 +26,111 @@ from ida_codexrebirth.context.backend import CodexRebirthBackendContext
 
 
 
-class CodexRebirthIDA():
+class CodexRebirthIDA(ida_idaapi.plugin_t):
     """
     The plugin integration layer IDA Pro.
     """
     
-    flags = ida_idaapi.PLUGIN_PROC | ida_idaapi.PLUGIN_MOD | ida_idaapi.PLUGIN_HIDE
+    flags = ida_idaapi.PLUGIN_MULTI | ida_idaapi.PLUGIN_HIDE | ida_idaapi.PLUGIN_PROC 
     comment = "Codex Rebirth"
     help = ""
     wanted_name = "CodexRebirth"
     wanted_hotkey = ""
 
     def __init__(self):
-     
-        self.run_backend()
+        self.user_defined_end_address = None
+        self.sym_engine_last_run = None
+        self.ctx = CodexRebirthBackendContext()
         self.load_ui()
+        print("CodexRebirth: IDA Plugin Loaded")
+        
+    def init(self):
+        return ida_idaapi.PLUGIN_OK
+    
+    def run(self, arg):
+        pass
+    
+    def term(self):
+        pass
+
+    def _run(self):
+        
+        if not self.user_defined_end_address:
+            # show  a message box to the user
+            show_msgbox("Please set the end address first")
+            return
+                        
+        if not self.ctx.is_initialized:
+            self.ctx.initialize()
+            
+        # restore the sym_engine to the state before the symbolic execution
+        if self.sym_engine_last_run and len(self.sym_engine_last_run.trace_records) > 0: 
+            print("Restoring the symbolic engine to the state before the symbolic execution")
+            self.ctx.sym_engine = self.sym_engine_last_run.clone()
+            
+        # delete all comments
+        print("Deleting all comments ...")
+        delete_all_comments()
+            
+        # we set the end address to the symbolic engine after the initialization
+        self.ctx.sym_engine.set_emu_end(self.user_defined_end_address)
+        
+        print("Running Symbolic Execution")
+        print("UI refresh will be disabled until the end of the symbolic execution")
+        time.sleep(0.2)
+        self.ctx.run_emulation()
         self.load_trace()
         self.show_ui()
         
+ 
+        print("Symbolic Execution Finished")
         
-    def run_backend(self):
+        
+        
+    def _commit(self):
+        """_summary_
+        
+        When we launch the symbolic execution, we clone the sym_engine and run the emulation on the clone.
+        But if we want to commit the current state of the sym_engine, we need to set the sym_engine to the clone.
+        
+        """
+        if self.ctx.sym_engine:
+            self.load_trace()
+            self.sym_engine_last_run = self.ctx.sym_engine.clone()
+            self.user_defined_end_address = None
+            print("="*80)
+            print("Committing the current state of the symbolic engine")
+            print("IMPORTANT: Now run ida until the end address")
+            print("="*80)
+            # ida continues to run until the end address
+            ida_dbg.continue_process()
+            
+            
+    def _reset_ctx(self):
+        """_summary_
+        
+        This function is called when the user clicks on the context menu item "Reset Context"
+        """
         self.ctx = CodexRebirthBackendContext()
-        self.ctx.run()
+        self.ctx.initialize()
+        print("Context reset")
+            
+            
+    def _interactive_end_address(self):
+        """_summary_
         
+        This function is called when the user clicks on the context menu item "Set End Address"
+        """
+        self.user_defined_end_address = idc.here()
+        print(f"End address set to {hex(self.user_defined_end_address)}")
+        
+        # set a comment at the end address
+        idaapi.set_cmt(self.user_defined_end_address, " ===== End address =====", False)
+        
+        # set a breakpoint at the end address
+        ida_dbg.add_bpt(self.user_defined_end_address, 1, idc.BPT_SOFT)
+        
+ 
     def load_ui(self):
         """
         Load the plugin and register universal UI actions with the disassembler.
@@ -74,6 +158,7 @@ class CodexRebirthIDA():
         # Mark the core as loaded and perform necessary warm-up tasks.
         self.loaded = True
         self.palette.warmup()
+        
         self.trace_dock = TraceDock(self)
 
         # Print a message to indicate successful plugin loading.
@@ -83,23 +168,24 @@ class CodexRebirthIDA():
 
     def load_trace(self):
         """
-        Load a trace from the specified filepath.
+        Load a trace from the specifi_ui_hookshooed filepath.
         
         If a trace is already loaded or in use prior to calling this function,
         it will be replaced by the newly loaded trace.
         """
+            
 
         # Create a trace reader, which loads the trace file from disk and provides
         # useful APIs for navigating the trace and querying information (memory,
         # registers) at chosen execution states.
         print("Loading trace records...")
-        self.reader = TraceReader(self.ctx.codex_backend.trace_records)
+        self.reader = TraceReader(self.ctx.sym_engine.trace_records)
         print(f"Trace loaded with {self.reader.length} records.")
 
         # Hook into the trace for further processing.
         self.hook()
 
-        print(f"Current state variables: {self.ctx.codex_backend.state}")
+        print(f"Current state variables: {self.ctx.sym_engine.state}")
 
         # Attach the trace engine to various plugin UI controllers, granting them
         # access to the underlying trace reader.
@@ -107,7 +193,6 @@ class CodexRebirthIDA():
         
         # Set up UI hooks for rendering lines and widget popups.
         self._ui_hooks.get_lines_rendering_info = self._render_lines
-        self._ui_hooks.finish_populating_widget_popup = self._popup_hook
 
         
     def show_ui(self):
@@ -138,108 +223,82 @@ class CodexRebirthIDA():
     # IDA Actions
     #--------------------------------------------------------------------------
 
-    ACTION_NEXT_EXECUTION  = "codexrebirth:next_execution"
-    ACTION_PREV_EXECUTION  = "codexrebirth:prev_execution"
+    ACTION_RUN = "codexrebirth:run"
+    ACTION_COMMIT = "codexrebirth:commit"
+    ACTION_END_ADDRESS = "codexrebirth:end_address"
+    ACTION_RESET_CTX = "codexrebirth:reset_ctx"
     
     
-    def _interactive_next_execution(self, db):
-        pself = self.get_context(db)
-        pself.interactive_next_execution()
-
-    def _interactive_prev_execution(self, db):
-        pself = self.get_context(db)
-        pself.interactive_prev_execution()
+    def _install_run_action(self, widget, popup):
+        
+        icon_data = self.palette.gen_icon("thunder.png")
+        action_desc = ida_kernwin.action_desc_t(
+            self.ACTION_RUN,                        # The action name
+            "Run Symbolic Execution",                     # The action text
+            IDACtxEntry(self._run),     # The action handler
+            None,                                   # Optional: action shortcut
+            "Run Symbolic Execution",                     # Optional: tooltip
+            ida_kernwin.load_custom_icon(data=icon_data))     # Optional: the action icon
+        
+        ida_kernwin.register_action(action_desc)
+        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_RUN, "Codexrebirth/")
+        
+        
+    def _install_reset_ctx_action(self, widget, popup):
+        icon_data = self.palette.gen_icon("reset.png")
+        action_desc = ida_kernwin.action_desc_t(
+            self.ACTION_RESET_CTX,                        # The action name
+            "Reset Context",                     # The action text
+            IDACtxEntry(self._reset_ctx),     # The action handler
+            None,                                   # Optional: action shortcut
+            "Reset Context",                     # Optional: tooltip
+            ida_kernwin.load_custom_icon(data=icon_data))    # Optional: the action icon
+        ida_kernwin.register_action(action_desc)
+        # attach action to a click on a address in the disassembly view
+        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_RESET_CTX, "Codexrebirth/")
+        
         
     
-    def interactive_next_execution(self):
-        """
-        Handle UI actions for seeking to the next execution of the selected address.
-        """
-        address = self.reader.dself.get_current_address()
-        result = self.reader.seek_to_next(address, BreakpointType.EXEC)
-
-        # TODO: blink screen? make failure more visible...
-        if not result:
-            print(f"Go to 0x{address:08x} failed, no future executions of address")
-
-    def interactive_prev_execution(self):
-        """
-        Handle UI actions for seeking to the previous execution of the selected address.
-        """
-        address = self.reader.dself.get_current_address()
-        result = self.reader.seek_to_prev(address, BreakpointType.EXEC)
-
-        # TODO: blink screen? make failure more visible...
-        if not result:
-            print(f"Go to 0x{address:08x} failed, no previous executions of address")
-    
-    
+    def _install_commit_action(self, widget, popup):
+        icon_data = self.palette.gen_icon("handshake.png")
+        action_desc = ida_kernwin.action_desc_t(
+            self.ACTION_COMMIT,                        # The action name
+            "Commit Symbolic Execution",                     # The action text
+            IDACtxEntry(self._commit),     # The action handler
+            None,                                   # Optional: action shortcut
+            "Commit Symbolic Execution",                     # Optional: tooltip
+            ida_kernwin.load_custom_icon(data=icon_data))    # Optional: the action icon
+            
+        ida_kernwin.register_action(action_desc)
+        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_COMMIT, "Codexrebirth/")
+        
+                
+    def _install_end_address_action(self, widget, popup):
+        icon_data = self.palette.gen_icon("end.png")
+        action_desc = ida_kernwin.action_desc_t(
+        self.ACTION_END_ADDRESS,                        # The action name
+            "Set End Address",                     # The action text
+            IDACtxEntry(self._interactive_end_address),     # The action handler
+            None,                                   # Optional: action shortcut
+            "Set End Address",                     # Optional: tooltip
+            ida_kernwin.load_custom_icon(data=icon_data))    # Optional: the action icon
+        ida_kernwin.register_action(action_desc)
+        # attach action to a click on a address in the disassembly view
+        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_END_ADDRESS, "Codexrebirth/")
+        
     
     def _install_ui(self):
         """
         Initialize & integrate all plugin UI elements.
         """
-        self._install_next_execution()
-        self._install_prev_execution()
+        self._ui_hooks.finish_populating_widget_popup = self._popup_hook
+        self._ui_hooks.hook()
+
 
     def _uninstall_ui(self):
         """
         Cleanup & remove all plugin UI integrations.
         """
-        self._uninstall_next_execution()
-        self._uninstall_prev_execution()
-
-
-    def _install_next_execution(self):
-
-        icon_data = self.palette.gen_arrow_icon(self.palette.arrow_next, 0)
-        self._icon_id_next_execution = ida_kernwin.load_custom_icon(data=icon_data)
-
-        # describe a custom IDA UI action
-        action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_NEXT_EXECUTION,                        # The action name
-            "Go to next execution",                            # The action text
-            IDAselfEntry(self._interactive_next_execution),     # The action handler
-            None,                                              # Optional: action shortcut
-            "Go to the next execution of the current address", # Optional: tooltip
-            self._icon_id_next_execution                       # Optional: the action icon
-        )
-
-        # register the action with IDA
-        result = ida_kernwin.register_action(action_desc)
-        assert result, f"Failed to register '{action_desc.name}' action with IDA"
-        print(f"Installed the '{action_desc.name}' menu entry")
-
-    def _install_prev_execution(self):
-
-        icon_data = self.palette.gen_arrow_icon(self.palette.arrow_prev, 180.0)
-        self._icon_id_prev_execution = ida_kernwin.load_custom_icon(data=icon_data)
-
-        # describe a custom IDA UI action
-        action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_PREV_EXECUTION,                            # The action name
-            "Go to previous execution",                            # The action text
-            IDAselfEntry(self._interactive_prev_execution),         # The action handler
-            None,                                                  # Optional: action shortcut
-            "Go to the previous execution of the current address", # Optional: tooltip
-            self._icon_id_prev_execution                           # Optional: the action icon
-        )
-
-        # register the action with IDA
-        result = ida_kernwin.register_action(action_desc)
-        assert result, f"Failed to register '{action_desc.name}' action with IDA"
-        print(f"Installed the '{action_desc.name}' menu entry")
-
-   
-    def _uninstall_next_execution(self):
-        result = self._uninstall_action(self.ACTION_NEXT_EXECUTION, self._icon_id_next_execution)
-        self._icon_id_next_execution = ida_idaapi.BADADDR
-        return result
-        
-    def _uninstall_prev_execution(self):
-        result = self._uninstall_action(self.ACTION_PREV_EXECUTION, self._icon_id_prev_execution)
-        self._icon_id_prev_execution = ida_idaapi.BADADDR
-        return result
 
 
     def _uninstall_action(self, action, icon_id=ida_idaapi.BADADDR):
@@ -260,85 +319,18 @@ class CodexRebirthIDA():
     #--------------------------------------------------------------------------
 
     def _popup_hook(self, widget, popup):
+        
         """
         (Event) IDA is about to show a popup for the given TWidget.
         """
-
-        # TODO: return if plugin/trace is not active
-        pass
-
-        # fetch the (IDA) window type (eg, disas, graph, hex ...)
-        view_type = ida_kernwin.get_widget_type(widget)
-
-        # only attach these context items to popups in disas views
-        if view_type == ida_kernwin.BWN_DISASMS:
-
-            # prep for some shady hacks
-            p_qmenu = ctypes.cast(int(popup), ctypes.POINTER(ctypes.c_void_p))[0]
-            qmenu = sip.wrapinstance(int(p_qmenu), QtWidgets.QMenu)
-
-            #
-            # inject and organize the Tenet plugin actions
-            #
-
-            ida_kernwin.attach_action_to_popup(
-                widget,
-                popup,
-                self.ACTION_NEXT_EXECUTION,  # The action ID (see above)
-                "Rename",                    # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP      # We want to append the action after ^
-            )
-
-            #
-            # this is part of our bodge to inject a plugin action submenu
-            # at a specific location in the QMenu, cuz I don't think it's
-            # actually possible with the native IDA API's (for groups...)
-            #
-
-            for action in qmenu.actions():
-                if action.text() == "Go to next execution":
-
-                    # inject a group for the exta 'go to' actions
-                    goto_submenu = QtWidgets.QMenu("Go to...")
-                    qmenu.insertMenu(action, goto_submenu)
-
-                    # hold a Qt ref of the submenu so it doesn't GC
-                    self.__goto_submenu = goto_submenu
-                    break
-
-            ida_kernwin.attach_action_to_popup(
-                widget,
-                popup,
-                self.ACTION_FIRST_EXECUTION,     # The action ID (see above)
-                "Go to.../",                     # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP          # We want to append the action after ^
-            )
-
-            ida_kernwin.attach_action_to_popup(
-                widget,
-                popup,
-                self.ACTION_FINAL_EXECUTION,     # The action ID (see above)
-                "Go to.../",                     # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP          # We want to append the action after ^
-            )
-
-            ida_kernwin.attach_action_to_popup(
-                widget,
-                popup,
-                self.ACTION_PREV_EXECUTION,  # The action ID (see above)
-                "Rename",                    # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP      # We want to append the action after ^
-            )
-
-            #
-            # inject a seperator to help insulate our plugin action group
-            #
-
-            for action in qmenu.actions():
-                if action.text() == "Go to previous execution":
-                    qmenu.insertSeparator(action)
-                    break
-
+        
+        if ida_kernwin.get_widget_type(widget) == ida_kernwin.BWN_DISASM:
+            self._install_run_action(widget, popup)
+            self._install_commit_action(widget, popup)
+            self._install_end_address_action(widget, popup)
+            self._install_reset_ctx_action(widget, popup)
+            
+        
     def _render_lines(self, lines_out, widget, lines_in):
         """
         (Event) IDA is about to render code viewer lines.
@@ -349,6 +341,7 @@ class CodexRebirthIDA():
             self._highlight_disassesmbly(lines_out, widget, lines_in)
 
         return
+    
 
     def _highlight_disassesmbly(self, lines_out, widget, lines_in):
         """
@@ -359,6 +352,7 @@ class CodexRebirthIDA():
         current_color = self.palette.trail_current
         backward_color = self.palette.trail_backward
         symbolic_color = self.palette.symbolic
+        end_address_color = self.palette.end_address
 
         r, g, b, _ = current_color.getRgb()
         current_color = 0xFF << 24 | b << 16 | g << 8 | r
@@ -387,6 +381,9 @@ class CodexRebirthIDA():
                 # apply special color to symbolic addresses
                 if self.reader.is_symbolic(idx):
                     color =  symbolic_color
+                    
+                if self.user_defined_end_address == address:
+                    color = end_address_color
                 
                 percent = 1.0 - ((trail_length - i) / trail_length)
                 # convert to bgr
@@ -421,13 +418,13 @@ class CodexRebirthIDA():
 # IDA UI Helpers
 #------------------------------------------------------------------------------
 
-class IDAselfEntry(ida_kernwin.action_handler_t):
+class IDACtxEntry(ida_kernwin.action_handler_t):
     """
     A minimal context menu entry class to utilize IDA's action handlers.
     """
 
     def __init__(self, action_function):
-        super(IDAselfEntry, self).__init__()
+        super(IDACtxEntry, self).__init__()
         self.action_function = action_function
 
     def activate(self,  ctx=None):
@@ -436,7 +433,7 @@ class IDAselfEntry(ida_kernwin.action_handler_t):
 
         NOTE: We pass 'None' to the action function to act as the '
         """
-        self.action_function(IDA_GLOBAL_self)
+        self.action_function()
         return 1
 
     def update(self, ctx=None):
@@ -457,6 +454,7 @@ class UIHooks(ida_kernwin.UI_Hooks):
         pass
     def finish_populating_widget_popup(self, widget, popup):
         pass
+
     
     
     
@@ -468,5 +466,3 @@ def PLUGIN_ENTRY():
     return CodexRebirthIDA()
 
 
-
-PLUGIN_ENTRY()

@@ -193,18 +193,15 @@ class PluginPalette(object):
             return
         print("Failed to refresh theme!")
 
-    def gen_arrow_icon(self, color, rotation):
+    def gen_icon(self,name):
         """
         Dynamically generate a colored/rotated arrow icon.
         """
-        icon_path = plugin_resource(os.path.join("icons", "arrow.png"))
+        
+        color =  self.icon
+        icon_path = plugin_resource(os.path.join("icons", name))
 
         img = QtGui.QPixmap(icon_path)
-
-        if rotation:
-            rm = QtGui.QTransform()
-            rm.rotate(rotation)
-            img = img.transformed(rm)
 
         mask = QtGui.QPixmap(img)
 
