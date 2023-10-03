@@ -380,6 +380,12 @@ class ValueBook(dict):
 
     def __repr__(self) -> str:
         return super().__repr__()
+    
+    def clone(self):
+        clone = ValueBook()
+        for key in self:
+            clone[key] = self[key]
+        return clone
 
 
 ValueBookInst = ValueBook()
@@ -393,6 +399,12 @@ class MaskBook(dict):
 
     def __repr__(self) -> str:
         return super().__repr__()
+    
+    def clone(self):
+        clone = MaskBook()
+        for key in self:
+            clone[key] = self[key]
+        return clone
 
 
 MaskBookInst = MaskBook()
@@ -2043,6 +2055,9 @@ class  CodexRebirth:
 
         # Allow exporting the TraceInst
         self.trace_records = Trace()
+        
+        # Allow exporting the value book
+        self.value_book = ValueBook()
 
         # Initialize the count of executed instructions
         self.insn_executed_count = 0
@@ -2121,7 +2136,7 @@ class  CodexRebirth:
         result = self.instruction_engine.evaluate_instruction(address, self.state)
         if isinstance(result, tuple):
             Insn = result[0]
-            return TraceInst.register(
+            return self.trace_records.register(
                 insn_addr, Insn, result[2]
             )
 
@@ -2137,7 +2152,7 @@ class  CodexRebirth:
         result = self.instruction_engine.evaluate_instruction(address, self.state)
         if isinstance(result, tuple):
             Insn = result[0]
-            return TraceInst.register(
+            return self.trace_records.register(
                 insn_addr, Insn, result[2]
             )
 
@@ -2173,7 +2188,7 @@ class  CodexRebirth:
                     ANSIColors.ERROR,
                 )
                 Insn = Instruction(insn)
-                return TraceInst.register(
+                return self.trace_records.register(
                     insn_addr,
                     Insn,
                     False,
@@ -2187,7 +2202,7 @@ class  CodexRebirth:
             result = self.instruction_engine.evaluate_instruction(None, self.state)
             if isinstance(result, tuple):
                 Insn = result[0]
-                return TraceInst.register(
+                return self.trace_records.register(
                     insn_addr, Insn, result[2]
                 )
         finally:
@@ -2213,12 +2228,12 @@ class  CodexRebirth:
     def set_var_name(self, addr_or_reg, name: str):
         # real_name can be a register or a memory address
         if isinstance(addr_or_reg, int):
-            AddressBookInst["mem_{}".format(hex(addr_or_reg))] = name
+            self.address_book["mem_{}".format(hex(addr_or_reg))] = name
         else:
-            AddressBookInst[addr_or_reg] = name
+            self.address_book[addr_or_reg] = name
 
     def set_var_value(self, name, value: int):
-        ValueBookInst[name] = value
+        self.value_book[name] = value
 
     def set_mask(self, name, mask: int):
         MaskBookInst[name] = mask
@@ -2257,6 +2272,7 @@ class  CodexRebirth:
         # Copy address book and trace records
         new_instance.address_book = self.address_book.clone()
         new_instance.trace_records = self.trace_records.clone()
+        new_instance.value_book = self.value_book.clone()
         
         # Copy executed instructions count
         new_instance.insn_executed_count = self.insn_executed_count
@@ -2266,10 +2282,11 @@ class  CodexRebirth:
     
     def run_emulation(self):
         
-        global AddressBookInst, TraceInst
+        global AddressBookInst, TraceInst, ValueBookInst
         
         AddressBookInst = self.address_book
         TraceInst = self.trace_records
+        ValueBookInst = self.value_book
         
 
         # Set up memory read, memory write, and code hooks
