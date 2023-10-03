@@ -82,6 +82,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.load_trace()
         self.show_ui()
         
+        if not self.sym_engine_last_run:
+            self.sym_engine_last_run = self.ctx.sym_engine.clone()
+        
  
         print("Symbolic Execution Finished")
         
@@ -113,6 +116,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         self.ctx = CodexRebirthBackendContext()
         self.ctx.initialize()
+        self.sym_engine_last_run = None
         print("Context reset")
             
             
