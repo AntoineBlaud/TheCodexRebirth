@@ -439,25 +439,36 @@ class Instruction:
         self.v_op1 = None
         self.v_op2 = None
         self.v_op3 = None
+        
+    def _convert_operand(self, op):
+        if isinstance(op, int):
+            return hex(op)
+        
+        elif isinstance(op, str):
+            try:
+                return hex(int(op))
+            except:
+                return op
+        
 
     def __repr__(self) -> str:
         res = self.cinsn.mnemonic + " " + self.cinsn.op_str + "\n"
         if self.v_op1:
             res += f"op1 = {self.v_op1}\n"
         elif self.op1:
-            res += f"op1 = {self.op1}\n"   
+            res += f"op1 = {self._convert_operand(self.op1)}\n" 
             
         if self.v_op2:
             res += f"op2 = {self.v_op2}\n"
         
         elif self.op2:
-            res += f"op2 = {self.op2}\n"
+            res += f"op2 = {self._convert_operand(self.op2)}\n"
             
         if self.v_op3:
             res += f"op3 = {self.v_op3}\n"
             
         elif self.op3:
-            res += f"op3 = {self.op3}\n"
+            res += f"op3 = {self._convert_operand(self.op3)}\n" 
             
         return res
 
@@ -1682,12 +1693,22 @@ class CodexInstructionEngineX86_64:
                 locals()[var_name] = globals()[var_name]
             
 
+        to_delete = []
         # Evaluate and store values for other variables
         for var_name, eval_value in codex_state.items():
             if not var_name.startswith("var_"):
                 eval_value = eval_value.sym_value
-                symbolic_reg_and_mem_expr[var_name] = eval(str(eval_value), locals())
+                try:
+                    symbolic_reg_and_mem_expr[var_name] = eval(str(eval_value), locals())
+                except Exception:
+                    # remove the symbolic variable
+                    to_delete.append(var_name)
+                    
                 del locals()["__builtins__"]
+        
+        # delete the symbolic variable
+        for var_name in to_delete:
+            codex_state.delete_symbolic_var(var_name)
 
         # Check symbolic memory values
         for var_name, eval_value in symbolic_reg_and_mem_expr.items():
@@ -1875,7 +1896,7 @@ class CodexInstructionEngineX86_64:
 
         elif insn.mnemonic.startswith("cmp") or insn.mnemonic.startswith("test"):
             self.show_op_values(insn, mem_access)
-            ask_to_continue("Found a cmp or test instruction, do you want to continue?")
+            #ask_to_continue("Found a cmp or test instruction, do you want to continue?")
 
         if resulting_operation is not None:
             msg = resulting_operation.color.get_colored_text(
@@ -1980,7 +2001,7 @@ class CodexInstructionEngineX86_64:
         # Print the values of the operands
         for op_name, op_value in op_values.items():
             log(
-                DebugLevel.DEBUG,
+                DebugLevel.INFO,
                 f"{op_name} = {op_value}",
                 self.debug_level,
                 ANSIColors.OKBLUE,
@@ -2048,7 +2069,7 @@ class  CodexRebirth:
 
         # Initialize start and end addresses for emulation
         self.addr_emu_start = None
-        self.addr_emu_end = None
+        self.addr_emu_end = []
 
         # Allow exporting the address book and codex dump
         self.address_book = AddressBook()
@@ -2058,6 +2079,8 @@ class  CodexRebirth:
         
         # Allow exporting the value book
         self.value_book = ValueBook()
+        
+        self.mask_book = MaskBook()
 
         # Initialize the count of executed instructions
         self.insn_executed_count = 0
@@ -2162,7 +2185,7 @@ class  CodexRebirth:
             insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
 
             # Check if we have reached the user-defined end address for emulation
-            if insn_addr == self.addr_emu_end:
+            if insn_addr in self.addr_emu_end:
                 raise UserStoppedExecution("Reached user-defined end address")
 
             # Check if there's a registered callback for the current address
@@ -2178,21 +2201,6 @@ class  CodexRebirth:
                     if fn_addr in self.callbacks:
                         # Execute the callback associated with the function address
                         self.callbacks[fn_addr](ql)
-
-            # Check if the instruction is within the text section
-            if not self.check_instruction_scope(ql):
-                log(
-                    DebugLevel.DEBUG,
-                    f"Instruction not in text section {hex(insn_addr)}",
-                    self.debug_level,
-                    ANSIColors.ERROR,
-                )
-                Insn = Instruction(insn)
-                return self.trace_records.register(
-                    insn_addr,
-                    Insn,
-                    False,
-                )
 
             # If the instruction involves memory access, delegate to dedicated functions (mem_read, mem_write)
             if check_memory_access(insn):
@@ -2213,7 +2221,10 @@ class  CodexRebirth:
         self.addr_emu_start = address
 
     def set_emu_end(self, address: int):
-        self.addr_emu_end = address
+        self.addr_emu_end.append(address)
+        
+    def add_emu_end(self, address: int):
+        self.addr_emu_end.append(address)
 
     def set_register(self, register: str, value: int):
         self.ql.arch.regs.write(register, value)
@@ -2234,12 +2245,17 @@ class  CodexRebirth:
 
     def set_var_value(self, name, value: int):
         self.value_book[name] = value
+        
+    def get_current_pc(self):
+        return get_instruction_address(self.ql)
 
     def set_mask(self, name, mask: int):
-        MaskBookInst[name] = mask
+        self.mask_book[name] = mask
 
     def show_codex(self):
         print(self.state)
+        
+        
         
     def clone(self):
         # must be callled only for IDA
@@ -2273,6 +2289,7 @@ class  CodexRebirth:
         new_instance.address_book = self.address_book.clone()
         new_instance.trace_records = self.trace_records.clone()
         new_instance.value_book = self.value_book.clone()
+        new_instance.mask_book = self.mask_book.clone()
         
         # Copy executed instructions count
         new_instance.insn_executed_count = self.insn_executed_count
@@ -2282,11 +2299,12 @@ class  CodexRebirth:
     
     def run_emulation(self):
         
-        global AddressBookInst, TraceInst, ValueBookInst
+        global AddressBookInst, TraceInst, ValueBookInst, MaskBookInst
         
         AddressBookInst = self.address_book
         TraceInst = self.trace_records
         ValueBookInst = self.value_book
+        MaskBookInst = self.mask_book
         
 
         # Set up memory read, memory write, and code hooks
@@ -2347,6 +2365,7 @@ class  CodexRebirth:
 
         # Pause for 1 seconds
         time.sleep(1)
+        
 
         # Validate symbolic memory and codex
         self.instruction_engine.validate_symbolic_memory(self.state)

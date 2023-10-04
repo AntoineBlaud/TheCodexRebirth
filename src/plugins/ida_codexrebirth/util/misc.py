@@ -5,8 +5,11 @@ import weakref
 import threading
 import idaapi
 import idautils
+import ida_kernwin
+import ida_segment
 import idc
-
+from functools import wraps
+import jsonschema
 #------------------------------------------------------------------------------
 # Plugin Util
 #------------------------------------------------------------------------------
@@ -243,3 +246,162 @@ def delete_all_comments():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
             idc.set_cmt(head, "", 0)
+            
+def to_ida_color(color):
+    r, g, b, _ = color.getRgb()
+    return 0xFF << 24 | b << 16 | g << 8 | r
+
+
+def address_to_segment_offset(address):
+    # Get the segment name for the given address
+    segment_name = idc.get_segm_name(address)
+
+    # Get the start address of the segment
+    segment_start = idc.get_segm_start(address)
+
+    # Calculate the offset within the segment
+    offset = address - segment_start
+
+    return {
+        "segment": segment_name,
+        "offset": offset
+     }
+    
+def segment_offset_to_address(segment, offset):
+    """
+    Convert a segment and offset to an address.
+    """
+    segment_start = ida_segment.get_segm_by_name(segment).start_ea
+    return segment_start + offset
+    
+    
+def delete_all_bpts():
+    for ea in idautils.Functions():
+        for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
+            idc.del_bpt(head)
+            
+
+def taint_memory_with_string(codex, value, addr, name_pattern, chunk_size=1):
+    """
+    Taint memory with a string in chunks of a specified size.
+
+    Args:
+        codex: The Codex instance.
+        value: The input string to taint.
+        addr: The starting memory address to write the string.
+        name_pattern: A name pattern for tainting.
+        chunk_size: The size of each chunk (default is 1 byte).
+    """
+    for i in range(0, len(value), chunk_size):
+        chunk = value[i:i + chunk_size]
+        name = f"{name_pattern}_{i}"
+        _taint_memory_with_string_chunk(codex, addr, chunk, name)
+        addr += chunk_size
+
+def _taint_memory_with_string_chunk(codex, addr, chunk, name):
+    """
+    Taint memory with a string.
+
+    Args:
+        codex: The Codex instance.
+        offset: The memory offset to write the string.
+        value: The input string to taint.
+        name_pattern: A name pattern for tainting.
+    """
+    mask = 0xff << ((len(chunk) -1) * 8)
+    
+    if isinstance(chunk, str):
+        value_bytes = chunk.encode()
+    elif isinstance(chunk, bytearray):
+        value_bytes = bytes(chunk)
+    else:
+        value_bytes = chunk
+        
+    assert isinstance(value_bytes, bytes)
+        
+    codex.ql.mem.write(addr, value_bytes)
+    value = int.from_bytes(value_bytes, byteorder='little')
+    codex.taint_memory(addr, name, value, mask)
+
+
+def open_console(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        flags = (
+                idaapi.PluginForm.WOPN_TAB
+                | idaapi.PluginForm.WOPN_MENU
+                | idaapi.PluginForm.WOPN_RESTORE
+                | idaapi.PluginForm.WOPN_PERSIST
+        )
+        widget_output = ida_kernwin.find_widget("Output")
+        ida_kernwin.display_widget(widget_output,flags)
+        func(*args, **kwargs)
+    return wrapper
+
+
+
+def validate_config(config):
+    schema = {
+        "type": "object",
+        "properties": {
+            "BinaryArch": {"type": "string"},
+            "rootfs_path": {"type": "string"},
+            "binary_path": {"type": "string"},
+            "log_plain": {"type": "boolean"},
+            "symbolic_check": {"type": "boolean"},
+            "strict_symbolic_check": {"type": "boolean"},
+            "addresses": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                        "segment": {"type": "string"},
+                        "offset": {"type": "integer"},
+                    },
+                    "required": ["segment", "offset"],
+                },
+            },
+            "tainted_memory": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "ref": {"type": "string"},
+                        "size": {"type": "integer"},
+                        "chunck_size": {"type": "integer"},
+                    },
+                    "required": ["ref", "size", "chunck_size"]
+                }
+            },
+            "tainted_registers": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "reg": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
+                    "required": ["reg", "name"]
+                }
+            },
+            "do_not_sym_execute": {
+                "type": "array", 
+                "items": {"type": "string"}}
+        },
+        "required": [
+            "BinaryArch",
+            "rootfs_path",
+            "binary_path",
+            "log_plain",
+            "symbolic_check",
+            "strict_symbolic_check",
+            "addresses",
+            "tainted_memory",
+            "tainted_registers",
+            "do_not_sym_execute"
+        ]
+    }
+
+   
+    jsonschema.validate(config, schema)
+       

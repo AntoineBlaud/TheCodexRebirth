@@ -12,16 +12,18 @@ import ida_kernwin
 import ida_bytes
 from ida_codexrebirth.util.misc import ask_file, msgbox, get_ea, get_regs_name, get_reg_value
 from codexrebirth.exceptions import UserStoppedExecution
-from ida_codexrebirth.util.misc import show_msgbox
-
-
+import  ida_codexrebirth.util.misc as utils
+import json
+from superglobals import setglobal
+from qiling import *
 
 class CodexRebirthBackendContext:
     def __init__(self):
         self.sym_engine = None
-        self.controller = None
+        self.config = None
         
         self.is_initialized = False
+        self.do_not_sym_execute = []
         
         # Create a temporary log file for debugging.
         self.log_file = self.setup_logger()
@@ -41,17 +43,11 @@ class CodexRebirthBackendContext:
         # Show a message box to the user.
         self.show_message_box()
 
-        # Load the controller script.
-        controller = self.load_controller()
-
-        # Rename the controller script with a timestamp.
-        self.rename_controller_script(controller)
-
-        # Get the binary path from IDA Pro.
-        binary_path = self.get_binary_path()
-
+        # Load the config script.
+        self.load_config()
+    
         # Initialize the backend for emulation.
-        self.sym_engine = self.initialize_symbolic_engine(binary_path)
+        self.initialize_symbolic_engine()
         
         self.is_initialized = True
         
@@ -61,18 +57,15 @@ class CodexRebirthBackendContext:
         
         # Check if the debugger is active; otherwise, there's no need to map segments.
         if not ida_dbg.is_debugger_on():
-            show_msgbox("Please start the debugger before running the emulation")
+            utils.show_msgbox("Please start the debugger before running the emulation")
 
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_qiling()
 
-        # Register callbacks for the backend.
-        self.register_callbacks()
-
         # Set up the emulation environment.
         self.map_registers()
         
-        
+
         # Run the emulation.
         try:
             # Run the emulation.
@@ -87,44 +80,28 @@ class CodexRebirthBackendContext:
 
     def show_message_box(self):
         msgbox("Welcome to Codex Rebirth!\n\n" + \
-            "1) Please select a controller script to start the emulation \n" +  \
-            "2) Binary must be located in the same directory as the ida database \n" + \
-            "3) I recommand to open the ida output window to see the log ('ALT+0') \n" \
-            ,"Codex Rebirth")
+            "1) Please select a config script to start the emulation \n" \
+             )
 
-    def load_controller(self):
+    def load_config(self):
         """
-        Load the controller script selected by the user.
+        Load the config script selected by the user.
 
         Raises:
-            Exception: If no controller is selected or loading fails.
+            Exception: If no config is selected or loading fails.
 
         Returns:
-            str: Path to the loaded controller script.
+            str: Path to the loaded config script.
         """
-        controller = ask_file("Select a controller file (.py)", "Python Files (*.py)")
-        if controller is None or len(controller) < 5:
-            raise Exception("No controller selected")
-        if os.path.isfile(controller):
-            try:
-                print("Loading controller script")
-                sys.path.append(os.path.dirname(controller))
-                self.controller = importlib.import_module(os.path.basename(controller).split(".")[0])
-                print("Controller script loaded")
-                return controller
-            except Exception as e:
-                print(e)
-                raise Exception("Failed to load controller script")
-
-    def rename_controller_script(self, controller):
-        """
-        Rename the controller script with a timestamp.
-
-        Args:
-            controller (str): Path to the controller script.
-        """
-        part1 = os.path.basename(controller).split("_")[0] if "_" in os.path.basename(controller) else os.path.basename(controller).split(".")[0]
-        os.rename(controller, os.path.join(os.path.dirname(controller),  part1 + "_" + str(int(time.time())) + ".py"))
+        config = ask_file("Select a config file (.json)", "JSON Files (*.json)")
+        if config is None or len(config) < 5:
+            raise Exception("No config selected")
+        
+        config = json.load(open(config, "r"))
+        utils.validate_config(config)
+        print("Configuration file has been validated")
+        self.config = config
+        
 
     def get_binary_path(self):
         """
@@ -135,37 +112,88 @@ class CodexRebirthBackendContext:
         """
         return os.path.join(os.getcwd(), idaapi.get_input_file_path())
 
-    def initialize_symbolic_engine(self, binary_path):
+    def initialize_symbolic_engine(self):
         """
         Initialize the backend for emulation.
 
         Args:
-            binary_path (str): Path to the binary file.
 
         Returns:
             Backend or None: Initialized backend or None if not available.
         """
+        
+        BINARY_PATH_KEY = "binary_path"
+        ROOTFS_PATH_KEY = "rootfs_path"
+        BINARY_ARCH_KEY = "BinaryArch"
+        LOG_PLAIN_KEY = "log_plain"
+        SYMBOLIC_CHECK_KEY = "symbolic_check"
+        ADDRESSES_KEY = "addresses"
+        TAINTED_REGISTERS_KEY = "tainted_registers"
+        TAINTED_MEMORY_KEY = "tainted_memory"
+        REF_KEY = "ref"
+        SIZE_KEY = "size"
+        CHUNK_SIZE_KEY = "chunck_size"
+        DO_NOT_SYM_EXECUTE_KEY = "do_not_sym_execute"
+        config = self.config
+                
         # Redirect standard output and standard error to the log file.
         with contextlib.redirect_stdout(self.log_file), contextlib.redirect_stderr(self.log_file):
                 # Redirect standard input to /dev/null (suppress user input).
                 sys.stdin = open(os.devnull, 'r')
-                if self.controller:
-                    return getattr(self.controller, "initialize_codex_rebirth", None)(binary_path)
-                return None
+                # Define constants for dictionary keys
+                binary_path = config[BINARY_PATH_KEY]
+                rootfs_path = config[ROOTFS_PATH_KEY]
+                setglobal('BINARY_ARCH', config[BINARY_ARCH_KEY])
 
+                from codexrebirth.core import CodexRebirth, DebugLevel
 
-    def register_callbacks(self):
-        """
-        Register callbacks with the initialized backend.
+                ql = Qiling([binary_path], rootfs_path, log_plain=config[LOG_PLAIN_KEY])
+                self.sym_engine = CodexRebirth(ql, DebugLevel.INFO, symbolic_check=config[SYMBOLIC_CHECK_KEY])
+                
+                
+        # Map IDA Pro segments to Qiling.
+        self.map_segments_to_qiling()
+        
+        # Set up the emulation environment.
+        self.map_registers()
+        
+        # Taint memory
+        for taint_memory in config[TAINTED_MEMORY_KEY]:
+            name = taint_memory[REF_KEY]
+            size = taint_memory[SIZE_KEY]
+            chunk_size = taint_memory[CHUNK_SIZE_KEY]
+            ref_addr = config[ADDRESSES_KEY][name]
+            segname, offset = ref_addr["segment"], ref_addr["offset"]
+            addr = utils.segment_offset_to_address(segname, offset)
+            # Read IDA memory to get the value
+            expected_value = bytearray(ida_bytes.get_bytes(addr, size))
+            # Apply the taint
+            print(f"Tainting memory - Name: {name}, Size: {size}, Chunk Size: {chunk_size}, Address: {addr}")
+            utils.taint_memory_with_string(self.sym_engine, expected_value, addr, name, chunk_size)
 
-        Note:
-            This method assumes that the `self.controller` object is already initialized.
-
-        """
-        if self.controller:
-            return getattr(self.controller, "configure_and_register_callbacks", None)(self.sym_engine)
-        return None
-
+        # Taint registers
+        for taint_register in config[TAINTED_REGISTERS_KEY]:
+            reg = taint_register["reg"]
+            name = taint_register["name"]
+            value = get_reg_value(reg)
+            # Apply the taint
+            print(f"Tainting register - Register: {reg}, Name: {name}, Value: {value}")
+            self.sym_engine.taint_register(reg, name, value)
+            
+            
+        # set do_not_sym_execute address
+        for do_not_sym_execute in config[DO_NOT_SYM_EXECUTE_KEY]:
+            ref_addr = config[ADDRESSES_KEY][do_not_sym_execute]
+            segname, offset = ref_addr["segment"], ref_addr["offset"]
+            addr = utils.segment_offset_to_address(segname, offset)
+            print(f"Address {hex(addr)} added to do_not_sym_execute list")
+            self.sym_engine.add_emu_end(addr)
+            self.do_not_sym_execute.append(addr)
+            # add breakpoint to the address
+            ida_dbg.add_bpt(addr, 1, idc.BPT_SOFT)
+        
+        
+   
 
     def map_segments_to_qiling(self):
         """
@@ -259,5 +287,6 @@ class CodexRebirthBackendContext:
             val = get_reg_value(regname)
             self.sym_engine.set_register(regname, val)
             print(regname, hex(val))
+
 
 
