@@ -18,13 +18,14 @@ from ida_codexrebirth.trace.reader import TraceReader
 from ida_codexrebirth.context.backend import CodexRebirthBackendContext
 import time
 from PyQt5.QtWidgets import QMessageBox
-
+import random
 import keyboard
+import openai
+
+openai.api_key = "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"
 
 
-#------------------------------------------------------------------------------
-# IDA UI Integration
-#------------------------------------------------------------------------------
+
 
 
 
@@ -40,6 +41,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     wanted_hotkey = ""
 
     def __init__(self):
+        self.decompilation_block_cache = {}
         self.reset()
         self.load_ui()
         print("CodexRebirth: IDA Plugin Loaded")
@@ -62,6 +64,21 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
     @utils.open_console
     def _run(self):
+        """
+        Execute symbolic execution and handle various scenarios.
+
+        This function performs symbolic execution, handles restoration of the symbolic engine state,
+        and checks for specific instructions during execution.
+
+        - If the end address is not set, it shows a message box to the user.
+        - If the symbolic engine is not initialized, it initializes it.
+        - It restores the sym_engine to its state before symbolic execution if available.
+        - Sets the end address to the symbolic engine.
+        - Prints messages and sleeps to indicate the execution progress.
+        - Checks if the current instruction is in the 'do_not_sym_execute' list and commits symbolic execution if found.
+        - Resumes symbolic execution after the 'do_not_sym_execute' instruction if necessary.
+        - Prints a banner to indicate the completion of symbolic execution.
+        """
         
         if not self.user_defined_end_address:
             # show  a message box to the user
@@ -104,14 +121,15 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 idaapi.step_over()
                 ida_dbg.wait_for_next_event(ida_dbg.WFNE_SUSP, -1)
                 
-            print("="*80)
-            print("Symbolic execution will be resumed in few seconds ...")
-            print("="*80)
+      
+            utils.print_banner("Symbolic execution will be resumed in few seconds ...")
+
             self._run()
-            
-        print("="*80)
-        print("Symbolic Execution Finished")
-        print("="*80)
+        
+        utils.print_banner("Symbolic Execution Finished")
+
+        
+
         
     
     def load_ui(self):
@@ -152,16 +170,12 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
     def load_trace(self):
         """
-        Load a trace from the specifi_ui_hookshooed filepath.
-        
-        If a trace is already loaded or in use prior to calling this function,
-        it will be replaced by the newly loaded trace.
-        """
-            
+        Load a trace file and create a trace reader.
 
-        # Create a trace reader, which loads the trace file from disk and provides
-        # useful APIs for navigating the trace and querying information (memory,
-        # registers) at chosen execution states.
+        This function loads a trace from a specified file path and creates a trace reader for navigation and querying.
+        The trace reader provides access to the loaded trace and its records.
+        """
+        
         print("Loading trace records...")
         self.reader = TraceReader(self.ctx.sym_engine.trace_records)
         print(f"Trace loaded with {self.reader.length} records.")
@@ -178,70 +192,152 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
     def show_ui(self):
         """
-        Integrate and arrange the plugin widgets into the disassembler UI.
+        Integrate and display the plugin's UI in the IDA Pro disassembler.
+
+        This function integrates the plugin's UI elements and displays them in the IDA Pro disassembler interface.
         """
+
         mw = get_qmainwindow()
         mw.addToolBar(QtCore.Qt.RightToolBarArea, self.trace_dock)
         self.trace_dock.show()
-        
-        
+
     def hook(self):
+        """
+        Hook into the IDA Pro user interface.
+        """
         if self._hooked:
             return
         self._hooked = True
         self._ui_hooks.hook()
 
     def unhook(self):
+        """
+        Unhook from the IDA Pro user interface.
+        """
         if not self._hooked:
             return
         self._hooked = False
         self._ui_hooks.unhook()
-        
+
     @utils.open_console
     def _commit(self):
-        """_summary_
-        
-        When we launch the symbolic execution, we clone the sym_engine and run the emulation on the clone.
-        But if we want to commit the current state of the sym_engine, we need to set the sym_engine to the clone.
-        
+        """
+        Commit the current state of the symbolic engine.
+
+        When symbolic execution is launched, it clones the sym_engine and runs emulation on the clone.
+        To commit the current state of the sym_engine, we set the sym_engine to the clone.
         """
         if self.ctx.sym_engine:
             self.load_trace()
             self.sym_engine_last_run = self.ctx.sym_engine.clone()
-            print("="*80)
-            print("Committing the current state of the symbolic engine")
-            print("IMPORTANT: Now run ida until the end address")
-            print("="*80)
-            # ida continues to run until the end address
+            utils.print_banner("Committing the current state of the symbolic engine")
+            # IDA continues to run until the end address
             ida_dbg.continue_process()
-            
-        
-            
+
     @utils.open_console
     def _interactive_end_address(self):
-        """_summary_
-        
-        This function is called when the user clicks on the context menu item "Set End Address"
+        """
+        Set the user-defined end address.
+
+        This function is called when the user clicks on the context menu item "Set End Address."
         """
         self.user_defined_end_address = idc.here()
         print(f"End address set to {hex(self.user_defined_end_address)}")
         
-        # set a comment at the end address
+        # Set a comment at the end address
         idaapi.set_cmt(self.user_defined_end_address, " ===== End address =====", False)
         
-        # set a breakpoint at the end address
+        # Set a breakpoint at the end address
         ida_dbg.add_bpt(self.user_defined_end_address, 1, idc.BPT_SOFT)
-        
+
     @utils.open_console
     def _interactive_get_seg_offset(self):
+        """
+        Get the segment offset for the current address.
+
+        This function is called when the user wants to retrieve the segment offset for the current address.
+        """
         address = idc.here()
         seg = str(utils.address_to_segment_offset(address)).replace('\'', '\"')
         print(f"Offset of {hex(address)}: {seg}")
-        
-        
+
     def _interactive_clean(self):
+        """
+        Clean up breakpoints, comments, and colors.
+
+        This function deletes all breakpoints, comments, and custom colors applied in the disassembly.
+        """
         utils.delete_all_bpts()
         utils.delete_all_comments()
+        utils.delete_all_colors()
+
+    @utils.open_console
+    def _interactive_color_common_blocks(self):
+        """
+        Color common blocks in a function based on similarity.
+
+        This function groups similar basic blocks in a function and colors them based on the specified similarity threshold.
+        """
+        # Specify the Levenshtein similarity threshold (e.g., 0.7 for 70% similarity)
+        similarity_threshold = 0.90
+        common_block_color = utils.to_ida_color(self.palette.common_blocks)
+        
+        # Specify the address (EA) of the function you want to analyze
+        function_address = idc.here()  # Change this to the address of your function
+        
+        # Get the list of basic blocks with disassembly for the specified function
+        blocks_info = utils.get_all_basic_blocks(function_address)
+
+        if blocks_info:
+            # Group similar blocks based on the threshold
+            grouped_blocks = utils.group_similar_blocks(blocks_info, similarity_threshold)
+            for group in grouped_blocks:
+                # Color blocks in the group if they exceed a certain size
+                if len(group) > 5:
+                    utils.color_blocks_in_group(group, common_block_color)  
+
+    @utils.open_console       
+    def _interactive_decompile_block(self):
+        """
+        Decompile a block of code using the OpenAI model.
+
+        This function allows the user to decompile a block of code by providing the equivalent C code and condensing it.
+        """
+        utils.check_openai_api_key()
+
+        ea = idc.here()
+        start_ea, disassembly = utils.get_basic_blocks(ea)
+        
+        if start_ea in self.decompilation_block_cache:
+            cached_response = self.decompilation_block_cache[start_ea]
+            utils.print_banner(cached_response, "-")
+            return
+
+        prompt = "Provide the equivalent C code and condense it:\n" + str(disassembly)
+        response = utils.query_model_sync(prompt)
+        self.decompilation_block_cache[start_ea] = response
+        utils.print_banner(response, "-")
+
+                    
+             
+    @utils.open_console       
+    def _interactive_decompile_block(self):
+        
+        utils.check_openai_api_key()
+    
+        ea = idc.here()
+        start_ea, disassembly = utils.get_basic_blocks(ea)
+        
+        if start_ea in self.decompilation_block_cache:
+            cached_response = self.decompilation_block_cache[start_ea]
+            utils.print_banner(cached_response, "-")
+            return
+
+        prompt = "Provide the equivalent C code and condense it :\n" + str(disassembly)
+        response = utils.query_model_sync(prompt)
+        self.decompilation_block_cache[start_ea] = response
+        utils.print_banner(response, "-")
+
         
  
     def _uninstall(self):
@@ -252,10 +348,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         mw = get_qmainwindow()
         mw.removeToolBar(self.trace_dock)
         self.trace_dock.close()
-        
         # clean IDA trace
         self._interactive_clean()
-        
+        # Reset the UI
         self.reset()
         
         return
@@ -267,111 +362,87 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     ACTION_RUN = "codexrebirth:run"
     ACTION_COMMIT = "codexrebirth:commit"
     ACTION_END_ADDRESS = "codexrebirth:end_address"
-    ACTION_RESET_CTX = "codexrebirth:reset_ctx"
     ACTION_GET_SEG_OFFSET = "codexrebirth:get_seg_offset"
     ACTION_CLEAN = "codexrebirth:clean"
     ACTION_RESET = "codexrebirth:reset"
+    ACTION_SIMILAR_BLOCKS = "codexrebirth:similar_blocks"
+    ACTION_DECOMPILE_BLOCK = "codexrebirth:decompile_block"
     
     
+    def _install_action(self, widget, popup, action_name, action_text, action_handler, icon_name=None):
+        """
+        Install an action in the IDA context menu.
+
+        Args:
+            widget: The widget to attach the action to.
+            popup: The popup menu to attach the action to.
+            action_name: The name of the action.
+            action_text: The text to display for the action.
+            action_handler: The function to call when the action is triggered.
+            icon_name: The name of the icon to use for the action (optional).
+
+        Returns:
+            None
+        """
+        if icon_name is not None:
+            icon_data = self.palette.gen_icon(icon_name)
+        else:
+            icon_data = -1
+        
+        action_desc = ida_kernwin.action_desc_t(
+            action_name,                # The action name
+            action_text,                # The action text
+            IDACtxEntry(action_handler), # The action handler
+            None,                       # Optional: action shortcut
+            action_text,                # Optional: tooltip
+            ida_kernwin.load_custom_icon(data=icon_data) if icon_data != -1 else icon_data)  # Optional: the action icon
+
+        ida_kernwin.register_action(action_desc)
+        ida_kernwin.attach_action_to_popup(widget, popup, action_name, "Codexrebirth/")
+
     def _install_run_action(self, widget, popup):
-        
-        icon_data = self.palette.gen_icon("thunder.png")
-        action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_RUN,                        # The action name
-            "Run Symbolic Execution",                     # The action text
-            IDACtxEntry(self._run),     # The action handler
-            None,                                   # Optional: action shortcut
-            "Run Symbolic Execution",                     # Optional: tooltip
-            ida_kernwin.load_custom_icon(data=icon_data))     # Optional: the action icon
-        
-        ida_kernwin.register_action(action_desc)
-        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_RUN, "Codexrebirth/")
-        
+        self._install_action(widget, popup, self.ACTION_RUN, "Run Symbolic Execution", self._run, "thunder.png")
+
     def _install_commit_action(self, widget, popup):
-        icon_data = self.palette.gen_icon("handshake.png")
-        action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_COMMIT,                        # The action name
-            "Commit Symbolic Execution",                     # The action text
-            IDACtxEntry(self._commit),     # The action handler
-            None,                                   # Optional: action shortcut
-            "Commit Symbolic Execution",                     # Optional: tooltip
-            ida_kernwin.load_custom_icon(data=icon_data))    # Optional: the action icon
-            
-        ida_kernwin.register_action(action_desc)
-        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_COMMIT, "Codexrebirth/")
-        
-                
+        self._install_action(widget, popup, self.ACTION_COMMIT, "Commit Symbolic Execution", self._commit, "handshake.png")
+
     def _install_end_address_action(self, widget, popup):
-        icon_data = self.palette.gen_icon("end.png")
-        action_desc = ida_kernwin.action_desc_t(
-        self.ACTION_END_ADDRESS,                        # The action name
-            "Set End Address",                     # The action text
-            IDACtxEntry(self._interactive_end_address),     # The action handler
-            None,                                   # Optional: action shortcut
-            "Set End Address",                     # Optional: tooltip
-            ida_kernwin.load_custom_icon(data=icon_data))    # Optional: the action icon
-        ida_kernwin.register_action(action_desc)
-        # attach action to a click on a address in the disassembly view
-        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_END_ADDRESS, "Codexrebirth/")
-        
-        
+        self._install_action(widget, popup, self.ACTION_END_ADDRESS, "Set End Address", self._interactive_end_address, "end.png")
+
     def _install_get_seg_offset_action(self, widget, popup):
-        action_desc = ida_kernwin.action_desc_t(
-        self.ACTION_GET_SEG_OFFSET,                        # The action name
-            "Get Offset",                     # The action text
-            IDACtxEntry(self._interactive_get_seg_offset),     # The action handler
-            None,                                   # Optional: action shortcut
-            "Get Offset",                     # Optional: tooltip
-            -1)    # Optional: the action icon
-        ida_kernwin.register_action(action_desc)
-        # attach action to a click on a address in the disassembly view
-        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_GET_SEG_OFFSET, "Codexrebirth/")
-        
-        
+        self._install_action(widget, popup, self.ACTION_GET_SEG_OFFSET, "Get Offset", self._interactive_get_seg_offset)
+
     def _install_clean_action(self, widget, popup):
-        icon_data = self.palette.gen_icon("reset.png")
-        action_desc = ida_kernwin.action_desc_t(
-        self.ACTION_CLEAN,                        # The action name
-            "Clean IDA",                     # The action text
-            IDACtxEntry(self._interactive_clean),     # The action handler
-            None,                                   # Optional: action shortcut
-            "Clean IDA",                     # Optional: tooltip
-            ida_kernwin.load_custom_icon(data=icon_data))    # Optional: the action icon
-        ida_kernwin.register_action(action_desc)
-        # attach action to a click on a address in the disassembly view
-        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_CLEAN, "Codexrebirth/")
-        
+        self._install_action(widget, popup, self.ACTION_CLEAN, "Clean IDA", self._interactive_clean, "reset.png")
+
     def _install_reset(self, widget, popup):
-        icon_data = self.palette.gen_icon("reset.png")
-        action_desc = ida_kernwin.action_desc_t(
-        self.ACTION_RESET,                        # The action name
-            "Reset Context",                     # The action text
-            IDACtxEntry(self.reset),     # The action handler
-            None,                                   # Optional: action shortcut
-            "Reset Context",                     # Optional: tooltip
-            ida_kernwin.load_custom_icon(data=icon_data))    # Optional: the action icon
-        ida_kernwin.register_action(action_desc)
-        # attach action to a click on a address in the disassembly view
-        ida_kernwin.attach_action_to_popup(widget, popup, self.ACTION_RESET, "Codexrebirth/")
-     
+        self._install_action(widget, popup, self.ACTION_RESET, "Reset Context", self.reset, "reset.png")
+
+    def _install_find_common_blocks(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_SIMILAR_BLOCKS, "Find Common Blocks", self._interactive_color_common_blocks)
+
+    def _install_decompile_blocks(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_DECOMPILE_BLOCK, "Decompile Block Code", self._interactive_decompile_block)
+
         
-    
+        
+     
     def _install_hooks(self):
         """
         Initialize & integrate all plugin UI elements.
+
+        This method sets up hooks for various UI and debugging events, allowing the plugin to integrate with IDA Pro.
         """
         
         self._ui_hooks.finish_populating_widget_popup = self._popup_hook
         self._ui_hooks.get_lines_rendering_info = self._render_lines
         self._ui_hooks.hook()
         
-        
         self._dbg_hooks.dbg_process_exit = self._exit
         self._dbg_hooks.dbg_process_detach = self._exit
         self._dbg_hooks.hook()
 
 
-        
     def _exit(self, pid, tid, ea, code):
         """
         (Event) IDA is about to exit.
@@ -382,7 +453,16 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
 
     def _uninstall_action(self, action, icon_id=ida_idaapi.BADADDR):
+        """
+        Uninstalls the specified action and frees the custom icon associated with it (if any).
 
+        Args:
+            action (ida_kernwin.action_desc_t): The action to uninstall.
+            icon_id (int, optional): The ID of the custom icon associated with the action. Defaults to ida_idaapi.BADADDR.
+
+        Returns:
+            bool: True if the action was successfully uninstalled, False otherwise.
+        """
         result = ida_kernwin.unregister_action(action)
         if not result:
             print(f"Failed to unregister {action}...")
@@ -410,6 +490,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self._install_end_address_action(widget, popup)
             self._install_get_seg_offset_action(widget, popup)
             self._install_clean_action(widget, popup)
+            self._install_find_common_blocks(widget, popup)
+            self._install_decompile_blocks(widget, popup)
             
         
     def _render_lines(self, lines_out, widget, lines_in):
@@ -426,18 +508,30 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
     def _highlight_disassesmbly(self, lines_out, widget, lines_in):
         """
-        """
-        trail_length = 1000
+        Highlights the disassembly in IDA Pro with different colors based on the current instruction and its context.
 
+        Args:
+            lines_out: The output lines.
+            widget: The widget to highlight.
+            lines_in: The input lines.
+
+        Returns:
+            None
+        """
+        if random.randint(0, 80) != 1:
+            return
+
+        trail_length = 2000
         forward_color = self.palette.trail_forward
         current_color = self.palette.trail_current
-        backward_color = self.palette.trail_backward
         symbolic_color = self.palette.symbolic
         end_address_color = self.palette.end_address
-        step_over = False
+        common_block_color = utils.to_ida_color(self.palette.common_blocks)
+        
+
         modifiers = QtGui.QGuiApplication.keyboardModifiers()
         step_over = bool(modifiers & QtCore.Qt.ShiftModifier)
-        
+
         current_address = idc.here()
         current_color = utils.to_ida_color(current_color)
         trail = {}
@@ -445,60 +539,55 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         if self.reader :
             forward_ips = self.reader.get_next_ips(trail_length, step_over)
             backward_ips = self.reader.get_prev_ips(trail_length, step_over)
-            
+            current_address = self.reader.rebased_ip
+
             trails = [
-                (backward_ips, backward_color), 
+                (backward_ips, forward_color), 
                 (forward_ips, forward_color)
             ]
 
             for j, (addresses, trail_color) in enumerate(trails):
                 for i, address in enumerate(addresses):
-                    
+
                     # find the index of the current address in the trail
                     idx = self.reader.idx - i if j == 0 else self.reader.idx + i
                     color = trail_color
-                    
+
                     # apply special color to symbolic addresses
                     if self.reader.is_symbolic(idx):
                         color =  symbolic_color
-                
+
                     percent = 1.0 - ((trail_length - i) / trail_length)
                     # convert to bgr
                     ida_color = utils.to_ida_color(color)
                     ida_color |= (0xFF - int(0xFF * percent)) << 24
-                    
-                    if address not in trail:
+
+                    if address not in trail or color == symbolic_color:
                         trail[address] = (ida_color, self.reader.get_Insn(idx))
-                        
-            current_address = self.reader.rebased_ip
-            
-            
+
 
         for section in lines_in.sections_lines:
             for line in section:
                 address = line.at.toea()
-                
+
                 if address in trail:
                     color, Insn = trail[address]
-                    cmt = utils.remove_line(str(Insn), 0)
+                    cmt = utils.remove_line(str(Insn))
                     idaapi.set_cmt(address, cmt, False)
-        
+
                 elif address == current_address:
                     color = current_color
-                    
+
                   # apply color for end address
                 elif address == self.user_defined_end_address :
                     color = utils.to_ida_color(end_address_color)
-                    
+
                 else:
                     continue
 
-                entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, color)
-                lines_out.entries.push_back(entry)
-                   
-                   
-
-
+                if idc.get_color(address, idc.CIC_ITEM) != common_block_color or color != forward_color:
+                    idaapi.set_item_color(address, color)
+                
 
 
 #------------------------------------------------------------------------------
@@ -556,9 +645,7 @@ class DBGHooks(ida_dbg.DBG_Hooks):
     def dbg_process_detach(self, pid, tid, ea):
         pass
     
-
-    
-    
+   
 
     
     

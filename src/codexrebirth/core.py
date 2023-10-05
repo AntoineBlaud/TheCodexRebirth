@@ -151,7 +151,7 @@ BINARY_ARCH = ArchitectureTranslator()[getglobal("BINARY_ARCH")]
 
 BINARY_MAX_MASK = BINARY_ARCH["binary_mask"]
 BINARY_ARCH_SIZE = BINARY_ARCH["binary_size"]
-MAX_RAW_REPR_LENGTH = 88
+MAX_RAW_REPR_LENGTH = 44
 new_var_counter = itertools.count(1)
 
 

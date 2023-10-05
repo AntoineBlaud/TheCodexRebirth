@@ -91,7 +91,8 @@
         "arrow_idle": "gray",
 
         "icon" : "red",
-        "end_address": "orange"
+        "end_address": "orange",
+        "common_blocks": "light_gray"
     }
 }
 

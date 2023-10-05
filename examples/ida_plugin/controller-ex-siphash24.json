@@ -1,0 +1,25 @@
+{
+    "BinaryArch": "x64",
+    "rootfs_path": "C:/Users/antoi/source/rootfs/x8664_linux",
+    "binary_path": "C:/Users/antoi/Downloads/samples/siphash24.bin",
+    "log_plain": true,
+    "debug_level": 1,
+    "symbolic_check": false,
+    "strict_symbolic_check": false,
+    "addresses": {
+        "in": {"segment": "[stack]", "offset": 125864}
+    },
+    "tainted_memory": [
+        {
+            "ref": "in",
+            "size": 2,
+            "chunck_size": 8
+        }
+    ],
+    "tainted_registers": [ 
+
+    ],
+    "do_not_sym_execute": [
+    ]
+    
+}

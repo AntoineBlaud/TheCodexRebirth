@@ -10,6 +10,9 @@ import ida_segment
 import idc
 from functools import wraps
 import jsonschema
+import openai
+import functools
+
 #------------------------------------------------------------------------------
 # Plugin Util
 #------------------------------------------------------------------------------
@@ -224,12 +227,10 @@ def get_regs_name() -> list:
         return [ 'EAX', 'EBX', 'ECX', 'EDX', 'ESP', 'EBP', 'ESI', 'EDI', 'R8D', 'R9D',
         'R10D', 'R11D', 'R12D', 'R13D', 'R14D', 'R15D', 'EIP']
         
-def remove_line(string, n):
-    lines = string.split('\n')
-    if len(lines) < n:
-        return string
-    lines.pop(n)
-    return '\n'.join(lines)
+def remove_line(string):
+    # remove the first line 
+    string = string[string.find('\n')+1:]
+    return string.replace("\n", " ; ")
 
 def show_msgbox(text, title="Codex Rebirth"):
     """
@@ -279,6 +280,11 @@ def delete_all_bpts():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
             idc.del_bpt(head)
+            
+def delete_all_colors():
+    for ea in idautils.Functions():
+        for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
+            idc.set_color(head, idc.CIC_ITEM, 0x242424)
             
 
 def taint_memory_with_string(codex, value, addr, name_pattern, chunk_size=1):
@@ -405,3 +411,148 @@ def validate_config(config):
    
     jsonschema.validate(config, schema)
        
+       
+import idaapi
+import idautils
+import idc
+
+
+def token_similarity(s1, s2):
+    # Convert the strings to sets of characters (or tokens)
+    set1 = set(s1)
+    set2 = set(s2)
+
+    # Calculate Jaccard similarity
+    intersection_size = len(set1.intersection(set2))
+    union_size = len(set1.union(set2))
+    
+    # Avoid division by zero
+    if union_size == 0:
+        return 0.0
+
+    similarity = intersection_size / union_size
+    return similarity
+
+
+def get_all_basic_blocks(ea):
+    func = idaapi.get_func(ea)
+    
+    if not func:
+        print("Function not found at 0x{:X}".format(ea))
+        return []
+
+    flow_chart = idaapi.FlowChart(func)
+
+    blocks_info = []
+    
+    for block in flow_chart:
+        block_start = block.start_ea
+        block_end = block.end_ea
+        block_disassembly = ""
+        for address in idautils.Heads(block_start, block_end):
+            instruction = idc.GetDisasm(address)
+            block_disassembly += "{}\n".format(instruction)
+        
+        blocks_info.append((block_start, block_disassembly))
+    
+    return blocks_info
+
+
+def get_basic_blocks(ea):
+    func = idaapi.get_func(ea)
+    if not func:
+        print("Function not found at 0x{:X}".format(ea))
+
+    flow_chart = idaapi.FlowChart(func)
+    for block in flow_chart:
+        block_start = block.start_ea
+        block_end = block.end_ea
+        if ea >= block_start and ea <= block_end:
+            instructions = []
+            for address in idautils.Heads(block_start, block_end):
+                instruction = idc.GetDisasm(address)
+                instructions.append(instruction)    
+            return block_start, "\n".join(instructions)
+        
+    return None, None
+        
+
+    
+
+def group_similar_blocks(blocks_info, similarity_threshold):
+    grouped_blocks = []
+    total_blocks = len(blocks_info)
+    
+    while blocks_info:
+        current_block_start, current_block_disassembly = blocks_info.pop(0)
+        similar_blocks = [(current_block_start, current_block_disassembly)]
+
+        for block_start, block_disassembly in blocks_info:
+            similarity = token_similarity(current_block_disassembly, block_disassembly)
+            if similarity >= similarity_threshold:
+                similar_blocks.append((block_start, block_disassembly))
+
+        for block in similar_blocks:
+            blocks_info = [(b_start, b_disassembly) for b_start, b_disassembly in blocks_info if b_start not in [b[0] for b in similar_blocks]]
+
+        grouped_blocks.append(similar_blocks)
+        progress_percentage = ((total_blocks - len(blocks_info)) / total_blocks) * 100
+        print("Progress: {:.2f}%".format(progress_percentage))
+
+    return grouped_blocks
+
+def color_blocks_in_group(group, color):
+    for block_start, _ in group:
+        func = idaapi.get_func(block_start)
+        flow_chart = idaapi.FlowChart(func)
+        for block in flow_chart:
+            if block.start_ea == block_start:
+                for head in idautils.Heads(block.start_ea, block.end_ea):
+                        idaapi.set_item_color(head, color)
+
+
+def query_model(query):
+    """
+    Function which sends a query to davinci-003 and calls a callback when the response is available.
+    Blocks until the response is received
+    :param query: The request to send to davinci-003
+    :param cb: Tu function to which the response will be passed to.
+    """
+    try:
+        
+        response = openai.ChatCompletion.create( 
+        model = 'gpt-3.5-turbo',
+        messages = [ # Change the prompt parameter to the messages parameter
+            {'role': 'user', 'content': query}
+        ],
+        temperature = 0,
+        timeout=2,  
+        )
+        return response['choices'][0]['message']['content']
+    except openai.InvalidRequestError as e:
+            print("Unfortunately, this function is too big to be analyzed with the model's current API limits.")
+
+    except openai.OpenAIError as e:
+        print(f"davinci-003 could not complete the request: {str(e)}")
+    except Exception as e:
+        print(f"General exception encountered while running the query: {str(e)}")
+
+# -----------------------------------------------------------------------------
+
+
+def query_model_sync(query):
+    print("Request sent...")
+    return query_model(query)
+
+
+
+def print_banner(message, char="="):
+    banner = char * 80
+    print(banner)
+    print(message)
+    print(banner)
+
+def check_openai_api_key():
+    if openai.api_key is None:
+        show_msgbox("Please set the OpenAI API key on the top of the ida_codexrebirth.py file")
+        return

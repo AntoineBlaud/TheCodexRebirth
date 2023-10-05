@@ -37,9 +37,8 @@ class CodexRebirthBackendContext:
         
         self.is_initialized = False
         
-        print("="*80)
-        print("Initializing CodexRebirth context (can take a while, please be patient)...")
-        print("="*80)
+        utils.print_banner("Initializing CodexRebirth context (can take a while, please be patient)...")
+    
         # Show a message box to the user.
         self.show_message_box()
 
@@ -75,7 +74,7 @@ class CodexRebirthBackendContext:
 
 
     def setup_logger(self):
-        return tempfile.NamedTemporaryFile(prefix="cr_trace", suffix=".txt", dir=os.path.expanduser("~\\Downloads"), delete=False, mode="w")
+        return tempfile.NamedTemporaryFile(prefix="cr_trace", suffix=".txt", delete=False, mode="w")
 
 
     def show_message_box(self):
@@ -112,14 +111,12 @@ class CodexRebirthBackendContext:
         """
         return os.path.join(os.getcwd(), idaapi.get_input_file_path())
 
+
     def initialize_symbolic_engine(self):
         """
-        Initialize the backend for emulation.
-
-        Args:
-
-        Returns:
-            Backend or None: Initialized backend or None if not available.
+        This function initializes the backend for emulation. It redirects standard output and standard error to the log file, 
+        redirects standard input to /dev/null (suppress user input), maps IDA Pro segments to Qiling, sets up the emulation environment, 
+        taints memory and registers, and sets do_not_sym_execute address.
         """
         
         BINARY_PATH_KEY = "binary_path"
@@ -200,12 +197,6 @@ class CodexRebirthBackendContext:
         Map IDA Pro segments to Qiling's memory.
 
         This function aligns the segments to the page size and joins adjacent segments with the same permissions.
-
-        Args:
-            None
-
-        Returns:
-            None
         """
         ql = self.sym_engine.ql
 
@@ -269,15 +260,7 @@ class CodexRebirthBackendContext:
     def map_registers(self):
         """
         Set up the emulation environment based
-
-
-        Args:
-            None
-
-        Returns:
-            None
         """
-
         # Get the current execution address as the emulation start.
         emu_start = get_ea()[0]
         self.sym_engine.set_emu_start(emu_start)
