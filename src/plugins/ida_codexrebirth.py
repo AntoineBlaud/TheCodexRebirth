@@ -22,7 +22,7 @@ import random
 import keyboard
 import openai
 
-openai.api_key = "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"
+openai.api_key = ""
 
 
 
