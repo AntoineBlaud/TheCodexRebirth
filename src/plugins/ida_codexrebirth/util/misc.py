@@ -12,6 +12,7 @@ from functools import wraps
 import jsonschema
 import openai
 import functools
+import ida_graph
 
 #------------------------------------------------------------------------------
 # Plugin Util
@@ -451,11 +452,24 @@ def get_all_basic_blocks(ea):
         block_disassembly = ""
         for address in idautils.Heads(block_start, block_end):
             instruction = idc.GetDisasm(address)
+            # remove comments
+            if ';' in instruction:
+                instruction = instruction.split(';')[0]
             block_disassembly += "{}\n".format(instruction)
         
         blocks_info.append((block_start, block_disassembly))
     
     return blocks_info
+
+
+def get_all_basic_blocks_start(ea):
+    func = idaapi.get_func(ea)
+    if not func:
+        print("Function not found at 0x{:X}".format(ea))
+        return []
+    
+    flow_chart = idaapi.FlowChart(func)
+    return [block.start_ea for block in flow_chart]
 
 
 def get_basic_blocks(ea):
@@ -471,6 +485,9 @@ def get_basic_blocks(ea):
             instructions = []
             for address in idautils.Heads(block_start, block_end):
                 instruction = idc.GetDisasm(address)
+                # remove comments
+                if ';' in instruction:
+                    instruction = instruction.split(';')[0]
                 instructions.append(instruction)    
             return block_start, "\n".join(instructions)
         
@@ -501,15 +518,29 @@ def group_similar_blocks(blocks_info, similarity_threshold):
 
     return grouped_blocks
 
-def color_blocks_in_group(group, color):
-    for block_start, _ in group:
+
+
+
+def get_current_gid():
+    tcontrol = idaapi.get_current_viewer()
+    view = ida_graph.get_viewer_graph(tcontrol)
+    return view.gid
+
+def color_blocks(blocks, color, cinside=True):
+    if not isinstance(blocks, list):
+        blocks = [blocks]
+    for block_start in blocks:
         func = idaapi.get_func(block_start)
         flow_chart = idaapi.FlowChart(func)
         for block in flow_chart:
             if block.start_ea == block_start:
-                for head in idautils.Heads(block.start_ea, block.end_ea):
+                p = idaapi.node_info_t()
+                p.bg_color = color
+                gid = get_current_gid()
+                if cinside:
+                    for head in idautils.Heads(block.start_ea, block.end_ea):
                         idaapi.set_item_color(head, color)
-
+                idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
 
 def query_model(query):
     """

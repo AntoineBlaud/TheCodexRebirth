@@ -7,7 +7,7 @@
     "symbolic_check": false,
     "strict_symbolic_check": false,
     "addresses": {
-        "in": {"segment": "[stack]", "offset": 125864}
+        "in": {"segment": "[stack]", "offset": 127688}
     },
     "tainted_memory": [
         {

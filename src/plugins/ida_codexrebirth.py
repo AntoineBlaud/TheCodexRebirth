@@ -25,10 +25,6 @@ import openai
 openai.api_key = ""
 
 
-
-
-
-
 class CodexRebirthIDA(ida_idaapi.plugin_t):
     """
     The plugin integration layer IDA Pro.
@@ -280,7 +276,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         # Specify the Levenshtein similarity threshold (e.g., 0.7 for 70% similarity)
         similarity_threshold = 0.90
-        common_block_color = utils.to_ida_color(self.palette.common_blocks)
+        common_block_color = self.palette.common_block_color
         
         # Specify the address (EA) of the function you want to analyze
         function_address = idc.here()  # Change this to the address of your function
@@ -290,11 +286,18 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         if blocks_info:
             # Group similar blocks based on the threshold
-            grouped_blocks = utils.group_similar_blocks(blocks_info, similarity_threshold)
+            grouped_blocks =  utils.group_similar_blocks(blocks_info, similarity_threshold)
             for group in grouped_blocks:
+                group = [ea for ea, _ in group]
                 # Color blocks in the group if they exceed a certain size
                 if len(group) > 5:
-                    utils.color_blocks_in_group(group, common_block_color)  
+                    # apply a random color slightly different than the common block color
+                    rand1 = random.randint(0, 50)
+                    rand2 = random.randint(0, 50)
+                    rand3 = random.randint(0, 50)
+                    r, g, b, _ = common_block_color.getRgb()
+                    color = 0xFF000000 | (r + rand1) << 16 | (g + rand2) << 8 | (b + rand3)
+                    utils.color_blocks(group, color)  
 
     @utils.open_console       
     def _interactive_decompile_block(self):
@@ -319,25 +322,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         utils.print_banner(response, "-")
 
                     
-             
-    @utils.open_console       
-    def _interactive_decompile_block(self):
-        
-        utils.check_openai_api_key()
-    
-        ea = idc.here()
-        start_ea, disassembly = utils.get_basic_blocks(ea)
-        
-        if start_ea in self.decompilation_block_cache:
-            cached_response = self.decompilation_block_cache[start_ea]
-            utils.print_banner(cached_response, "-")
-            return
-
-        prompt = "Provide the equivalent C code and condense it :\n" + str(disassembly)
-        response = utils.query_model_sync(prompt)
-        self.decompilation_block_cache[start_ea] = response
-        utils.print_banner(response, "-")
-
         
  
     def _uninstall(self):
@@ -522,11 +506,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
 
         trail_length = 2000
+        execution_times_color = self.palette.trail_backward
         forward_color = self.palette.trail_forward
         current_color = self.palette.trail_current
         symbolic_color = self.palette.symbolic
         end_address_color = self.palette.end_address
-        common_block_color = utils.to_ida_color(self.palette.common_blocks)
         
 
         modifiers = QtGui.QGuiApplication.keyboardModifiers()
@@ -535,6 +519,13 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         current_address = idc.here()
         current_color = utils.to_ida_color(current_color)
         trail = {}
+
+        blocks_start = utils.get_all_basic_blocks_start(current_address)
+        blocks_execution_count = {k: 0 for k in blocks_start}
+        
+        ignored = {}
+        
+
 
         if self.reader :
             forward_ips = self.reader.get_next_ips(trail_length, step_over)
@@ -545,6 +536,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 (backward_ips, forward_color), 
                 (forward_ips, forward_color)
             ]
+            
 
             for j, (addresses, trail_color) in enumerate(trails):
                 for i, address in enumerate(addresses):
@@ -557,18 +549,36 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     if self.reader.is_symbolic(idx):
                         color =  symbolic_color
 
-                    percent = 1.0 - ((trail_length - i) / trail_length)
                     # convert to bgr
                     ida_color = utils.to_ida_color(color)
-                    ida_color |= (0xFF - int(0xFF * percent)) << 24
 
                     if address not in trail or color == symbolic_color:
                         trail[address] = (ida_color, self.reader.get_Insn(idx))
+                        
+                    if address in blocks_execution_count:
+                        blocks_execution_count[address] += 1
+                        
+            # color block by execution count
+            total_execution_count = sum(blocks_execution_count.values())
+            for block_start, execution_count in blocks_execution_count.items():
+                
+                idaapi.set_cmt(block_start, f"Executed {execution_count} times", False)
+                ignored[block_start] = True
+                
+                if execution_count < 1 or execution_count > 4:
+                    continue
+                
+                ida_color = utils.to_ida_color(execution_times_color)
+                utils.color_blocks([block_start], ida_color, cinside=False)
+                
 
 
         for section in lines_in.sections_lines:
             for line in section:
                 address = line.at.toea()
+                
+                if address in ignored:
+                    continue
 
                 if address in trail:
                     color, Insn = trail[address]
@@ -585,8 +595,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 else:
                     continue
 
-                if idc.get_color(address, idc.CIC_ITEM) != common_block_color or color != forward_color:
-                    idaapi.set_item_color(address, color)
+                idaapi.set_item_color(address, color)
+                
+
                 
 
 

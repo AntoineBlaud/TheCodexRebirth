@@ -31,7 +31,8 @@
         "light_blue":     [144, 190, 252],
         "blue":           [ 30, 136, 229],
         "dark_blue":      [  0,   0, 128],
-        "light_pink":     [200, 17, 217]
+        "light_pink":     [200, 17, 217],
+        "blue_azul":      [  80,  223, 245]
 
     },
 
@@ -82,7 +83,7 @@
         "mem_write_bg": "blue",
         "mem_write_fg": "white",
 
-        "trail_backward": "red",
+        "trail_backward": "blue_azul",
         "trail_current":  "purple",
         "trail_forward":  "dark_blue",
 
@@ -92,7 +93,7 @@
 
         "icon" : "red",
         "end_address": "orange",
-        "common_blocks": "light_gray"
+        "common_block_color": "light_gray"
     }
 }
 
