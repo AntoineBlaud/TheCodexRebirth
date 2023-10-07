@@ -13,6 +13,7 @@ import jsonschema
 import openai
 import functools
 import ida_graph
+import re 
 
 #------------------------------------------------------------------------------
 # Plugin Util
@@ -518,6 +519,10 @@ def group_similar_blocks(blocks_info, similarity_threshold):
 
     return grouped_blocks
 
+
+def remove_hardcoded_values(block_disassembly):
+    pattern = re.compile(r"[0-9a-fA-F]+h")
+    return pattern.sub("", block_disassembly)
 
 
 

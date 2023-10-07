@@ -25,6 +25,10 @@ import openai
 openai.api_key = ""
 
 
+
+
+
+
 class CodexRebirthIDA(ida_idaapi.plugin_t):
     """
     The plugin integration layer IDA Pro.
@@ -281,8 +285,12 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # Specify the address (EA) of the function you want to analyze
         function_address = idc.here()  # Change this to the address of your function
         
+        blocks_info = []
+        
         # Get the list of basic blocks with disassembly for the specified function
-        blocks_info = utils.get_all_basic_blocks(function_address)
+        # remove harcoded values in disassembly (e.g., addresses) to improve the similarity
+        for ea, disassembly in utils.get_all_basic_blocks(function_address):
+            blocks_info.append((ea, utils.remove_hardcoded_values(disassembly)))
 
         if blocks_info:
             # Group similar blocks based on the threshold
@@ -502,7 +510,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         Returns:
             None
         """
-        if random.randint(0, 80) != 1:
+        if random.randint(0, 500) != 1 or not self.reader:
             return
 
         trail_length = 2000
@@ -520,57 +528,54 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         current_color = utils.to_ida_color(current_color)
         trail = {}
 
-        blocks_start = utils.get_all_basic_blocks_start(current_address)
-        blocks_execution_count = {k: 0 for k in blocks_start}
-        
         ignored = {}
         
+        
+        blocks_start = utils.get_all_basic_blocks_start(current_address)
+        blocks_execution_count = {k: 0 for k in blocks_start}
+        forward_ips = self.reader.get_next_ips(trail_length, step_over)
+        backward_ips = self.reader.get_prev_ips(trail_length, step_over)
+        current_address = self.reader.rebased_ip
 
+        trails = [
+            (backward_ips, forward_color), 
+            (forward_ips, forward_color)
+        ]
+        
 
-        if self.reader :
-            forward_ips = self.reader.get_next_ips(trail_length, step_over)
-            backward_ips = self.reader.get_prev_ips(trail_length, step_over)
-            current_address = self.reader.rebased_ip
+        for j, (addresses, trail_color) in enumerate(trails):
+            for i, address in enumerate(addresses):
 
-            trails = [
-                (backward_ips, forward_color), 
-                (forward_ips, forward_color)
-            ]
+                # find the index of the current address in the trail
+                idx = self.reader.idx - i if j == 0 else self.reader.idx + i
+                color = trail_color
+
+                # apply special color to symbolic addresses
+                if self.reader.is_symbolic(idx):
+                    color =  symbolic_color
+
+                # convert to bgr
+                ida_color = utils.to_ida_color(color)
+
+                if address not in trail or color == symbolic_color:
+                    trail[address] = (ida_color, self.reader.get_Insn(idx))
+                    
+                if address in blocks_execution_count:
+                    blocks_execution_count[address] += 1
+                    
+        # color block by execution count
+        total_execution_count = sum(blocks_execution_count.values())
+        for block_start, execution_count in blocks_execution_count.items():
             
-
-            for j, (addresses, trail_color) in enumerate(trails):
-                for i, address in enumerate(addresses):
-
-                    # find the index of the current address in the trail
-                    idx = self.reader.idx - i if j == 0 else self.reader.idx + i
-                    color = trail_color
-
-                    # apply special color to symbolic addresses
-                    if self.reader.is_symbolic(idx):
-                        color =  symbolic_color
-
-                    # convert to bgr
-                    ida_color = utils.to_ida_color(color)
-
-                    if address not in trail or color == symbolic_color:
-                        trail[address] = (ida_color, self.reader.get_Insn(idx))
-                        
-                    if address in blocks_execution_count:
-                        blocks_execution_count[address] += 1
-                        
-            # color block by execution count
-            total_execution_count = sum(blocks_execution_count.values())
-            for block_start, execution_count in blocks_execution_count.items():
-                
-                idaapi.set_cmt(block_start, f"Executed {execution_count} times", False)
-                ignored[block_start] = True
-                
-                if execution_count < 1 or execution_count > 4:
-                    continue
-                
-                ida_color = utils.to_ida_color(execution_times_color)
-                utils.color_blocks([block_start], ida_color, cinside=False)
-                
+            idaapi.set_cmt(block_start, f"Executed {execution_count} times", False)
+            ignored[block_start] = True
+            
+            if execution_count < 1 or execution_count > 4:
+                continue
+            
+            ida_color = utils.to_ida_color(execution_times_color)
+            utils.color_blocks([block_start], ida_color, cinside=False)
+            
 
 
         for section in lines_in.sections_lines:
