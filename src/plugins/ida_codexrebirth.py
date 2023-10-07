@@ -42,6 +42,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
     def __init__(self):
         self.decompilation_block_cache = {}
+        self.snaphost_file_path = None
         self.reset()
         self.load_ui()
         print("CodexRebirth: IDA Plugin Loaded")
@@ -328,8 +329,80 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         response = utils.query_model_sync(prompt)
         self.decompilation_block_cache[start_ea] = response
         utils.print_banner(response, "-")
-
+        
+        
+    @utils.open_console
+    def _interactive_hexdump_mem_diff(self):
+        
+        print("Hexdumping memory difference (Could take a while) ...")
+        time.sleep(0.1)
+ 
+        if not self.ctx.sym_engine:
+            print("Symbolic engine is not initialized. Ensure that you run symbolic execution first.")
+            return
+        
+        diff_count = 0
+        diff_buffer = []
+               
+        for seg in idautils.Segments():
+            seg_start = idc.get_segm_start(seg)
+            seg_end = idc.get_segm_end(seg)
+            
+            for ea in range(seg_start, seg_end):
+                ida_value = int(idc.get_wide_byte(ea))
+                ctx_value = int(self.ctx.sym_engine.ql.mem.read(ea, 1)[0])
+                
+                if ida_value != ctx_value:
                     
+                    if diff_count > 32:
+                        continue
+                
+                    if diff_count < 32:  # Limit to 32 bytes
+                        diff_buffer.append((ida_value, ctx_value))
+                        
+                    elif diff_count == 32:
+                        print(hex(ea - diff_count), " :\n", utils.repr_hex_and_ascii(diff_buffer), "...", "\n")
+                        diff_buffer = []
+                        
+                    diff_count += 1
+                    
+                elif diff_count > 0:
+                    print(hex(ea - diff_count), " : ", utils.repr_hex_and_ascii(diff_buffer))
+                    diff_buffer = []
+                    diff_count = 0   
+                    
+                    
+    @utils.open_console
+    def _interactive_ida_create_execution_snapshot(self):
+        """
+        Take an IDA execution snapshot.
+
+        This function takes a snapshot of the current IDA execution state and saves it to a file.
+        """
+        if not ida_dbg.is_debugger_on():
+            print("Please start the debugger first")
+            return
+        
+        print("Taking IDA execution snapshot ...")
+        self.snaphost_file_path = utils.take_execution_snapshot()  
+        
+    @utils.open_console
+    def _interactive_ida_restore_execution_snapshot(self):
+        """
+        Restore an IDA execution snapshot.
+
+        This function restores a previously taken IDA execution snapshot.
+        """
+        if not ida_dbg.is_debugger_on():
+            print("Please start the debugger first")
+            return
+        
+        if not self.snaphost_file_path:
+            print("Please take an execution snapshot first")
+            return
+        
+        print("Restoring IDA execution snapshot ...")
+        utils.restore_execution_snapshot(self.snaphost_file_path)
         
  
     def _uninstall(self):
@@ -359,6 +432,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     ACTION_RESET = "codexrebirth:reset"
     ACTION_SIMILAR_BLOCKS = "codexrebirth:similar_blocks"
     ACTION_DECOMPILE_BLOCK = "codexrebirth:decompile_block"
+    ACTION_HEXDUMP_MEM_DIFF = "codexrebirth:hexdump_mem_diff"
+    ACTION_IDA_CREATE_EXECUTION_SNAPSHOT = "codexrebirth:ida_create_execution_snapshot"
+    ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT = "codexrebirth:ida_restore_execution_snapshot"
     
     
     def _install_action(self, widget, popup, action_name, action_text, action_handler, icon_name=None):
@@ -416,8 +492,15 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     def _install_decompile_blocks(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_DECOMPILE_BLOCK, "Decompile Block Code", self._interactive_decompile_block)
 
+    def _install_hexdump_mem_diff(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_HEXDUMP_MEM_DIFF, "MemDiff with Symbolic Execution", self._interactive_hexdump_mem_diff)
         
+    def _install_ida_create_execution_snapshot(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_IDA_CREATE_EXECUTION_SNAPSHOT, "Create Execution Snapshot", self._interactive_ida_create_execution_snapshot)
         
+    def _install_ida_restore_execution_snapshot(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT, "Restore Execution Snapshot", self._interactive_ida_restore_execution_snapshot)
+     
      
     def _install_hooks(self):
         """
@@ -484,6 +567,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self._install_clean_action(widget, popup)
             self._install_find_common_blocks(widget, popup)
             self._install_decompile_blocks(widget, popup)
+            self._install_hexdump_mem_diff(widget, popup)
+            self._install_ida_create_execution_snapshot(widget, popup)
+            self._install_ida_restore_execution_snapshot(widget, popup)
             
         
     def _render_lines(self, lines_out, widget, lines_in):
@@ -510,7 +596,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         Returns:
             None
         """
-        if random.randint(0, 500) != 1 or not self.reader:
+        if random.randint(0, 200) != 1 or not self.reader:
             return
 
         trail_length = 2000
@@ -602,10 +688,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
                 idaapi.set_item_color(address, color)
                 
-
-                
-
-
 #------------------------------------------------------------------------------
 # IDA UI Helpers
 #------------------------------------------------------------------------------

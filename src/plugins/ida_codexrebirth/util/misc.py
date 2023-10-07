@@ -14,7 +14,9 @@ import openai
 import functools
 import ida_graph
 import re 
-
+import pickle
+import tempfile
+import ida_bytes
 #------------------------------------------------------------------------------
 # Plugin Util
 #------------------------------------------------------------------------------
@@ -525,6 +527,12 @@ def remove_hardcoded_values(block_disassembly):
     return pattern.sub("", block_disassembly)
 
 
+def repr_hex_and_ascii(byte_pairs):
+    hex_str_ida = " ".join(f"{ida:02X}" for ida, ctx in byte_pairs)
+    ascii_str_ida = "".join(chr(ida) if 32 <= ida <= 126 else '.' for ida, ctx in byte_pairs)
+    hex_str_ctx = " ".join(f"{ctx:02X}" for ida, ctx in byte_pairs)
+    ascii_str_ctx = "".join(chr(ctx) if 32 <= ctx <= 126 else '.' for ida, ctx in byte_pairs)
+    return f"{hex_str_ida}  {ascii_str_ida}\n{hex_str_ctx}  {ascii_str_ctx}"
 
 def get_current_gid():
     tcontrol = idaapi.get_current_viewer()
@@ -592,3 +600,51 @@ def check_openai_api_key():
     if openai.api_key is None:
         show_msgbox("Please set the OpenAI API key on the top of the ida_codexrebirth.py file")
         return
+    
+    
+    
+def take_execution_snapshot():
+    # Get the current state of segments and registers
+    segments = {}
+    for seg in idautils.Segments():
+        seg_start = idc.get_segm_start(seg)
+        seg_end = idc.get_segm_end(seg)
+        segments[seg] = (seg_start, seg_end, idc.get_bytes(seg_start, seg_end - seg_start))
+    
+    registers = {}
+    for reg in idautils.GetRegisterList():
+        try:
+            registers[reg] = idc.get_reg_value(reg)
+        except:
+            pass
+    # Create a temporary directory to store the snapshot
+    temp_dir = tempfile.mkdtemp()
+    snapshot_file = os.path.join(temp_dir, 'snapshot.pkl')
+    
+    # Serialize and save the data to a file
+    with open(snapshot_file, 'wb') as f:
+        snapshot_data = (segments, registers)
+        pickle.dump(snapshot_data, f)
+    
+    print(f"Execution snapshot saved to {snapshot_file}")
+    return os.path.join(temp_dir, 'snapshot.pkl')
+
+def restore_execution_snapshot(snapshot_file):
+    
+    if not os.path.exists(snapshot_file):
+        print("Snapshot file not found")
+        return
+    
+    # Deserialize the snapshot data
+    with open(snapshot_file, 'rb') as f:
+        segments, registers = pickle.load(f)
+    
+    # Restore segments
+    for seg, (seg_start, _, seg_data) in segments.items():
+        ida_bytes.patch_bytes(seg_start, seg_data)
+    
+    # Restore registers
+    for reg, value in registers.items():
+        idc.set_reg_value(value, reg)
+    
+    print("Execution snapshot restored")
