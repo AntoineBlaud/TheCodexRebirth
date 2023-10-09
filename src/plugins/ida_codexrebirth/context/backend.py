@@ -71,6 +71,8 @@ class CodexRebirthBackendContext:
             self.sym_engine.run_emulation()
         except UserStoppedExecution:
             pass
+        except Exception as e:
+            print("Engine stopped with exception: ", e)
 
 
     def setup_logger(self):

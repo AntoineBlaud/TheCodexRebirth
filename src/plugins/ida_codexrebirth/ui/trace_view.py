@@ -1,9 +1,10 @@
 import logging
 
 from ida_codexrebirth.util.qt import *
-from ida_codexrebirth.util.misc import register_callback, notify_callback
+from ida_codexrebirth.util.misc import register_callback, notify_callback, get_segment_name_bounds, to_ida_color, get_color
 from ida_codexrebirth.integration.api import disassembler
-
+import idc 
+from ida_codexrebirth.ui.palette import PluginPalette
 logger = logging.getLogger("Tenet.UI.TraceView")
 
 #
@@ -67,6 +68,9 @@ class TraceBar(QtWidgets.QWidget):
         # the magnetism distance (in pixels) for cursor clicks on viz events
         self._magnetism_distance = 4
         self._hovered_idx = INVALID_IDX
+        
+        self.palette = PluginPalette()
+        self.palette.warmup()
 
 
         #----------------------------------------------------------------------
@@ -252,6 +256,7 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_reads = []
         self._idx_writes = []
         self._idx_symbolic = []
+        self._idx_library = []
 
         self._refresh_painting_metrics()
         self.refresh()
@@ -343,14 +348,25 @@ class TraceBar(QtWidgets.QWidget):
         # holding the shift key while scrolling is used to 'step over'
         mod_keys = QtGui.QGuiApplication.keyboardModifiers()
         step_over = bool(mod_keys & QtCore.Qt.ShiftModifier)
+        
+        common_block_color = to_ida_color(self.palette.common_block_color)
+        
 
         # scrolling up, so step 'backwards' through the trace
         if event.angleDelta().y() > 0:
             self.reader.step_backward(1, step_over)
+            ea = self.reader.get_ip(self.reader.idx)
+            while get_color(ea) == common_block_color or idc.GetDisasm(ea).startswith("j"):
+                self.reader.step_backward(1, step_over)
+                ea = self.reader.get_ip(self.reader.idx)
 
         # scrolling down, so step 'forwards' through the trace
         elif event.angleDelta().y() < 0:
             self.reader.step_forward(1, step_over)
+            ea = self.reader.get_ip(self.reader.idx)
+            while get_color(ea) == common_block_color or idc.GetDisasm(ea).startswith("j"):
+                self.reader.step_forward(1, step_over)
+                ea = self.reader.get_ip(self.reader.idx)
 
         self.refresh()
         event.accept()
@@ -722,13 +738,22 @@ class TraceBar(QtWidgets.QWidget):
         Refresh trace event / highlight info from the underlying trace reader.
         """
         self._idx_symbolic = []
+        self._idx_library = []
+        
+        text_start, text_end = get_segment_name_bounds(".text")
 
         reader= self.reader
         if not (reader):
             return
         
         for idx in reader.get_executions_between(self.start_idx, self.end_idx):
-            if reader.is_symbolic(idx):
+            
+            # get current text start/end
+            ea = reader.get_ip(idx)
+            if not (ea >= text_start and ea < text_end):
+                self._idx_library.append(idx)
+  
+            elif reader.is_symbolic(idx):
                 self._idx_symbolic.append(idx)
 
 
@@ -927,6 +952,7 @@ class TraceBar(QtWidgets.QWidget):
         access_sets = \
         [
             (self._idx_symbolic, self.pctx.palette.symbolic),
+            (self._idx_library, self.pctx.palette.trace_library)
         ]
 
         painter.setPen(QtCore.Qt.NoPen)
@@ -959,6 +985,7 @@ class TraceBar(QtWidgets.QWidget):
         access_sets = \
         [
             (self._idx_symbolic, self.pctx.palette.symbolic),
+            (self._idx_library, self.pctx.palette.trace_library)
         ]
 
         for entries, color in access_sets:

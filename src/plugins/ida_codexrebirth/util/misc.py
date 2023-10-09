@@ -17,6 +17,8 @@ import re
 import pickle
 import tempfile
 import ida_bytes
+
+from collections import Counter
 #------------------------------------------------------------------------------
 # Plugin Util
 #------------------------------------------------------------------------------
@@ -422,19 +424,27 @@ import idc
 
 
 def token_similarity(s1, s2):
+    s1 = s1.split("\n")
+    s2 = s2.split("\n")
     # Convert the strings to sets of characters (or tokens)
     set1 = set(s1)
     set2 = set(s2)
 
     # Calculate Jaccard similarity
-    intersection_size = len(set1.intersection(set2))
-    union_size = len(set1.union(set2))
+    intersection = set1.intersection(set2)
+    union_size = len(s1) + len(s2) 
+    
+    counter_s1 = Counter(s1)
+    counter_s2 = Counter(s2)
+    counter = 0
+    for token in intersection:
+        counter += counter_s1[token] + counter_s2[token]    
     
     # Avoid division by zero
     if union_size == 0:
         return 0.0
 
-    similarity = intersection_size / union_size
+    similarity = counter / union_size
     return similarity
 
 
@@ -468,14 +478,13 @@ def get_all_basic_blocks(ea):
 def get_all_basic_blocks_start(ea):
     func = idaapi.get_func(ea)
     if not func:
-        print("Function not found at 0x{:X}".format(ea))
         return []
     
     flow_chart = idaapi.FlowChart(func)
     return [block.start_ea for block in flow_chart]
 
 
-def get_basic_blocks(ea):
+def get_basic_blocks(ea, comment=False):
     func = idaapi.get_func(ea)
     if not func:
         print("Function not found at 0x{:X}".format(ea))
@@ -488,9 +497,9 @@ def get_basic_blocks(ea):
             instructions = []
             for address in idautils.Heads(block_start, block_end):
                 instruction = idc.GetDisasm(address)
-                # remove comments
-                if ';' in instruction:
-                    instruction = instruction.split(';')[0]
+                if not comment:
+                    if ';' in instruction:
+                        instruction = instruction.split(';')[0]
                 instructions.append(instruction)    
             return block_start, "\n".join(instructions)
         
@@ -508,16 +517,17 @@ def group_similar_blocks(blocks_info, similarity_threshold):
         similar_blocks = [(current_block_start, current_block_disassembly)]
 
         for block_start, block_disassembly in blocks_info:
-            similarity = token_similarity(current_block_disassembly, block_disassembly)
+            similarity = token_similarity(remove_hardcoded_values(current_block_disassembly), remove_hardcoded_values(block_disassembly))
             if similarity >= similarity_threshold:
                 similar_blocks.append((block_start, block_disassembly))
 
-        for block in similar_blocks:
-            blocks_info = [(b_start, b_disassembly) for b_start, b_disassembly in blocks_info if b_start not in [b[0] for b in similar_blocks]]
+        
+        blocks_info = [(b_start, b_disassembly) for b_start, b_disassembly in blocks_info if b_start not in [b[0] for b in similar_blocks]]
 
         grouped_blocks.append(similar_blocks)
         progress_percentage = ((total_blocks - len(blocks_info)) / total_blocks) * 100
-        print("Progress: {:.2f}%".format(progress_percentage))
+        print("Percentage of blocks grouped: {:.2f}%".format(progress_percentage))
+        ida_kernwin.refresh_idaview_anyway()
 
     return grouped_blocks
 
@@ -539,6 +549,57 @@ def get_current_gid():
     view = ida_graph.get_viewer_graph(tcontrol)
     return view.gid
 
+def color_common_blocks(blocks, color, cinside=True):
+    
+    blocks_start = [start for start, _ in blocks]
+    blocks_disassembly = [remove_hardcoded_values(diss) for _, diss in blocks]
+    
+    for current_bstart in blocks_start:
+        
+        # transform the disassembly into a set of instructions
+        instructions_set_per_block = []
+    
+        for diss in blocks_disassembly:
+            instructions_set_per_block.append(set())
+            for line in diss.split('\n'):
+                if ";" in line:
+                    line = line.split(';')[0]
+                instructions_set_per_block[-1].add(line)
+                
+        # create percentage of instructions
+        instructions_counter = dict()          
+        for i in range(len(instructions_set_per_block)):
+             for inst in instructions_set_per_block[i]:
+                if inst not in instructions_counter:
+                    instructions_counter[inst] = 0
+                instructions_counter[inst] += 1
+                
+        # convert to percentage
+        for inst in instructions_counter:
+            instructions_counter[inst] /= len(instructions_set_per_block)
+
+        
+        func = idaapi.get_func(current_bstart)
+        flow_chart = idaapi.FlowChart(func)
+        for block in flow_chart:
+            if block.start_ea == current_bstart:
+                p = idaapi.node_info_t()
+                p.bg_color = color
+                gid = get_current_gid()
+                if cinside:
+                    for head in idautils.Heads(block.start_ea, block.end_ea):
+                        # get current disassembly
+                        current_inst = remove_hardcoded_values(idc.GetDisasm(head))
+                        if ';' in current_inst:
+                            current_inst = current_inst.split(';')[0]
+                        if instructions_counter[current_inst] > 0.7 or current_inst.startswith("j"):
+                            idaapi.set_item_color(head, color)
+
+                idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
+                
+
+
+                
 def color_blocks(blocks, color, cinside=True):
     if not isinstance(blocks, list):
         blocks = [blocks]
@@ -609,7 +670,8 @@ def take_execution_snapshot():
     for seg in idautils.Segments():
         seg_start = idc.get_segm_start(seg)
         seg_end = idc.get_segm_end(seg)
-        segments[seg] = (seg_start, seg_end, idc.get_bytes(seg_start, seg_end - seg_start))
+        if  abs(seg_end - seg_start) < 0xFFFFFF:
+            segments[seg] = (seg_start, seg_end, idc.get_bytes(seg_start, seg_end - seg_start))
     
     registers = {}
     for reg in idautils.GetRegisterList():
@@ -640,11 +702,38 @@ def restore_execution_snapshot(snapshot_file):
         segments, registers = pickle.load(f)
     
     # Restore segments
+    i = 0
     for seg, (seg_start, _, seg_data) in segments.items():
         ida_bytes.patch_bytes(seg_start, seg_data)
+        i += 1
+        print(f"Percentage of segments restored: {i / len(segments) * 100:.2f}%", end='\r')
     
     # Restore registers
     for reg, value in registers.items():
         idc.set_reg_value(value, reg)
     
     print("Execution snapshot restored")
+
+
+
+def get_op_values(ea):
+    disassembly = idc.GetDisasm(ea)
+    pattern = re.compile(r"0x[0-9a-fA-F]+")
+    return set(pattern.findall(disassembly))
+    
+def get_vars(ea):
+    disassembly = idc.GetDisasm(ea)
+    pattern = re.compile(r"var_[0-9a-zA-Z_]+")
+    return pattern.findall(disassembly)
+
+
+
+def get_segment_name_bounds(name):
+    segments = [(idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg)) for seg in idautils.Segments()]
+    for start, end, seg_name in segments:
+        if seg_name == name:
+            return start, end
+    
+    
+def get_color(ea):
+    return idc.get_color(ea, idc.CIC_ITEM)

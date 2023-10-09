@@ -15,11 +15,7 @@
         "j_malloc_base_01": {"segment": ".text", "offset": 25568}
     },
     "tainted_memory": [
-        {
-            "ref": "in",
-            "size": 16,
-            "chunck_size": 1
-        }
+
     ],
     "tainted_registers": [ 
         {

@@ -27,8 +27,6 @@ openai.api_key = ""
 
 
 
-
-
 class CodexRebirthIDA(ida_idaapi.plugin_t):
     """
     The plugin integration layer IDA Pro.
@@ -99,7 +97,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         print("Running Symbolic Execution")
         print("UI refresh will be disabled until the end of the symbolic execution")
-        time.sleep(0.2)
+        ida_kernwin.refresh_idaview_anyway()
         self.ctx.run_emulation()
         self.load_trace()
         self.show_ui()
@@ -280,7 +278,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         This function groups similar basic blocks in a function and colors them based on the specified similarity threshold.
         """
         # Specify the Levenshtein similarity threshold (e.g., 0.7 for 70% similarity)
-        similarity_threshold = 0.90
+        similarity_threshold = 0.65
         common_block_color = self.palette.common_block_color
         
         # Specify the address (EA) of the function you want to analyze
@@ -291,22 +289,26 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # Get the list of basic blocks with disassembly for the specified function
         # remove harcoded values in disassembly (e.g., addresses) to improve the similarity
         for ea, disassembly in utils.get_all_basic_blocks(function_address):
-            blocks_info.append((ea, utils.remove_hardcoded_values(disassembly)))
+            blocks_info.append((ea, disassembly))
 
         if blocks_info:
             # Group similar blocks based on the threshold
             grouped_blocks =  utils.group_similar_blocks(blocks_info, similarity_threshold)
-            for group in grouped_blocks:
-                group = [ea for ea, _ in group]
+            grouped_blocks = [group for group in grouped_blocks if len(group) > 5]
+         
+            for i, group in enumerate(grouped_blocks):
                 # Color blocks in the group if they exceed a certain size
                 if len(group) > 5:
                     # apply a random color slightly different than the common block color
-                    rand1 = random.randint(0, 50)
-                    rand2 = random.randint(0, 50)
-                    rand3 = random.randint(0, 50)
-                    r, g, b, _ = common_block_color.getRgb()
-                    color = 0xFF000000 | (r + rand1) << 16 | (g + rand2) << 8 | (b + rand3)
-                    utils.color_blocks(group, color)  
+                    # rand1 = random.randint(0, 50)
+                    # rand2 = random.randint(0, 50)
+                    # rand3 = random.randint(0, 50)
+                    # r, g, b, _ = common_block_color.getRgb()
+                    # color = 0xFF000000 | (r + rand1) << 16 | (g + rand2) << 8 | (b + rand3)
+                    color = utils.to_ida_color(common_block_color)
+                    utils.color_common_blocks(group, color)  
+                    print("Percentage of colored blocks: ", round((i+1)/len(grouped_blocks), 2) * 100, "%")
+                    ida_kernwin.refresh_idaview_anyway()
 
     @utils.open_console       
     def _interactive_decompile_block(self):
@@ -325,7 +327,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             utils.print_banner(cached_response, "-")
             return
 
-        prompt = "Provide the equivalent C code and condense it:\n" + str(disassembly)
+        prompt = "Please provide a deobfuscated C version of this code. Op1 and op2 represent values found in operands :\n" + str(disassembly)
         response = utils.query_model_sync(prompt)
         self.decompilation_block_cache[start_ea] = response
         utils.print_banner(response, "-")
@@ -335,7 +337,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     def _interactive_hexdump_mem_diff(self):
         
         print("Hexdumping memory difference (Could take a while) ...")
-        time.sleep(0.1)
  
         if not self.ctx.sym_engine:
             print("Symbolic engine is not initialized. Ensure that you run symbolic execution first.")
@@ -348,9 +349,16 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             seg_start = idc.get_segm_start(seg)
             seg_end = idc.get_segm_end(seg)
             
+            if  abs(seg_end - seg_start) > 0xFFFFF:
+                continue
+            
+            print("Hexdumping segment: ", hex(seg_start), " - ", hex(seg_end))
+    
+            
             for ea in range(seg_start, seg_end):
                 ida_value = int(idc.get_wide_byte(ea))
                 ctx_value = int(self.ctx.sym_engine.ql.mem.read(ea, 1)[0])
+                
                 
                 if ida_value != ctx_value:
                     
@@ -369,9 +377,30 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 elif diff_count > 0:
                     print(hex(ea - diff_count), " : ", utils.repr_hex_and_ascii(diff_buffer))
                     diff_buffer = []
-                    diff_count = 0   
+                    diff_count = 0  
+         
+    @utils.open_console           
+    def _interactive_show_var_equals(self):
+        
+        func = idaapi.get_func(idc.here())
+        c_ea = idc.here()
+        
+        current_ops = utils.get_op_values(c_ea)
+        
+        if len(current_ops) == 0:
+            return
+
+        
+        for ea in idautils.Heads(func.start_ea, func.end_ea):
+            ops = utils.get_op_values(ea)
+            if  ea == c_ea:
+                continue
+                
+            if len(current_ops.intersection(ops)) > 0:
+                print(hex(ea), " : ", idc.GetDisasm(ea))
+                idaapi.set_item_color(ea, utils.to_ida_color(self.palette.trail_current))
                     
-                    
+                  
     @utils.open_console
     def _interactive_ida_create_execution_snapshot(self):
         """
@@ -414,7 +443,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         mw.removeToolBar(self.trace_dock)
         self.trace_dock.close()
         # clean IDA trace
-        self._interactive_clean()
+        utils.delete_all_colors()
         # Reset the UI
         self.reset()
         
@@ -435,6 +464,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     ACTION_HEXDUMP_MEM_DIFF = "codexrebirth:hexdump_mem_diff"
     ACTION_IDA_CREATE_EXECUTION_SNAPSHOT = "codexrebirth:ida_create_execution_snapshot"
     ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT = "codexrebirth:ida_restore_execution_snapshot"
+    ACTION_IDA_SHOW_VAR_EQUALS = "codexrebirth:ida_show_var_equals"
     
     
     def _install_action(self, widget, popup, action_name, action_text, action_handler, icon_name=None):
@@ -501,6 +531,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     def _install_ida_restore_execution_snapshot(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT, "Restore Execution Snapshot", self._interactive_ida_restore_execution_snapshot)
      
+     
+    def _install_interactive_show_var_equals(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_IDA_SHOW_VAR_EQUALS, "Show Variables Equals", self._interactive_show_var_equals)
      
     def _install_hooks(self):
         """
@@ -570,6 +603,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self._install_hexdump_mem_diff(widget, popup)
             self._install_ida_create_execution_snapshot(widget, popup)
             self._install_ida_restore_execution_snapshot(widget, popup)
+            self._install_interactive_show_var_equals(widget, popup)
             
         
     def _render_lines(self, lines_out, widget, lines_in):
@@ -596,13 +630,18 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         Returns:
             None
         """
+        current_address = idc.here()
+        current_color = self.palette.trail_current
+        common_block_color = utils.to_ida_color(self.palette.common_block_color)
+        if utils.get_color(current_address) != common_block_color:
+            idaapi.set_item_color(current_address, utils.to_ida_color(current_color))
+        
         if random.randint(0, 200) != 1 or not self.reader:
             return
 
-        trail_length = 2000
+        trail_length = 1000
         execution_times_color = self.palette.trail_backward
         forward_color = self.palette.trail_forward
-        current_color = self.palette.trail_current
         symbolic_color = self.palette.symbolic
         end_address_color = self.palette.end_address
         
@@ -611,7 +650,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         step_over = bool(modifiers & QtCore.Qt.ShiftModifier)
 
         current_address = idc.here()
-        current_color = utils.to_ida_color(current_color)
         trail = {}
 
         ignored = {}
@@ -686,7 +724,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 else:
                     continue
 
-                idaapi.set_item_color(address, color)
+                # We dont overwrite the color if its a common block
+                if utils.get_color(address) != common_block_color:
+                    idaapi.set_item_color(address, color)
                 
 #------------------------------------------------------------------------------
 # IDA UI Helpers

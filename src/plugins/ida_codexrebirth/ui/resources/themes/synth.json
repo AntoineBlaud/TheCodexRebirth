@@ -93,7 +93,8 @@
 
         "icon" : "red",
         "end_address": "orange",
-        "common_block_color": "light_gray"
+        "common_block_color": "light_gray",
+        "trace_library" : "true_yellow"
     }
 }
 
