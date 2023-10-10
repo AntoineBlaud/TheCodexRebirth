@@ -94,7 +94,9 @@
         "icon" : "red",
         "end_address": "orange",
         "common_block_color": "light_gray",
-        "trace_library" : "true_yellow"
+        "trace_library" : "true_yellow",
+        "trace_other_funcs" : "orange",
+        "trace_highlighted_address" : "true_red"
     }
 }
 

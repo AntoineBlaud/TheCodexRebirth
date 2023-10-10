@@ -216,8 +216,7 @@ def get_ea() :
         idaapi.get_reg_val('RIP', rv)
     else:
         idaapi.get_reg_val('EIP', rv)
-    functionname = idaapi.get_func_name(rv.ival)
-    return rv.ival, functionname
+    return rv.ival
 
 def get_reg_value(reg_name) -> int:
     rv = idaapi.regval_t()
@@ -291,6 +290,16 @@ def delete_all_colors():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
             idc.set_color(head, idc.CIC_ITEM, 0x242424)
+            
+        func = idaapi.get_func(ea)
+        flow_chart = idaapi.FlowChart(func)
+        for block in flow_chart:
+            p = idaapi.node_info_t()
+            p.bg_color = 0x242424
+            gid = get_current_gid()
+            idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
+            
+
             
 
 def taint_memory_with_string(codex, value, addr, name_pattern, chunk_size=1):
@@ -475,13 +484,13 @@ def get_all_basic_blocks(ea):
     return blocks_info
 
 
-def get_all_basic_blocks_start(ea):
+def get_all_basic_blocks_bounds(ea):
     func = idaapi.get_func(ea)
     if not func:
         return []
     
     flow_chart = idaapi.FlowChart(func)
-    return [block.start_ea for block in flow_chart]
+    return [(block.start_ea, block.end_ea) for block in flow_chart]
 
 
 def get_basic_blocks(ea, comment=False):
@@ -510,8 +519,6 @@ def get_basic_blocks(ea, comment=False):
 
 def group_similar_blocks(blocks_info, similarity_threshold):
     grouped_blocks = []
-    total_blocks = len(blocks_info)
-    
     while blocks_info:
         current_block_start, current_block_disassembly = blocks_info.pop(0)
         similar_blocks = [(current_block_start, current_block_disassembly)]
@@ -521,13 +528,8 @@ def group_similar_blocks(blocks_info, similarity_threshold):
             if similarity >= similarity_threshold:
                 similar_blocks.append((block_start, block_disassembly))
 
-        
         blocks_info = [(b_start, b_disassembly) for b_start, b_disassembly in blocks_info if b_start not in [b[0] for b in similar_blocks]]
-
         grouped_blocks.append(similar_blocks)
-        progress_percentage = ((total_blocks - len(blocks_info)) / total_blocks) * 100
-        print("Percentage of blocks grouped: {:.2f}%".format(progress_percentage))
-        ida_kernwin.refresh_idaview_anyway()
 
     return grouped_blocks
 
@@ -592,9 +594,11 @@ def color_common_blocks(blocks, color, cinside=True):
                         current_inst = remove_hardcoded_values(idc.GetDisasm(head))
                         if ';' in current_inst:
                             current_inst = current_inst.split(';')[0]
-                        if instructions_counter[current_inst] > 0.7 or current_inst.startswith("j"):
-                            idaapi.set_item_color(head, color)
-
+                        try:
+                            if instructions_counter[current_inst] > 0.7 or current_inst.startswith("j"):
+                                idaapi.set_item_color(head, color)
+                        except KeyError:
+                            pass
                 idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
                 
 

@@ -64,13 +64,14 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_reads = []
         self._idx_writes = []
         self._idx_symbolic = []
+        self._idx_library = []
+        self._idx_other_funcs = []
+        self._idx_highlighted_address = []
 
         # the magnetism distance (in pixels) for cursor clicks on viz events
         self._magnetism_distance = 4
         self._hovered_idx = INVALID_IDX
-        
-        self.palette = PluginPalette()
-        self.palette.warmup()
+
 
 
         #----------------------------------------------------------------------
@@ -200,7 +201,7 @@ class TraceBar(QtWidgets.QWidget):
         self.reader = reader
 
         # initialize state based on the reader
-        self.set_bounds(0, len(reader._idx_trace_cache))
+        self.set_bounds(0, reader.length)
 
 
     def set_bounds(self, start_idx, end_idx):
@@ -208,11 +209,11 @@ class TraceBar(QtWidgets.QWidget):
         Set the idx bounds of the trace visualization.
         """
         assert end_idx > start_idx, f"Invalid Bounds ({start_idx}, {end_idx})"
-
+        print(f"Setting bounds to {start_idx} - {end_idx}")
         # set the bounds of the trace
         self.start_idx = max(0, start_idx)
-        self.end_idx = end_idx
-        self._end_idx_internal = end_idx
+        self.end_idx = end_idx - 1
+        self._end_idx_internal = end_idx - 1
 
         # update drawing metrics, note that this can 'tweak' end_idx to improve cell rendering
         self._refresh_painting_metrics()
@@ -257,6 +258,8 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_writes = []
         self._idx_symbolic = []
         self._idx_library = []
+        self._idx_other_funcs = []
+        self._idx_highlighted_address = []
 
         self._refresh_painting_metrics()
         self.refresh()
@@ -349,9 +352,8 @@ class TraceBar(QtWidgets.QWidget):
         mod_keys = QtGui.QGuiApplication.keyboardModifiers()
         step_over = bool(mod_keys & QtCore.Qt.ShiftModifier)
         
-        common_block_color = to_ida_color(self.palette.common_block_color)
+        common_block_color = to_ida_color(self.pctx.palette.common_block_color)
         
-
         # scrolling up, so step 'backwards' through the trace
         if event.angleDelta().y() > 0:
             self.reader.step_backward(1, step_over)
@@ -739,19 +741,33 @@ class TraceBar(QtWidgets.QWidget):
         """
         self._idx_symbolic = []
         self._idx_library = []
+        self._idx_other_funcs = []
+        self._idx_highlighted_address = []
         
-        text_start, text_end = get_segment_name_bounds(".text")
-
         reader= self.reader
         if not (reader):
             return
         
+        text_start, text_end = get_segment_name_bounds(".text")
+        func_start, func_end = self.reader.get_current_function_bounds()
+
+       
+        
         for idx in reader.get_executions_between(self.start_idx, self.end_idx):
             
+            if not reader.get_ip(idx):
+                continue
             # get current text start/end
             ea = reader.get_ip(idx)
-            if not (ea >= text_start and ea < text_end):
+            
+            if ea == self.reader.highlighted_address:
+                self._idx_highlighted_address.append(idx)
+            
+            elif not (ea >= text_start and ea < text_end):
                 self._idx_library.append(idx)
+                
+            elif not (ea >= func_start and ea < func_end):
+                self._idx_other_funcs.append(idx)
   
             elif reader.is_symbolic(idx):
                 self._idx_symbolic.append(idx)
@@ -818,6 +834,8 @@ class TraceBar(QtWidgets.QWidget):
         painter.drawImage(0, 0, self._image_cursor)
 
         #painter.drawImage(0, 0, self._image_final)
+        
+        self.pctx.update_disassembly_view()
 
     def _draw_base(self):
         """
@@ -952,7 +970,9 @@ class TraceBar(QtWidgets.QWidget):
         access_sets = \
         [
             (self._idx_symbolic, self.pctx.palette.symbolic),
-            (self._idx_library, self.pctx.palette.trace_library)
+            (self._idx_library, self.pctx.palette.trace_library),
+            (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
+            (self._idx_highlighted_address, self.pctx.palette.trace_highlighted_address)
         ]
 
         painter.setPen(QtCore.Qt.NoPen)
@@ -985,7 +1005,9 @@ class TraceBar(QtWidgets.QWidget):
         access_sets = \
         [
             (self._idx_symbolic, self.pctx.palette.symbolic),
-            (self._idx_library, self.pctx.palette.trace_library)
+            (self._idx_library, self.pctx.palette.trace_library),
+            (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
+            (self._idx_highlighted_address, self.pctx.palette.trace_highlighted_address)
         ]
 
         for entries, color in access_sets:
@@ -1227,6 +1249,10 @@ class TraceView(QtWidgets.QWidget):
         hbox.addWidget(self.trace_global)
 
         self.setLayout(hbox)
+        
+    def update(self):
+        self.trace_local.update()
+        self.trace_global.update()
 
 
     #--------------------------------------------------------------------------
@@ -1266,3 +1292,6 @@ class TraceDock(QtWidgets.QToolBar):
 
     def detach_reader(self):
         self.view.detach_reader()
+        
+    def update(self):
+        self.view.update()

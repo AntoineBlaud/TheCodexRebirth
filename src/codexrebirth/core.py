@@ -968,6 +968,11 @@ class SymRegister(SymValue):
     def _not(self):
         self.sym_value.value = ~self.sym_value.value & BINARY_MAX_MASK
         return self.update(self.sym_value)
+    
+    
+BAD_OPERANDS = [".*pl", ".*il", ".*z", ".*h"]
+
+BAD_INSN = []
 
 
 if BINARY_ARCH in (ARCH.X86_64, ARCH.X86):
@@ -1802,6 +1807,15 @@ class CodexInstructionEngineX86_64:
         if insn_addr == self.last_instruction_executed:
             self.is_last_instruction_symbolic = False
             return False
+        
+        for bad_op_pattern in BAD_OPERANDS:
+            if re.match(bad_op_pattern, insn.op_str):
+                return False
+            
+        for bad_insn_pattern in BAD_INSN:
+            if re.match(bad_insn_pattern, insn.op_str):
+                return False
+            
 
         self.check_resulting_operation(codex_state)
 
@@ -2181,6 +2195,10 @@ class  CodexRebirth:
 
     def code_execution_hook(self, ql: Qiling, address: int, size):
         try:
+            
+            if time.time() - self.start_time > 60:
+                raise UserStoppedExecution("Reached timeout of 60 seconds")
+            
             # Get the current instruction and its address
             insn, insn_addr = get_current_instruction(ql), get_instruction_address(ql)
 
@@ -2216,6 +2234,11 @@ class  CodexRebirth:
         finally:
             # Increment the instruction executed count
             self.insn_executed_count += 1
+            
+            
+            
+            
+            
 
     def set_emu_start(self, address: int):
         self.addr_emu_start = address
@@ -2312,11 +2335,8 @@ class  CodexRebirth:
         self.ql.hook_mem_write(self.memory_write_hook)
         self.ql.hook_code(self.code_execution_hook)
 
-        # Display register and stack dump before emulation starts
-        self.show_register_stack_dump()
-
         # Start measuring emulation time
-        start_time = time.time()
+        self.start_time = time.time()
 
         try:
             # Start Qiling engine emulation within the specified address range
@@ -2325,7 +2345,7 @@ class  CodexRebirth:
             else:
                 self.ql.run()
 
-        except (unicorn.UcError, UserStoppedExecution) as e:
+        except (unicorn.UcError) as e:
             log(
                 DebugLevel.ERROR,
                 f"Exception occurred while emulating: {str(e)}",
@@ -2334,7 +2354,7 @@ class  CodexRebirth:
             )
 
         end_time = time.time()
-        emulation_time = end_time - start_time
+        emulation_time = end_time -  self.start_time 
         instructions_per_second = self.insn_executed_count / emulation_time
 
         # Create a separator line for output formatting

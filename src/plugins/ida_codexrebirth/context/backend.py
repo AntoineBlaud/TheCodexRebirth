@@ -37,7 +37,7 @@ class CodexRebirthBackendContext:
         
         self.is_initialized = False
         
-        utils.print_banner("Initializing CodexRebirth context (can take a while, please be patient)...")
+        utils.print_banner("Initializing CodexRebirth context (can take up to 180 seconds, please be patient)...")
     
         # Show a message box to the user.
         self.show_message_box()
@@ -58,6 +58,7 @@ class CodexRebirthBackendContext:
         if not ida_dbg.is_debugger_on():
             utils.show_msgbox("Please start the debugger before running the emulation")
 
+  
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_qiling()
 
@@ -65,14 +66,10 @@ class CodexRebirthBackendContext:
         self.map_registers()
         
 
-        # Run the emulation.
-        try:
+        
             # Run the emulation.
-            self.sym_engine.run_emulation()
-        except UserStoppedExecution:
-            pass
-        except Exception as e:
-            print("Engine stopped with exception: ", e)
+        self.sym_engine.run_emulation()
+       
 
 
     def setup_logger(self):
@@ -224,9 +221,6 @@ class CodexRebirthBackendContext:
             if size > 0:
                 to_map.append((start, end, size, name))
             
-        print("Detected segments with size > 0")
-        for seg in to_map:
-            print(hex(seg[0]), hex(seg[1]), hex(seg[2]), seg[3])
 
         # Join adjacent segments with the same permissions.
         for i in range(len(to_map) - 1):
@@ -246,12 +240,12 @@ class CodexRebirthBackendContext:
         print("Registering memory mappings")
         # Map the segments to Qiling's memory.
         for start, end, size, name in to_map:
-            print(hex(start), hex(end), hex(size), name)
             ql.mem.map(start, size)
             if abs(size) < 0xFFFFFF:
                 data = ida_bytes.get_bytes(start, size)
                 ql.mem.write(start, data)
             else:
+                print(hex(start), hex(end), hex(size), name)
                 print("Segment too large to map")
             
             #  update the start and end address of the text segment
@@ -264,7 +258,7 @@ class CodexRebirthBackendContext:
         Set up the emulation environment based
         """
         # Get the current execution address as the emulation start.
-        emu_start = get_ea()[0]
+        emu_start = get_ea()
         self.sym_engine.set_emu_start(emu_start)
  
         # Set register values based on the current state.

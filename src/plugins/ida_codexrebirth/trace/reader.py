@@ -1,8 +1,8 @@
 
 from ida_codexrebirth.integration.api import disassembler, DisassemblerContextAPI
 from ida_codexrebirth.trace.arch import ArchAMD64, ArchX86
-
-
+import idaapi
+import ida_codexrebirth.util.misc as utils
 
 class TraceReader(object):
     """
@@ -24,10 +24,14 @@ class TraceReader(object):
         self._cached_registers = {}
         self._idx_trace_cache = {}
         self.construct_trace_cache()
-      
+        self._highlighted_address = None
         
+        
+    
         
     def construct_trace_cache(self):
+        
+ 
         for insn_addr in self._addr_trace_cache:
             for idx in self._addr_trace_cache[insn_addr].keys():
                 self._idx_trace_cache[idx] = (insn_addr, self._addr_trace_cache[insn_addr][idx])
@@ -38,13 +42,6 @@ class TraceReader(object):
     # Trace Properties
     #-------------------------------------------------------------------------
 
-    @property
-    def ip(self):
-        """
-        Return the current instruction pointer.
-        """
-        return self.get_register(self.arch.IP)
-    
     @property
     def rebased_ip(self):
         """
@@ -58,12 +55,24 @@ class TraceReader(object):
         Return the length of the trace.
         """
         return len(self._idx_trace_cache)
+    
+    @property
+    def highlighted_address(self):
+        """
+        Return the currently highlighted address.
+        """
+        return self._highlighted_address
 
 
 
     #-------------------------------------------------------------------------
     # Trace Navigation
     #-------------------------------------------------------------------------
+    def set_highlighted_address(self, address):
+        if address in self._addr_trace_cache:
+            self._highlighted_address = address
+            return True
+
 
     def seek(self, idx):
         """
@@ -82,8 +91,17 @@ class TraceReader(object):
         # set the ida instruction pointer
         self.dctx.set_ip(self.get_ip(idx))
         
+    
         
-
+    def get_current_function_bounds(self):
+        """
+        Return the bounds of the init function.
+        """
+        ea = utils.get_ea()
+        func = idaapi.get_func(ea) 
+        return func.start_ea, func.end_ea
+    
+        
     def is_symbolic(self, idx):
         """
         Return True if the given address is symbolic.
@@ -91,6 +109,7 @@ class TraceReader(object):
         if idx not in self._idx_trace_cache:
             return False
         return self._idx_trace_cache[idx][1].is_symbolic
+    
     
   
     
@@ -106,6 +125,8 @@ class TraceReader(object):
         """
         Return the instruction pointer for the given timestamp.
         """
+        if idx not in self._idx_trace_cache:
+            return None
         return self._idx_trace_cache[idx][0]
 
     def seek_percent(self, percent):
@@ -115,39 +136,34 @@ class TraceReader(object):
         target_idx = int(self.length * (percent / 100))
         self.seek(target_idx)
 
-    def seek_to_first(self, address, access_type, length=1):
+    def seek_to_first(self, address):
         """
         Seek to the first instance of the given breakpoint.
 
         Returns True on success, False otherwise.
         """
-        return self.seek_to_next(address, access_type, length, 0)
+        return self.seek_to_next(address)
 
-    def seek_to_final(self, address, access_type, length=1):
+    def seek_to_final(self, address):
         """
         Seek to the final instance of the given breakpoint.
 
         Returns True on success, False otherwise.
         """
-        return self.seek_to_prev(address, access_type, length, self.length-1)
+        return self.seek_to_prev(address)
 
-    def seek_to_next(self, address, access_type, length=1, start_idx=None):
+    def seek_to_next(self, address,start_idx=None):
         """
         Seek to the next instance of the given breakpoint.
 
         Returns True on success, False otherwise.
         """
-        if start_idx is None:
-            start_idx = self.idx + 1
-
-    
-        assert length == 1
+       
         idx = self.find_next_execution(address, start_idx)
-
         self.seek(idx)
         return True
 
-    def seek_to_prev(self, address, access_type, length=1, start_idx=None):
+    def seek_to_prev(self, address, start_idx=None):
         """
         Seek to the previous instance of the given breakpoint.
 
@@ -270,7 +286,7 @@ class TraceReader(object):
         if idx_index < len(addr_timestamps) - 1:
             return addr_timestamps[idx_index + 1]
         # fail, reached start of trace
-        return -1
+        return self.idx
 
     def find_prev_execution(self, address, idx=None):
         """
@@ -291,6 +307,6 @@ class TraceReader(object):
         if idx > 0:
             return addr_timestamps[idx_index - 1]
         
-        return -1
+        return self.idx
             
             
