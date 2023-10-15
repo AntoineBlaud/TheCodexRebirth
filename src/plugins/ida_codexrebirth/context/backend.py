@@ -23,7 +23,6 @@ class CodexRebirthBackendContext:
         self.config = None
         
         self.is_initialized = False
-        self.do_not_sym_execute = []
         
         # Create a temporary log file for debugging.
         self.log_file = self.setup_logger()
@@ -184,9 +183,6 @@ class CodexRebirthBackendContext:
             addr = utils.segment_offset_to_address(segname, offset)
             print(f"Address {hex(addr)} added to do_not_sym_execute list")
             self.sym_engine.add_emu_end(addr)
-            self.do_not_sym_execute.append(addr)
-            # add breakpoint to the address
-            ida_dbg.add_bpt(addr, 1, idc.BPT_SOFT)
         
         
    

@@ -72,10 +72,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         
 
-        if not self.ctx.is_initialized:
-            self.ctx.initialize()
-
-
+       
+        self.ctx.initialize()
 
         # we set the end address to the symbolic engine after the initialization
         self.ctx.sym_engine.set_emu_end(self.user_defined_end_address)
@@ -96,12 +94,15 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
             except UserStoppedExecution:
                 
+                current_ip = self.ctx.sym_engine.get_current_pc()
+                
+                print("User stopped the execution, current ea: ", hex(current_ip))
+                
                 if time.time() - start > 90:
                     print("Symbolic execution took too long. Aborting ...")
                     break
                 
                 else:
-                    current_ip = self.ctx.sym_engine.get_current_pc()
                     if  utils.get_ea() != current_ip:
                         ida_dbg.add_bpt(current_ip, 1, idc.BPT_SOFT)
                         ida_dbg.continue_process()
@@ -109,7 +110,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                         
                     # avance at least of 2 instructions
                     for _ in range(2):
-                        ida_dbg.step_into()
+                        ida_dbg.step_over()
                         ida_dbg.wait_for_next_event(ida_dbg.WFNE_SUSP, -1)
                     
                   
@@ -650,7 +651,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         is_quick_update = trail_length == 100
 
         # one chance out of 50 to update if is quick update
-        if is_quick_update and random.randint(0, (trail_length )) == 1:
+        if is_quick_update and random.randint(0, (trail_length * 2 )) != 1:
             return
         
         

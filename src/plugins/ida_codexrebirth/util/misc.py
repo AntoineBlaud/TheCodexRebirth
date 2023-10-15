@@ -229,8 +229,7 @@ def get_regs_name() -> list:
         return ['RAX', 'RBX', 'RCX', 'RDX', 'RSP', 'RBP', 'RSI', 'RDI', 'R8', 'R9',
         'R10', 'R11', 'R12', 'R13', 'R14', 'R15', 'RIP']
     else:
-        return [ 'EAX', 'EBX', 'ECX', 'EDX', 'ESP', 'EBP', 'ESI', 'EDI', 'R8D', 'R9D',
-        'R10D', 'R11D', 'R12D', 'R13D', 'R14D', 'R15D', 'EIP']
+        return [ 'EAX', 'EBX', 'ECX', 'EDX', 'ESP', 'EBP', 'ESI', 'EDI', 'EIP']
         
 def remove_line(string):
     # remove the first line 

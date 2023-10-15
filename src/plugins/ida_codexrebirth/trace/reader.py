@@ -97,9 +97,12 @@ class TraceReader(object):
         """
         Return the bounds of the init function.
         """
-        ea = utils.get_ea()
-        func = idaapi.get_func(ea) 
-        return func.start_ea, func.end_ea
+        try:
+            ea = self._idx_trace_cache[0][0]
+            func = idaapi.get_func(ea) 
+            return func.start_ea, func.end_ea
+        except:
+            return 0, 0
     
         
     def is_symbolic(self, idx):

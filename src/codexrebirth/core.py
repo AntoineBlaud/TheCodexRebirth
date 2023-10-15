@@ -2235,10 +2235,7 @@ class  CodexRebirth:
             # Increment the instruction executed count
             self.insn_executed_count += 1
             
-            
-            
-            
-            
+  
 
     def set_emu_start(self, address: int):
         self.addr_emu_start = address
