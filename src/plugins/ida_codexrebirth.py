@@ -16,6 +16,7 @@ import ida_codexrebirth.util.misc as utils
 from ida_codexrebirth.ui.trace_view import TraceDock
 from ida_codexrebirth.trace.reader import TraceReader
 from ida_codexrebirth.context.backend import CodexRebirthBackendContext
+from ida_codexrebirth.context.var_explorer import VarExplorer
 import time
 from PyQt5.QtWidgets import QMessageBox
 import random
@@ -42,6 +43,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.snaphost_file_path = None
         self.reset()
         self.load_ui()
+        self.var_exp = VarExplorer()
         print("CodexRebirth: IDA Plugin Loaded")
         
     def reset(self):
@@ -631,30 +633,23 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, current_color)
                     lines_out.entries.push_back(entry)
                     
+        if random.randint(0, 200) == 1:
+            # update var explorer
+            print("Updating var explorer ...")
+            self.var_exp.update()
+                    
 
         
-    def update_disassembly_view(self, trail_length=100):
+    def update_disassembly_view(self, trail_length):
         """
         Update the disassembly view.
         """
+    
         
         if not self.reader:
             return
         
         current_address = idc.here()
-        
-        # one in 700 chance to update a bigger trail
-        if random.randint(0, 700) == 1:
-            trail_length = 0xFFF
-        
-        
-        is_quick_update = trail_length == 100
-
-        # one chance out of 50 to update if is quick update
-        if is_quick_update and random.randint(0, (trail_length * 2 )) != 1:
-            return
-        
-        
         forward_color = self.palette.trail_forward
         symbolic_color = self.palette.symbolic
         end_address_color = self.palette.end_address
