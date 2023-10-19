@@ -633,7 +633,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, current_color)
                     lines_out.entries.push_back(entry)
                     
-        if random.randint(0, 200) == 1:
+        if random.randint(0, 2500) == 1:
             # update var explorer
             print("Updating var explorer ...")
             self.var_exp.update()
