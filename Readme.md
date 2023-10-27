@@ -1,4 +1,6 @@
-# CodexRebirth Project
+# CodexRebirth Project (Alpha Version)
+
+Important: A new version will be released in a few weeks, and it will offer a tenfold improvement. Please check the development branch to get a hint on the upcoming features.
 
 The CodexRebirth project aims to simplify the reverse engineering of obfuscated methods using a Taint Analysis approach. It will analyze all assembly instructions and, when one depends on a tainted register or memory, or on a result derived from one of these tainted values, it will process the operation and update the relevant equations.
 

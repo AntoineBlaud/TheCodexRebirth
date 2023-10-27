@@ -640,11 +640,12 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     
 
         
-    def update_disassembly_view(self, trail_length):
+    def update_disassembly_view(self, trail_length=0x50):
         """
         Update the disassembly view.
         """
     
+        is_quick_update = trail_length == 0x50
         
         if not self.reader:
             return
