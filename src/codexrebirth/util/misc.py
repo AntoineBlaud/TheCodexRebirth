@@ -17,6 +17,7 @@ import re
 import pickle
 import tempfile
 import ida_bytes
+from capstone.x86_const import X86_OP_MEM, X86_OP_REG, X86_OP_IMM
 
 from collections import Counter
 #------------------------------------------------------------------------------
@@ -623,3 +624,13 @@ def get_segment_name_bounds(name):
     
 def get_color(ea):
     return idc.get_color(ea, idc.CIC_ITEM)
+
+def check_memory_access(insn):
+        # lea instruction is not a memory access
+    if insn.mnemonic == "lea":
+        return False
+
+    for op in insn.operands:
+        if op.type == X86_OP_MEM:
+            return True
+    return False

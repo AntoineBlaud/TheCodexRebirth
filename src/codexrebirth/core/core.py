@@ -39,6 +39,9 @@ from codexrebirth.core.values import (
 from codexrebirth.util.ustring import (
     create_name_from_addr,
 )
+from codexrebirth.util.misc import (
+    check_memory_access
+)
 from codexrebirth.util.counter import alt_count
 
 from codexrebirth.core.engines import (
@@ -790,13 +793,11 @@ class Runner:
         self.reg_sm = DataStoreManager()
         self.mem_sm = DataStoreManager()
         
-    
     def register_callback(self, address: int, fn: callable):
         assert isinstance(address, int)
         assert callable(fn)
         self.callbacks[address] = fn
         
-    
     def set_emu_start(self, address: int):
         assert isinstance(address, int)
         self.addr_emu_start = address
@@ -809,10 +810,6 @@ class Runner:
         assert isinstance(address, int)
         self.addr_emu_end.append(address)
         
-
-        
-        
-        
     def clone(self):
         raise NotImplementedError("clone method not implemented")
     
@@ -822,7 +819,6 @@ class Runner:
 
         
         
-
 class QilingRunner(Runner):
     def __init__(self, ql_instance, debug_level=DebugLevel.INFO, *args, **kwargs):
         super().__init__(debug_level, *args, **kwargs)
@@ -911,7 +907,7 @@ class QilingRunner(Runner):
                         self.callbacks[fn_addr](ql)
 
             # If the instruction involves memory access, delegate to dedicated functions (mem_read, mem_write)
-            if self.check_memory_access(insn):
+            if check_memory_access(insn):
                 return
 
             # Evaluate the instruction with the current codex state
@@ -929,16 +925,6 @@ class QilingRunner(Runner):
     def get_current_pc(self):
         return self.engine.get_current_instruction_address()
     
-    
-    def check_memory_access(self,insn):
-            # lea instruction is not a memory access
-        if insn.mnemonic == "lea":
-            return False
-
-        for op in insn.operands:
-            if op.type == X86_OP_MEM:
-                return True
-        return False
     
     def update_data_store(self, Insn):
         for i in range(min(len(Insn.cinsn.operands), 3)):
