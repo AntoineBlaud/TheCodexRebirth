@@ -9,21 +9,21 @@ import idc
 import idaapi
 from codexrebirth.exceptions import UserStoppedExecution
 
-from ida_codexrebirth.util.qt import *
-from ida_codexrebirth.ui.palette import PluginPalette
-import ida_codexrebirth.util.misc as utils
+from codexrebirth.util.qt import *
+from codexrebirth.ui.palette import PluginPalette
+importcodexrebirth.util.misc as utils
 
-from ida_codexrebirth.ui.trace_view import TraceDock
-from ida_codexrebirth.trace.reader import TraceReader
-from ida_codexrebirth.context.backend import CodexRebirthBackendContext
-from ida_codexrebirth.context.var_explorer import VarExplorer
+from codexrebirth.ui.trace_view import TraceDock
+from codexrebirth.trace.reader import TraceReader
+from codexrebirth.context.qlbackend import QilingBackend
+from codexrebirth.context.var_explorer import VarExplorer
 import time
 from PyQt5.QtWidgets import QMessageBox
 import random
 import keyboard
 import openai
 
-openai.api_key = ""
+
 
 
 
@@ -39,11 +39,15 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     wanted_hotkey = ""
 
     def __init__(self):
-        self.decompilation_block_cache = {}
-        self.snaphost_file_path = None
+        self.load_config()
         self.reset()
         self.load_ui()
+        # OpenAI API key
+        openai.api_key = self.config["openai_key"]
+        # Var explorer, used to renamed registers in disassembly view
         self.var_exp = VarExplorer()
+        # Snapshot manager, used to take and restore IDA execution snapshots
+        self.snap_manager = SnapshotManager()
         print("CodexRebirth: IDA Plugin Loaded")
         
     def reset(self):
@@ -51,7 +55,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.sym_engine_last_run = None
         self.reader = None
         self.blocks_execution_count  = None
-        self.ctx = CodexRebirthBackendContext()
+        self.ctx = QilingBackend()
         
         
     def init(self):
@@ -62,6 +66,26 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     
     def term(self):
         pass
+    
+    def load_config(self):
+        """
+        Load the config script selected by the user.
+
+        Raises:
+            Exception: If no config is selected or loading fails.
+
+        Returns:
+            str: Path to the loaded config script.
+        """
+        config = ask_file("Select a config file (.json)", "JSON Files (*.json)")
+        if config is None or len(config) < 5:
+            raise Exception("No config selected")
+        
+        config = json.load(open(config, "r"))
+        utils.validate_config(config)
+        print("Configuration file has been validated")
+        self.config = config
+        
 
     @utils.open_console
     def _run(self):
@@ -73,10 +97,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         """
         
-
-       
         self.ctx.initialize()
-
         # we set the end address to the symbolic engine after the initialization
         self.ctx.sym_engine.set_emu_end(self.user_defined_end_address)
 
@@ -234,16 +255,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # Set a breakpoint at the end address
         ida_dbg.add_bpt(self.user_defined_end_address, 1, idc.BPT_SOFT)
 
-    @utils.open_console
-    def _interactive_get_seg_offset(self):
-        """
-        Get the segment offset for the current address.
-
-        This function is called when the user wants to retrieve the segment offset for the current address.
-        """
-        address = idc.here()
-        seg = str(utils.address_to_segment_offset(address)).replace('\'', '\"')
-        print(f"Offset of {hex(address)}: {seg}")
 
     def _interactive_clean(self):
         """
@@ -289,73 +300,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     utils.color_common_blocks(group, color)  
                     ida_kernwin.refresh_idaview_anyway()
 
-    @utils.open_console       
-    def _interactive_decompile_block(self):
-        """
-        Decompile a block of code using the OpenAI model.
 
-        This function allows the user to decompile a block of code by providing the equivalent C code and condensing it.
-        """
-        utils.check_openai_api_key()
-
-        ea = idc.here()
-        start_ea, disassembly = utils.get_basic_blocks(ea)
-        
-        if start_ea in self.decompilation_block_cache:
-            cached_response = self.decompilation_block_cache[start_ea]
-            utils.print_banner(cached_response, "-")
-            return
-
-        prompt = "Please provide a deobfuscated C version of this code. Op1 and op2 represent values found in operands :\n" + str(disassembly)
-        response = utils.query_model_sync(prompt)
-        self.decompilation_block_cache[start_ea] = response
-        utils.print_banner(response, "-")
-        
-        
-    @utils.open_console
-    def _interactive_hexdump_mem_diff(self):
-        
-        print("Hexdumping memory difference (Could take a while) ...")
- 
-        if not self.ctx.sym_engine:
-            print("Symbolic engine is not initialized. Ensure that you run symbolic execution first.")
-            return
-        
-        diff_count = 0
-        diff_buffer = []
-               
-        for seg in idautils.Segments():
-            seg_start = idc.get_segm_start(seg)
-            seg_end = idc.get_segm_end(seg)
-            
-            if  abs(seg_end - seg_start) > 0xFFFFF:
-                continue
-            
-            print("Hexdumping segment: ", hex(seg_start), " - ", hex(seg_end))
-    
-            
-            for ea in range(seg_start, seg_end):
-                ida_value = int(idc.get_wide_byte(ea))
-                ctx_value = int(self.ctx.sym_engine.ql.mem.read(ea, 1)[0])
-
-                if ida_value != ctx_value:
-                    
-                    if diff_count > 32:
-                        continue
-                
-                    if diff_count < 32:  # Limit to 32 bytes
-                        diff_buffer.append((ida_value, ctx_value))
-                        
-                    elif diff_count == 32:
-                        print(hex(ea - diff_count), " :\n", utils.repr_hex_and_ascii(diff_buffer), "...", "\n")
-                        diff_buffer = []
-                        
-                    diff_count += 1
-                    
-                elif diff_count > 0:
-                    print(hex(ea - diff_count), " : ", utils.repr_hex_and_ascii(diff_buffer))
-                    diff_buffer = []
-                    diff_count = 0  
         
     @utils.open_console
     def _interactive_hightligh_address(self):
@@ -367,8 +312,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         self.reader.set_highlighted_address(idc.here())
          
-
-                    
+     
                   
     @utils.open_console
     def _interactive_ida_create_execution_snapshot(self):
@@ -382,10 +326,10 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         print("Taking IDA execution snapshot ...")
-        self.snaphost_file_path = utils.take_execution_snapshot()  
+        self.snaphost_file_path = utils.take_ida_execution_snapshot()  
         
     @utils.open_console
-    def _interactive_ida_restore_execution_snapshot(self):
+    def _interactive_ida_restore_ida_execution_snapshot(self):
         """
         Restore an IDA execution snapshot.
 
@@ -400,7 +344,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         print("Restoring IDA execution snapshot ...")
-        utils.restore_execution_snapshot(self.snaphost_file_path)
+        utils.restore_ida_execution_snapshot(self.snaphost_file_path)
         
         
         
@@ -441,14 +385,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
     ACTION_RUN = "codexrebirth:run"
     ACTION_END_ADDRESS = "codexrebirth:end_address"
-    ACTION_GET_SEG_OFFSET = "codexrebirth:get_seg_offset"
     ACTION_CLEAN = "codexrebirth:clean"
     ACTION_RESET = "codexrebirth:reset"
     ACTION_SIMILAR_BLOCKS = "codexrebirth:similar_blocks"
-    ACTION_DECOMPILE_BLOCK = "codexrebirth:decompile_block"
-    ACTION_HEXDUMP_MEM_DIFF = "codexrebirth:hexdump_mem_diff"
     ACTION_IDA_CREATE_EXECUTION_SNAPSHOT = "codexrebirth:ida_create_execution_snapshot"
-    ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT = "codexrebirth:ida_restore_execution_snapshot"
+    ACTION_IDA_restore_ida_execution_snapshot = "codexrebirth:ida_restore_ida_execution_snapshot"
     ACTION_GO_NEXT_EXECUTION = "codexrebirth:go_next_execution"
     ACTION_GO_PREV_EXECUTION = "codexrebirth:go_prev_execution"
     ACTION_HIGHLIGHT_ADDRESS = "codexrebirth:highlight_address"
@@ -492,8 +433,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     def _install_end_address_action(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_END_ADDRESS, "Set End Address", self._interactive_end_address, "end.png")
 
-    def _install_get_seg_offset_action(self, widget, popup):
-        self._install_action(widget, popup, self.ACTION_GET_SEG_OFFSET, "Get Offset", self._interactive_get_seg_offset)
 
     def _install_clean_action(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_CLEAN, "Clean IDA", self._interactive_clean, "reset.png")
@@ -504,17 +443,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     def _install_find_common_blocks(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_SIMILAR_BLOCKS, "Find Common Blocks", self._interactive_color_common_blocks)
 
-    def _install_decompile_blocks(self, widget, popup):
-        self._install_action(widget, popup, self.ACTION_DECOMPILE_BLOCK, "Decompile Block Code", self._interactive_decompile_block)
-
-    def _install_hexdump_mem_diff(self, widget, popup):
-        self._install_action(widget, popup, self.ACTION_HEXDUMP_MEM_DIFF, "MemDiff with Symbolic Execution", self._interactive_hexdump_mem_diff)
-        
     def _install_ida_create_execution_snapshot(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_IDA_CREATE_EXECUTION_SNAPSHOT, "Create Execution Snapshot", self._interactive_ida_create_execution_snapshot)
         
-    def _install_ida_restore_execution_snapshot(self, widget, popup):
-        self._install_action(widget, popup, self.ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT, "Restore Execution Snapshot", self._interactive_ida_restore_execution_snapshot)
+    def _install_ida_restore_ida_execution_snapshot(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_IDA_restore_ida_execution_snapshot, "Restore Execution Snapshot", self._interactive_ida_restore_ida_execution_snapshot)
      
     def _install_go_next_execution(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_GO_NEXT_EXECUTION, "Go to next execution", self._interactive_go_next_execution, shortcut="Shift+n")
@@ -586,13 +519,10 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         if ida_kernwin.get_widget_type(widget) == ida_kernwin.BWN_DISASM:
             self._install_run_action(widget, popup)
             self._install_end_address_action(widget, popup)
-            self._install_get_seg_offset_action(widget, popup)
             self._install_clean_action(widget, popup)
             self._install_find_common_blocks(widget, popup)
-            self._install_decompile_blocks(widget, popup)
-            self._install_hexdump_mem_diff(widget, popup)
             self._install_ida_create_execution_snapshot(widget, popup)
-            self._install_ida_restore_execution_snapshot(widget, popup)
+            self._install_ida_restore_ida_execution_snapshot(widget, popup)
             self._install_go_next_execution(widget, popup)
             self._install_go_prev_execution(widget, popup)
             self._install_highlight_address(widget, popup)
@@ -633,14 +563,14 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, current_color)
                     lines_out.entries.push_back(entry)
                     
-        if random.randint(0, 200) == 1:
+        if random.randint(0, 2500) == 1:
             # update var explorer
             print("Updating var explorer ...")
             self.var_exp.update()
                     
 
         
-    def update_disassembly_view(self, trail_length):
+    def update_disassembly_view(self, trail_length=0x50):
         """
         Update the disassembly view.
         """
@@ -664,9 +594,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         trail = {}
   
         
-        if not is_quick_update:
-            blocks_info = utils.get_all_basic_blocks_bounds(current_address)
-            self.blocks_execution_count = {start: 0 for start, end in blocks_info}
+       
+        blocks_info = utils.get_all_basic_blocks_bounds(current_address)
+        self.blocks_execution_count = {start: 0 for start, end in blocks_info}
             
         forward_ips = self.reader.get_next_ips(trail_length, step_over)
         backward_ips = self.reader.get_prev_ips(trail_length, step_over)
@@ -695,9 +625,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 if address not in trail or color == symbolic_color:
                     trail[address] = (ida_color, self.reader.get_Insn(idx))
                     
-                if not is_quick_update:
-                    if address in self.blocks_execution_count:
-                        self.blocks_execution_count[address] += 1
+               
+                if address in self.blocks_execution_count:
+                    self.blocks_execution_count[address] += 1
         
       
         for address in trail:

@@ -212,7 +212,7 @@ class IDAContextAPI(DisassemblerContextAPI):
     def set_ip(self, address):
         idaapi.jumpto(address)
 
-    def get_instruction_addresses(self):
+    def get_current_instruction_addresses(self):
         """
         Return all instruction addresses from the executable.
         """

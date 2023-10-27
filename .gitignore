@@ -3,3 +3,6 @@ src/codexrebirth.egg-info
 src/dist
 diff.txt
 install.bat
+config.json
+TheCodexRebirth.code-workspace
+notes.txt

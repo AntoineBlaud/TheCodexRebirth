@@ -10,62 +10,45 @@ import idautils
 import idc
 import ida_kernwin
 import ida_bytes
-from ida_codexrebirth.util.misc import ask_file, msgbox, get_ea, get_regs_name, get_reg_value
+from codexrebirth.util.misc import ask_file, msgbox, get_ea, get_regs_name, get_reg_value
 from codexrebirth.exceptions import UserStoppedExecution
-import  ida_codexrebirth.util.misc as utils
+import codexrebirth.util.misc as utils
 import json
 from superglobals import setglobal
 from qiling import *
 
-class CodexRebirthBackendContext:
+class QilingBackend:
     def __init__(self):
         self.sym_engine = None
         self.config = None
-        
         self.is_initialized = False
-        
         # Create a temporary log file for debugging.
-        self.log_file = self.setup_logger()
-        
+        self.log_file = self.setup_logger() 
         # Redirect standard input to /dev/null (suppress user input).
         sys.stdin = open(os.devnull, 'r')
         
         
 
     def initialize(self):
-        
         self.is_initialized = False
-        
         utils.print_banner("Initializing CodexRebirth context (can take up to 180 seconds, please be patient)...")
-    
         # Show a message box to the user.
         self.show_message_box()
-
         # Load the config script.
         self.load_config()
-    
         # Initialize the backend for emulation.
         self.initialize_symbolic_engine()
-        
         self.is_initialized = True
         
         
     def run_emulation(self):
-        
-        
         # Check if the debugger is active; otherwise, there's no need to map segments.
         if not ida_dbg.is_debugger_on():
             utils.show_msgbox("Please start the debugger before running the emulation")
-
-  
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_qiling()
-
         # Set up the emulation environment.
         self.map_registers()
-        
-
-        
             # Run the emulation.
         self.sym_engine.run_emulation()
        
@@ -80,25 +63,6 @@ class CodexRebirthBackendContext:
             "1) Please select a config script to start the emulation \n" \
              )
 
-    def load_config(self):
-        """
-        Load the config script selected by the user.
-
-        Raises:
-            Exception: If no config is selected or loading fails.
-
-        Returns:
-            str: Path to the loaded config script.
-        """
-        config = ask_file("Select a config file (.json)", "JSON Files (*.json)")
-        if config is None or len(config) < 5:
-            raise Exception("No config selected")
-        
-        config = json.load(open(config, "r"))
-        utils.validate_config(config)
-        print("Configuration file has been validated")
-        self.config = config
-        
 
     def get_binary_path(self):
         """

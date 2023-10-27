@@ -359,72 +359,6 @@ def open_console(func):
     return wrapper
 
 
-
-def validate_config(config):
-    schema = {
-        "type": "object",
-        "properties": {
-            "BinaryArch": {"type": "string"},
-            "rootfs_path": {"type": "string"},
-            "binary_path": {"type": "string"},
-            "log_plain": {"type": "boolean"},
-            "symbolic_check": {"type": "boolean"},
-            "strict_symbolic_check": {"type": "boolean"},
-            "addresses": {
-                "type": "object",
-                "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                        "segment": {"type": "string"},
-                        "offset": {"type": "integer"},
-                    },
-                    "required": ["segment", "offset"],
-                },
-            },
-            "tainted_memory": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "ref": {"type": "string"},
-                        "size": {"type": "integer"},
-                        "chunck_size": {"type": "integer"},
-                    },
-                    "required": ["ref", "size", "chunck_size"]
-                }
-            },
-            "tainted_registers": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "reg": {"type": "string"},
-                        "name": {"type": "string"},
-                    },
-                    "required": ["reg", "name"]
-                }
-            },
-            "do_not_sym_execute": {
-                "type": "array", 
-                "items": {"type": "string"}}
-        },
-        "required": [
-            "BinaryArch",
-            "rootfs_path",
-            "binary_path",
-            "log_plain",
-            "symbolic_check",
-            "strict_symbolic_check",
-            "addresses",
-            "tainted_memory",
-            "tainted_registers",
-            "do_not_sym_execute"
-        ]
-    }
-
-   
-    jsonschema.validate(config, schema)
-       
        
 import idaapi
 import idautils
@@ -662,62 +596,11 @@ def print_banner(message, char="="):
 
 def check_openai_api_key():
     if openai.api_key is None:
-        show_msgbox("Please set the OpenAI API key on the top of the ida_codexrebirth.py file")
+        show_msgbox("Please set the OpenAI API key on the top of thecodexrebirth.py file")
         return
     
     
     
-def take_execution_snapshot():
-    # Get the current state of segments and registers
-    segments = {}
-    for seg in idautils.Segments():
-        seg_start = idc.get_segm_start(seg)
-        seg_end = idc.get_segm_end(seg)
-        if  abs(seg_end - seg_start) < 0xFFFFFF:
-            segments[seg] = (seg_start, seg_end, idc.get_bytes(seg_start, seg_end - seg_start))
-    
-    registers = {}
-    for reg in idautils.GetRegisterList():
-        try:
-            registers[reg] = idc.get_reg_value(reg)
-        except:
-            pass
-    # Create a temporary directory to store the snapshot
-    temp_dir = tempfile.mkdtemp()
-    snapshot_file = os.path.join(temp_dir, 'snapshot.pkl')
-    
-    # Serialize and save the data to a file
-    with open(snapshot_file, 'wb') as f:
-        snapshot_data = (segments, registers)
-        pickle.dump(snapshot_data, f)
-    
-    print(f"Execution snapshot saved to {snapshot_file}")
-    return os.path.join(temp_dir, 'snapshot.pkl')
-
-def restore_execution_snapshot(snapshot_file):
-    
-    if not os.path.exists(snapshot_file):
-        print("Snapshot file not found")
-        return
-    
-    # Deserialize the snapshot data
-    with open(snapshot_file, 'rb') as f:
-        segments, registers = pickle.load(f)
-    
-    # Restore segments
-    i = 0
-    for seg, (seg_start, _, seg_data) in segments.items():
-        ida_bytes.patch_bytes(seg_start, seg_data)
-        i += 1
-        print(f"Percentage of segments restored: {i / len(segments) * 100:.2f}%", end='\r')
-    
-    # Restore registers
-    for reg, value in registers.items():
-        idc.set_reg_value(value, reg)
-    
-    print("Execution snapshot restored")
-
-
 
 def get_op_values(ea):
     disassembly = idc.GetDisasm(ea)

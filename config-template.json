@@ -1,0 +1,6 @@
+{
+    "rootfs_path": "C:/Users/*****/source/rootfs/",
+    "log_plain": true,
+    "debug_level": 1,
+    "openai_key": "sk-1234567890abcdefg"
+}
