@@ -1,4 +1,13 @@
-# CodexRebirth Project
+# CodexRebirth Project (DEV Branch)
+
+### Changes from the main branch:
+Refactor All Projects and Introduce Enhanced Tainting Functionality
+
+In this commit, we've carried out a comprehensive refactoring of all projects, focusing on enhancing the engine's capabilities. The key feature introduced is a dynamic tainting mechanism that ensures that all registers and memory are consistently tainted. This change allows for a more flexible workflow in IDA, enabling users to select specific addresses and registers for tainting directly from the current instruction index.
+
+Furthermore, this update also includes the implementation of a system for storing memory and register values. This development paves the way for seamless IDA exploration and synchronization, improving the overall user experience and efficiency.
+
+### Introduction
 
 The CodexRebirth project aims to simplify the reverse engineering of obfuscated methods using a Taint Analysis approach. It will analyze all assembly instructions and, when one depends on a tainted register or memory, or on a result derived from one of these tainted values, it will process the operation and update the relevant equations.
 
