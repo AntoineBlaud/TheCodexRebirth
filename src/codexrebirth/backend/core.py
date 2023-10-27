@@ -20,16 +20,16 @@ from codexrebirth.util.color import Color, ANSIColors
 from codexrebirth.util.exceptions import SetupError, UserStoppedExecution
 
 
-from codexrebirth.core.instruction import (
+from codexrebirth.backend.instruction import (
     Instruction,
     InstructionSet
 )
-from codexrebirth.core.trace import (
+from codexrebirth.backend.trace import (
     Trace,
     TraceEntry
 )
 
-from codexrebirth.core.values import (
+from codexrebirth.backend.values import (
     SymValue,
     RealValue,
     ASymValue,
@@ -44,10 +44,10 @@ from codexrebirth.util.misc import (
 )
 from codexrebirth.util.counter import alt_count
 
-from codexrebirth.core.engines import (
+from codexrebirth.backend.engines import (
     QilingEngine
 )
-from codexrebirth.core.datastore import DataStoreManager
+from codexrebirth.backend.datastore import DataStoreManager
 from z3 import (
     set_option,
     BitVec
@@ -79,19 +79,6 @@ class DebugLevel:
     INFO = 1
     DEBUG = 2
 
-
-CONFIG = {
-    "BINARY_ARCH": None,
-    "BINARY_ARCH_SIZE": None,
-    "BINARY_MAX_MASK": None,
-    "MAX_RAW_REPR_LENGTH": 44,
-    "SUPPORTED_INSTRUCTIONS": None,
-    "BAD_OPERANDS": None,
-    "CS_UC_REGS": None,
-    "TRACE_RECORDS": None,
-}
-
-setglobal("CONFIG", CONFIG)
 
 BAD_OPERANDS_X86_64 =  [".*pl", ".*il", ".*z", ".*h"]
 SUPPORTED_INSTRUCTIONS_X86_64 = [".?mov.*", "lea", "add","sub","xor","and","or",
@@ -883,6 +870,12 @@ class QilingRunner(Runner):
         if pc < self.text_base or pc >= self.text_end:
             return False
         return True
+    
+    def set_register(self, register: str, value: int):
+        self.ql.arch.regs.write(register, value)
+
+    def get_register(self, register: str):
+        return self.ql.arch.regs.read(register)
 
     def code_execution_hook(self, ql: Qiling, address: int, size):
         try:
@@ -912,7 +905,7 @@ class QilingRunner(Runner):
 
             # Evaluate the instruction with the current codex state
             Insn = self.instruction_engine.evaluate_instruction(None, self.taint_st)
-            self.update_data_store(Insn)
+            self.update_datastore(Insn)
             return self.trace_records.register(
                 insn_addr, Insn
             )
@@ -926,7 +919,7 @@ class QilingRunner(Runner):
         return self.engine.get_current_instruction_address()
     
     
-    def update_data_store(self, Insn):
+    def update_datastore(self, Insn):
         for i in range(min(len(Insn.cinsn.operands), 3)):
             operand = Insn.cinsn.operands[i]
             if operand.type == X86_OP_REG:
@@ -966,24 +959,33 @@ class QilingRunner(Runner):
     
     
     def setup_config(self):
-        self.config = getglobal("CONFIG")
-        self.config["TRACE_RECORDS"] = self.trace_records
-        
+        CONFIG = {
+            "BINARY_ARCH": None,
+            "BINARY_ARCH_SIZE": None,
+            "BINARY_MAX_MASK": None,
+            "MAX_RAW_REPR_LENGTH": 44,
+            "SUPPORTED_INSTRUCTIONS": None,
+            "BAD_OPERANDS": None,
+            "CS_UC_REGS": None,
+            "TRACE_RECORDS": self.trace_records,
+        }
+
         BINARY_ARCH = self.ql.arch.type
         
         if BINARY_ARCH in (QL_ARCH.X86, QL_ARCH.X8664):
-            self.config["SUPPORTED_INSTRUCTIONS"] = InstructionSet(SUPPORTED_INSTRUCTIONS_X86_64)
-            self.config["BAD_OPERANDS"] = BAD_OPERANDS_X86_64
+            CONFIG["SUPPORTED_INSTRUCTIONS"] = InstructionSet(SUPPORTED_INSTRUCTIONS_X86_64)
+            CONFIG["BAD_OPERANDS"] = BAD_OPERANDS_X86_64
             
         if BINARY_ARCH == QL_ARCH.X8664:
-            self.config["BINARY_MAX_MASK"] = 0xFFFFFFFFFFFFFFFF
-            self.config["BINARY_ARCH_SIZE"] = 64
+            CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFFFFFFFFFF
+            CONFIG["BINARY_ARCH_SIZE"] = 64
             
         elif BINARY_ARCH == QL_ARCH.X86:
-            self.config["BINARY_MAX_MASK"] = 0xFFFFFFFF
-            self.config["BINARY_ARCH_SIZE"] = 32
+            CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFF
+            CONFIG["BINARY_ARCH_SIZE"] = 32
             
-        setglobal("CONFIG", self.config)
+        setglobal("CONFIG", CONFIG)
+        self.config = CONFIG
             
         
 

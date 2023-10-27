@@ -1,5 +1,5 @@
 
-from codexrebirth.core.instruction import Instruction
+from codexrebirth.backend.instruction import Instruction
 
 class TraceEntry:
     def __init__(self, Insn: Instruction) -> None:

@@ -69,9 +69,9 @@ class Instruction:
         clone.r_op1 = self.r_op1
         clone.r_op2 = self.r_op2
         clone.r_op3 = self.r_op3
+        clone.mem_access = self.mem_access 
         clone.v_op1 = self.v_op1.clone() if self.v_op1 else None
         clone.v_op2 = self.v_op2.clone() if self.v_op2 else None
         clone.v_op3 = self.v_op3.clone() if self.v_op3 else None
         clone.v_op_result = self.v_op_result.clone() if self.v_op_result else None
-        clone.mem_access = self.mem_access.clone() if self.mem_access else None
         return clone

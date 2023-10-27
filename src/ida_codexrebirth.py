@@ -7,23 +7,25 @@ import ida_kernwin
 import idautils
 import idc
 import idaapi
-from codexrebirth.exceptions import UserStoppedExecution
 
+from codexrebirth.util.exceptions import UserStoppedExecution
 from codexrebirth.util.qt import *
 from codexrebirth.ui.palette import PluginPalette
-importcodexrebirth.util.misc as utils
-
 from codexrebirth.ui.trace_view import TraceDock
 from codexrebirth.trace.reader import TraceReader
 from codexrebirth.context.qlbackend import QilingBackend
 from codexrebirth.context.var_explorer import VarExplorer
+from codexrebirth.context.msnapshot import SnapshotManager
+from codexrebirth.util.config import validate_config
+import codexrebirth.util.misc as utils
+
 import time
 from PyQt5.QtWidgets import QMessageBox
 import random
 import keyboard
 import openai
-
-
+import os 
+import json
 
 
 
@@ -77,13 +79,10 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         Returns:
             str: Path to the loaded config script.
         """
-        config = ask_file("Select a config file (.json)", "JSON Files (*.json)")
-        if config is None or len(config) < 5:
-            raise Exception("No config selected")
-        
-        config = json.load(open(config, "r"))
-        utils.validate_config(config)
-        print("Configuration file has been validated")
+        # load config from IDA plugin directory
+        config_path = os.path.join(os.path.dirname(__file__), "codexrebirth_config.json")
+        config = json.load(open(config_path, "r"))
+        validate_config(config)
         self.config = config
         
 
@@ -97,54 +96,23 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         """
         
-        self.ctx.initialize()
-        # we set the end address to the symbolic engine after the initialization
-        self.ctx.sym_engine.set_emu_end(self.user_defined_end_address)
+        self.ctx.initialize(self.config)
+        
+        if self.user_defined_end_address:
+            # we set the end address to the symbolic engine after the initialization
+            self.ctx.sym_engine.set_emu_end(self.user_defined_end_address)
 
-        print("Running Symbolic Execution")
+        print("Running Symbolic Execution ...")
         print("UI refresh will be disabled until the end of the symbolic execution")
         ida_kernwin.refresh_idaview_anyway()
 
-
-        start = time.time()
-        
-        while True:
-
-            try:
-                ida_dbg.del_bpt(utils.get_ea())
-                self.ctx.run_emulation()
-                break
-
-            except UserStoppedExecution:
-                
-                current_ip = self.ctx.sym_engine.get_current_pc()
-                
-                print("User stopped the execution, current ea: ", hex(current_ip))
-                
-                if time.time() - start > 90:
-                    print("Symbolic execution took too long. Aborting ...")
-                    break
-                
-                else:
-                    if  utils.get_ea() != current_ip:
-                        ida_dbg.add_bpt(current_ip, 1, idc.BPT_SOFT)
-                        ida_dbg.continue_process()
-                        ida_dbg.wait_for_next_event(ida_dbg.WFNE_SUSP, -1)
-                        
-                    # avance at least of 2 instructions
-                    for _ in range(2):
-                        ida_dbg.step_over()
-                        ida_dbg.wait_for_next_event(ida_dbg.WFNE_SUSP, -1)
-                    
-                  
-
+        self.ctx.run_emulation()
 
         self.load_trace_ui()
         self.update_disassembly_view(trail_length=0xFFFFF)
         utils.print_banner("Symbolic Execution Finished")
         
 
-        
     
     def load_ui(self):
         """
@@ -299,9 +267,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     color = utils.to_ida_color(common_block_color)
                     utils.color_common_blocks(group, color)  
                     ida_kernwin.refresh_idaview_anyway()
-
-
-        
+ 
     @utils.open_console
     def _interactive_hightligh_address(self):
         """
@@ -311,9 +277,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         self.reader.set_highlighted_address(idc.here())
-         
-     
-                  
+                
     @utils.open_console
     def _interactive_ida_create_execution_snapshot(self):
         """
@@ -326,7 +290,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         print("Taking IDA execution snapshot ...")
-        self.snaphost_file_path = utils.take_ida_execution_snapshot()  
+        self.snap_manager.take_ida_execution_snapshot()
         
     @utils.open_console
     def _interactive_ida_restore_ida_execution_snapshot(self):
@@ -339,13 +303,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             print("Please start the debugger first")
             return
         
-        if not self.snaphost_file_path:
-            print("Please take an execution snapshot first")
-            return
-        
         print("Restoring IDA execution snapshot ...")
-        utils.restore_ida_execution_snapshot(self.snaphost_file_path)
-        
+        self.snap_manager.restore_ida_execution_snapshot()
         
         
     def _interactive_go_next_execution(self):
@@ -362,6 +321,12 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         self.reader.seek_to_prev(idc.here())
         self.trace_dock.update()
+        
+    def _interactive_synchronize_variables(self):
+        """
+        Synchronize variables between IDA Pro and Qiling.
+        """
+        self.var_exp.update()
         
  
     def _uninstall(self):
@@ -389,10 +354,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     ACTION_RESET = "codexrebirth:reset"
     ACTION_SIMILAR_BLOCKS = "codexrebirth:similar_blocks"
     ACTION_IDA_CREATE_EXECUTION_SNAPSHOT = "codexrebirth:ida_create_execution_snapshot"
-    ACTION_IDA_restore_ida_execution_snapshot = "codexrebirth:ida_restore_ida_execution_snapshot"
+    ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT = "codexrebirth:ida_restore_ida_execution_snapshot"
     ACTION_GO_NEXT_EXECUTION = "codexrebirth:go_next_execution"
     ACTION_GO_PREV_EXECUTION = "codexrebirth:go_prev_execution"
     ACTION_HIGHLIGHT_ADDRESS = "codexrebirth:highlight_address"
+    ACTION_SYNCHRONIZE_VARIABLES = "codexrebirth:synchronize_variables"
 
     
     
@@ -447,7 +413,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self._install_action(widget, popup, self.ACTION_IDA_CREATE_EXECUTION_SNAPSHOT, "Create Execution Snapshot", self._interactive_ida_create_execution_snapshot)
         
     def _install_ida_restore_ida_execution_snapshot(self, widget, popup):
-        self._install_action(widget, popup, self.ACTION_IDA_restore_ida_execution_snapshot, "Restore Execution Snapshot", self._interactive_ida_restore_ida_execution_snapshot)
+        self._install_action(widget, popup, self.ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT, "Restore Execution Snapshot", self._interactive_ida_restore_ida_execution_snapshot)
      
     def _install_go_next_execution(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_GO_NEXT_EXECUTION, "Go to next execution", self._interactive_go_next_execution, shortcut="Shift+n")
@@ -458,6 +424,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     def _install_highlight_address(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_HIGHLIGHT_ADDRESS, "Highlight address", self._interactive_hightligh_address)
         
+    def _install_synchronize_variables(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_SYNCHRONIZE_VARIABLES, "Synchronize variables", self._interactive_synchronize_variables, shortcut="Shift+s")
     
     def _install_hooks(self):
         """
@@ -526,6 +494,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self._install_go_next_execution(widget, popup)
             self._install_go_prev_execution(widget, popup)
             self._install_highlight_address(widget, popup)
+            self._install_synchronize_variables(widget, popup)
      
             
         
@@ -563,11 +532,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                     entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, current_color)
                     lines_out.entries.push_back(entry)
                     
-        if random.randint(0, 2500) == 1:
-            # update var explorer
-            print("Updating var explorer ...")
-            self.var_exp.update()
-                    
 
         
     def update_disassembly_view(self, trail_length=0x50):
@@ -575,6 +539,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         Update the disassembly view.
         """
     
+        is_quick_update = trail_length == 0x50
         
         if not self.reader:
             return
@@ -594,9 +559,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         trail = {}
   
         
-       
-        blocks_info = utils.get_all_basic_blocks_bounds(current_address)
-        self.blocks_execution_count = {start: 0 for start, end in blocks_info}
+        if not is_quick_update:
+            blocks_info = utils.get_all_basic_blocks_bounds(current_address)
+            self.blocks_execution_count = {start: 0 for start, end in blocks_info}
             
         forward_ips = self.reader.get_next_ips(trail_length, step_over)
         backward_ips = self.reader.get_prev_ips(trail_length, step_over)
@@ -625,9 +590,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 if address not in trail or color == symbolic_color:
                     trail[address] = (ida_color, self.reader.get_Insn(idx))
                     
-               
-                if address in self.blocks_execution_count:
-                    self.blocks_execution_count[address] += 1
+                if not is_quick_update:
+                    if address in self.blocks_execution_count:
+                        self.blocks_execution_count[address] += 1
         
       
         for address in trail:
@@ -655,7 +620,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 
                 if execution_count > 0 and utils.get_color(block_start) != common_block_color:
                     utils.color_blocks([block_start], utils.to_ida_color(self.palette.trail_forward), cinside=False)
-
 
                 
 #------------------------------------------------------------------------------

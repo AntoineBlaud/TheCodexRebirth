@@ -2,7 +2,7 @@
 from codexrebirth.integration.api import disassembler, DisassemblerContextAPI
 from codexrebirth.trace.arch import ArchAMD64, ArchX86
 import idaapi
-importcodexrebirth.util.misc as utils
+import codexrebirth.util.misc as utils
 
 class TraceReader(object):
     """
@@ -23,20 +23,20 @@ class TraceReader(object):
         self._idx_cached_registers = -1
         self._cached_registers = {}
         self._idx_trace_cache = {}
-        self.construct_trace_cache()
         self._highlighted_address = None
+        self.current_symbolic_id = None
         
+        self.construct_trace_cache()
         
-    
-        
+
     def construct_trace_cache(self):
-        
- 
-        for insn_addr in self._addr_trace_cache:
-            for idx in self._addr_trace_cache[insn_addr].keys():
-                self._idx_trace_cache[idx] = (insn_addr, self._addr_trace_cache[insn_addr][idx])
+        self._idx_trace_cache = {
+            idx: (insn_addr, trace) 
+            for insn_addr in self._addr_trace_cache 
+            for idx, trace in self._addr_trace_cache[insn_addr].items()
+        }
+
                 
-        print("Trace cache constructed")
         
     #-------------------------------------------------------------------------
     # Trace Properties
@@ -62,8 +62,7 @@ class TraceReader(object):
         Return the currently highlighted address.
         """
         return self._highlighted_address
-
-
+    
 
     #-------------------------------------------------------------------------
     # Trace Navigation
@@ -72,7 +71,6 @@ class TraceReader(object):
         if address in self._addr_trace_cache:
             self._highlighted_address = address
             return True
-
 
     def seek(self, idx):
         """
@@ -92,7 +90,6 @@ class TraceReader(object):
         self.dctx.set_ip(self.get_ip(idx))
         
     
-        
     def get_current_function_bounds(self):
         """
         Return the bounds of the init function.
@@ -111,26 +108,28 @@ class TraceReader(object):
         """
         if idx not in self._idx_trace_cache:
             return False
-        return self._idx_trace_cache[idx][1].is_symbolic
+        return self.get_trace(idx).sym_id == self.current_symbolic_id
     
     
-  
+    def get_trace(self, idx):
+        if idx not in self._idx_trace_cache:
+            return None
+        return self._idx_trace_cache[idx]
+    
     
     def get_Insn(self, idx):
         if idx not in self._idx_trace_cache:
             return None
-        return self._idx_trace_cache[idx][1].Insn
-        
-        
-        
-        
+        return self.get_trace(idx).Insn
+         
     def get_ip(self, idx):
         """
         Return the instruction pointer for the given timestamp.
         """
         if idx not in self._idx_trace_cache:
             return None
-        return self._idx_trace_cache[idx][0]
+        return self.get_trace(idx)[0]
+
 
     def seek_percent(self, percent):
         """

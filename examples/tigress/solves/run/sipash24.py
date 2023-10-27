@@ -4,7 +4,7 @@ from qiling.const import QL_VERBOSE
 from superglobals import setglobal
 import sys 
 
-from codexrebirth.core import *
+from codexrebirth.backend import *
 
 ##############################################################################################
 # IMPORTANT: address depend of you system, you need to change the address and disable aslr 
