@@ -58,7 +58,7 @@ class Instruction:
         if self.v_op_result:
             res += f"sym_result_id = {self.v_op_result.id}\n"
         if self.mem_access:
-            res += f"mem_access = {self.mem_access}\n"
+            res += f"mem_access = {hex(self.mem_access)}\n"
         return res
 
     def clone(self):

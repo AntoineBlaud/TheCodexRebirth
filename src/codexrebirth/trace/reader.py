@@ -114,7 +114,7 @@ class TraceReader(object):
     def get_trace(self, idx):
         if idx not in self._idx_trace_cache:
             return None
-        return self._idx_trace_cache[idx]
+        return self._idx_trace_cache[idx][1]
     
     
     def get_Insn(self, idx):
@@ -128,7 +128,7 @@ class TraceReader(object):
         """
         if idx not in self._idx_trace_cache:
             return None
-        return self.get_trace(idx)[0]
+        return self._idx_trace_cache[idx][0]
 
 
     def seek_percent(self, percent):

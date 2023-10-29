@@ -22,3 +22,4 @@ def validate_config(config):
    
     jsonschema.validate(config, schema)
        
+       

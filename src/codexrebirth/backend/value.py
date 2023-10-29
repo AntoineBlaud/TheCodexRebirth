@@ -2,9 +2,6 @@
 from superglobals import *
 import uuid
 
-BINARY_MAX_MASK = None
-BINARY_ARCH_SIZE = None
-
 from codexrebirth.util.binaryop import (
     binary_subtraction,
     RotateLeft,
@@ -22,12 +19,16 @@ from z3 import BitVec, BitVecVal, Extract, RotateLeft, RotateRight, Not
 from codexrebirth.util.color import Color
 
 
-def set_global(func):
+BINARY_MAX_MASK = None
+BINARY_ARCH_SIZE = None
+
+def initialize_global(func):
     def wrapper(*args, **kwargs):
-        global BINARY_MAX_MASK
-        global BINARY_ARCH_SIZE
-        BINARY_MAX_MASK = getglobal('CONFIG')['BINARY_MAX_MASK']
-        BINARY_ARCH_SIZE = getglobal('CONFIG')['BINARY_ARCH_SIZE']
+        global BINARY_MAX_MASK, BINARY_ARCH_SIZE
+        if not BINARY_MAX_MASK:
+            BINARY_MAX_MASK = getglobal('CONFIG')['BINARY_MAX_MASK']
+        if not BINARY_ARCH_SIZE:
+            BINARY_ARCH_SIZE = getglobal('CONFIG')['BINARY_ARCH_SIZE']
         return func(*args, **kwargs)
     return wrapper
 
@@ -54,7 +55,7 @@ class SymValue:
     def clone(self):
         return SymValue(self.value)
 
-    @set_global
+    @initialize_global
     def __and__(self, other: int):
         if other != BINARY_ARCH_SIZE:
             return SymValue(self.value & (1 << other) - 1)
@@ -93,7 +94,7 @@ class _RealValue:
 
 
 class RealValue:
-    @set_global
+    @initialize_global
     def __init__(self, value):
         self.sym_value = _RealValue(value)
 
@@ -195,7 +196,7 @@ class ASymValue:
 
 
 class SymMemory(ASymValue):
-    @set_global
+    @initialize_global
     def __init__(self, name: int, value: int = None):
         super().__init__()
         self.color = Color()
@@ -376,7 +377,7 @@ class SymRegister(ASymValue):
             self._set(target)
         return self
 
-    @set_global
+    @initialize_global
     def reset(self):
         self.sym = SymValue(BitVec(str(self.name), BINARY_ARCH_SIZE))
         self.color = Color()

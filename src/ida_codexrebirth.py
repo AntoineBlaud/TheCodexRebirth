@@ -106,11 +106,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         print("UI refresh will be disabled until the end of the symbolic execution")
         ida_kernwin.refresh_idaview_anyway()
 
-        self.ctx.run_emulation()
+        self.ctx.run_emulation(callback=self.load_trace_ui)
 
-        self.load_trace_ui()
-        self.update_disassembly_view(trail_length=0xFFFFF)
-        utils.print_banner("Symbolic Execution Finished")
         
 
     
@@ -144,9 +141,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.palette.warmup()
         
         self.trace_dock = TraceDock(self)
-
-        # Print a message to indicate successful plugin loading.
-        print("UI successfully loaded.")
+        
+        self.update_disassembly_view(trail_length=0xFFFFF)
+        utils.print_banner("Symbolic Execution Finished. UI successfully loaded.")
 
 
 
@@ -167,8 +164,10 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         # Hook into the trace for further processing.
         self.hook()
-
-        print(f"Current state variables:\n {self.ctx.sym_engine.state}")
+        
+        print("Register and memory state: ")
+        print(self.ctx.sym_engine.mem_sm)
+        print(self.ctx.sym_engine.reg_sm)
 
         # Attach the trace engine to various plugin UI controllers, granting them
         # access to the underlying trace reader.

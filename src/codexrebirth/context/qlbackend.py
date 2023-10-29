@@ -15,6 +15,7 @@ import codexrebirth.util.misc as utils
 import json
 from superglobals import setglobal
 from qiling import *
+from threading import Thread
 
 class QilingBackend:
     def __init__(self):
@@ -34,8 +35,15 @@ class QilingBackend:
         self.initialize_symbolic_engine(config)
         self.is_initialized = True
         
+    def run_emulation_thread(self, callback, main_thread):
+        self.sym_engine.run_emulation()
+        # fetch the main thread
+        # call the callback function with the main thread
+        ida_kernwin.execute_sync(callback, ida_kernwin.MFF_FAST)
         
-    def run_emulation(self):
+        
+        
+    def run_emulation(self, callback):
         # Check if the debugger is active; otherwise, there's no need to map segments.
         if not ida_dbg.is_debugger_on():
             utils.show_msgbox("Please start the debugger before running the emulation")
@@ -43,14 +51,13 @@ class QilingBackend:
         self.map_segments_to_qiling()
         # Set up the emulation environment.
         self.map_registers()
-            # Run the emulation.
-        self.sym_engine.run_emulation()
+        # Run the emulation in a separate thread.
+        main_thread = idaapi.get_current_thread()
+        Thread(target=self.run_emulation_thread, args=(callback, main_thread,)).start()
+        
        
-
-
     def setup_logger(self):
         return tempfile.NamedTemporaryFile(prefix="cr_trace", suffix=".txt", delete=False, mode="w")
-
 
 
     def get_binary_path(self):
@@ -80,6 +87,7 @@ class QilingBackend:
         rootfs_path = config["rootfs_path"]
         log_plain = config["log_plain"]
         debug_level = config["debug_level"]
+        timeout = config["timeout"]
 
         # Determine the file type from IDA Pro.
         file_type = idaapi.get_file_type_name()
@@ -97,7 +105,7 @@ class QilingBackend:
             
             # Initialize the Qiling emulator.
             ql = Qiling([binary_path], rootfs_path, log_plain=log_plain)
-            self.sym_engine = QilingRunner(ql, debug_level)
+            self.sym_engine = QilingRunner(ql, debug_level, timeout)
 
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_qiling()
@@ -105,7 +113,7 @@ class QilingBackend:
         # Set up the emulation environment.
         self.map_registers()
 
-    
+
 
     def map_segments_to_qiling(self):
         """
@@ -156,13 +164,14 @@ class QilingBackend:
         # Map the segments to Qiling's memory.
         for start, end, size, name in to_map:
             ql.mem.map(start, size)
+            print(hex(start), hex(end), hex(size), name)
+            
             if abs(size) < 0xFFFFFF:
                 data = ida_bytes.get_bytes(start, size)
                 ql.mem.write(start, data)
             else:
-                print(hex(start), hex(end), hex(size), name)
-                print("Segment too large to map")
-            
+                print("Segment too large to copy to Qiling's memory.")
+                
             #  update the start and end address of the text segment
             if ".text" in name:
                 self.sym_engine.text_start = start

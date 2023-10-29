@@ -20,6 +20,7 @@ setup(
         'superglobals',
         "easygui",
         "jsonschema",
-        "openai"
+        "openai",
+        "line_profiler"
     ]
 )    

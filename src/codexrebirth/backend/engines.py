@@ -66,6 +66,8 @@ class QilingEngine(EngineWrapper):
         raise ValueError("Unknown architecture type")
 
     def read_memory_int(self, address):
+        if not self.is_mapped(address):
+            return 0
         return int.from_bytes(
             self.ql.mem.read(address, self.ql.arch.bits // 8), byteorder="little"
         )

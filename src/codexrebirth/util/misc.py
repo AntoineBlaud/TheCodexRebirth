@@ -599,8 +599,7 @@ def check_openai_api_key():
     if openai.api_key is None:
         show_msgbox("Please set the OpenAI API key on the top of thecodexrebirth.py file")
         return
-    
-    
+   
     
 
 def get_op_values(ea):
