@@ -15,8 +15,10 @@ from codexrebirth.ui.trace_view import TraceDock
 from codexrebirth.trace.reader import TraceReader
 from codexrebirth.context.launcher import Launcher
 from codexrebirth.context.var_explorer import VarExplorer
+from codexrebirth.context.similar_code import SimilarCode
 from codexrebirth.context.msnapshot import SnapshotManager
 from codexrebirth.util.config import validate_config
+from codexrebirth.util.color import generate_visually_distinct_colors
 import codexrebirth.util.misc as utils
 
 import time
@@ -26,6 +28,7 @@ import keyboard
 import openai
 import os 
 import json
+import threading
 
 
 
@@ -50,6 +53,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.var_exp = VarExplorer()
         # Snapshot manager, used to take and restore IDA execution snapshots
         self.snap_manager = SnapshotManager()
+        # Similar code, used to find similar code in the disassembly view
+        self.similar_code = SimilarCode()
         print("CodexRebirth: IDA Plugin Loaded")
         
     def reset(self):
@@ -58,6 +63,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.reader = None
         self.blocks_execution_count  = None
         self.ctx = Launcher()
+        self.colors = generate_visually_distinct_colors(70)
         
         
     def init(self):
@@ -108,7 +114,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         self.ctx.run_emulation(callback=self.load_trace_ui)
 
-        
 
     
     def load_ui(self):
@@ -204,7 +209,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         self._hooked = False
         self._ui_hooks.unhook()
-
+        
 
     @utils.open_console
     def _interactive_end_address(self):
@@ -234,38 +239,20 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         utils.delete_all_colors()
 
     @utils.open_console
-    def _interactive_color_common_blocks(self):
+    def _interactive_color_similar_blocks(self):
         """
-        Color common blocks in a function based on similarity.
+        Color similar blocks in a function based on similarity.
 
         This function groups similar basic blocks in a function and colors them based on the specified similarity threshold.
         """
-        # Specify the Levenshtein similarity threshold (e.g., 0.7 for 70% similarity)
-        similarity_threshold = 0.65
-        common_block_color = self.palette.common_block_color
+        if len(self.colors) < 1:
+            raise Exception("No more colors available (max 70)")
+            return
         
-        # Specify the address (EA) of the function you want to analyze
-        function_address = idc.here()  # Change this to the address of your function
-        
-        blocks_info = []
-        
-        # Get the list of basic blocks with disassembly for the specified function
-        # remove harcoded values in disassembly (e.g., addresses) to improve the similarity
-        for ea, disassembly in utils.get_all_basic_blocks(function_address):
-            blocks_info.append((ea, disassembly))
-
-        if blocks_info:
-            # Group similar blocks based on the threshold
-            grouped_blocks =  utils.group_similar_blocks(blocks_info, similarity_threshold)
-            grouped_blocks = [group for group in grouped_blocks if len(group) > 5]
-         
-            for i, group in enumerate(grouped_blocks):
-                # Color blocks in the group if they exceed a certain size
-                if len(group) > 5:
-
-                    color = utils.to_ida_color(common_block_color)
-                    utils.color_common_blocks(group, color)  
-                    ida_kernwin.refresh_idaview_anyway()
+        args = (self.config["similarity_factor"], 
+                self.colors.pop(), 
+                ida_kernwin.ask_str("", 0, "Enter a comment"))
+        self.similar_code.run(*args)
  
     @utils.open_console
     def _interactive_hightligh_address(self):
@@ -405,8 +392,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     def _install_reset(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_RESET, "Reset Context", self.reset, "reset.png")
 
-    def _install_find_common_blocks(self, widget, popup):
-        self._install_action(widget, popup, self.ACTION_SIMILAR_BLOCKS, "Find Common Blocks", self._interactive_color_common_blocks)
+    def _install_find_similar_blocks(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_SIMILAR_BLOCKS, "Find Similar Code Blocks", self._interactive_color_similar_blocks)
 
     def _install_ida_create_execution_snapshot(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_IDA_CREATE_EXECUTION_SNAPSHOT, "Create Execution Snapshot", self._interactive_ida_create_execution_snapshot)
@@ -487,7 +474,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self._install_run_action(widget, popup)
             self._install_end_address_action(widget, popup)
             self._install_clean_action(widget, popup)
-            self._install_find_common_blocks(widget, popup)
+            self._install_find_similar_blocks(widget, popup)
             self._install_ida_create_execution_snapshot(widget, popup)
             self._install_ida_restore_ida_execution_snapshot(widget, popup)
             self._install_go_next_execution(widget, popup)
@@ -548,7 +535,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         symbolic_color = self.palette.symbolic
         end_address_color = self.palette.end_address
         current_color = utils.to_ida_color(self.palette.trail_current)
-        common_block_color = utils.to_ida_color(self.palette.common_block_color)
+        similar_block_color = utils.to_ida_color(self.palette.similar_block_color)
         
 
         modifiers = QtGui.QGuiApplication.keyboardModifiers()
@@ -608,8 +595,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             if address == self.user_defined_end_address :
                 color = utils.to_ida_color(end_address_color)
 
-            # We dont overwrite the color if its a common block
-            if utils.get_color(address) != common_block_color:
+            # We dont overwrite the color if its a similar block
+            if utils.get_color(address) != similar_block_color:
                 idaapi.set_item_color(address, color)
                 
         if self.blocks_execution_count:       
@@ -617,7 +604,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             for block_start, execution_count in self.blocks_execution_count.items():
                 idaapi.set_cmt(block_start, f"Executed {execution_count} times", False)
                 
-                if execution_count > 0 and utils.get_color(block_start) != common_block_color:
+                if execution_count > 0 and utils.get_color(block_start) != similar_block_color:
                     utils.color_blocks([block_start], utils.to_ida_color(self.palette.trail_forward), cinside=False)
 
                 

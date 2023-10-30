@@ -257,6 +257,9 @@ def to_ida_color(color):
     r, g, b, _ = color.getRgb()
     return 0xFF << 24 | b << 16 | g << 8 | r
 
+def rbg_ida_color(r, g, b):
+    return 0xFF << 24 | b << 16 | g << 8 | r
+
 
 def address_to_segment_offset(address):
     # Get the segment name for the given address
@@ -317,119 +320,6 @@ def open_console(func):
     return wrapper
 
 
-       
-import idaapi
-import idautils
-import idc
-
-
-def token_similarity(s1, s2):
-    s1 = s1.split("\n")
-    s2 = s2.split("\n")
-    # Convert the strings to sets of characters (or tokens)
-    set1 = set(s1)
-    set2 = set(s2)
-
-    # Calculate Jaccard similarity
-    intersection = set1.intersection(set2)
-    union_size = len(s1) + len(s2) 
-    
-    counter_s1 = Counter(s1)
-    counter_s2 = Counter(s2)
-    counter = 0
-    for token in intersection:
-        counter += counter_s1[token] + counter_s2[token]    
-    
-    # Avoid division by zero
-    if union_size == 0:
-        return 0.0
-
-    similarity = counter / union_size
-    return similarity
-
-
-def get_all_basic_blocks(ea):
-    func = idaapi.get_func(ea)
-    
-    if not func:
-        print("Function not found at 0x{:X}".format(ea))
-        return []
-
-    flow_chart = idaapi.FlowChart(func)
-
-    blocks_info = []
-    
-    for block in flow_chart:
-        block_start = block.start_ea
-        block_end = block.end_ea
-        block_disassembly = ""
-        for address in idautils.Heads(block_start, block_end):
-            instruction = idc.GetDisasm(address)
-            # remove comments
-            if ';' in instruction:
-                instruction = instruction.split(';')[0]
-            block_disassembly += "{}\n".format(instruction)
-        
-        blocks_info.append((block_start, block_disassembly))
-    
-    return blocks_info
-
-
-def get_all_basic_blocks_bounds(ea):
-    func = idaapi.get_func(ea)
-    if not func:
-        return []
-    
-    flow_chart = idaapi.FlowChart(func)
-    return [(block.start_ea, block.end_ea) for block in flow_chart]
-
-
-def get_basic_blocks(ea, comment=False):
-    func = idaapi.get_func(ea)
-    if not func:
-        print("Function not found at 0x{:X}".format(ea))
-
-    flow_chart = idaapi.FlowChart(func)
-    for block in flow_chart:
-        block_start = block.start_ea
-        block_end = block.end_ea
-        if ea >= block_start and ea <= block_end:
-            instructions = []
-            for address in idautils.Heads(block_start, block_end):
-                instruction = idc.GetDisasm(address)
-                if not comment:
-                    if ';' in instruction:
-                        instruction = instruction.split(';')[0]
-                instructions.append(instruction)    
-            return block_start, "\n".join(instructions)
-        
-    return None, None
-        
-
-    
-
-def group_similar_blocks(blocks_info, similarity_threshold):
-    grouped_blocks = []
-    while blocks_info:
-        current_block_start, current_block_disassembly = blocks_info.pop(0)
-        similar_blocks = [(current_block_start, current_block_disassembly)]
-
-        for block_start, block_disassembly in blocks_info:
-            similarity = token_similarity(remove_hardcoded_values(current_block_disassembly), remove_hardcoded_values(block_disassembly))
-            if similarity >= similarity_threshold:
-                similar_blocks.append((block_start, block_disassembly))
-
-        blocks_info = [(b_start, b_disassembly) for b_start, b_disassembly in blocks_info if b_start not in [b[0] for b in similar_blocks]]
-        grouped_blocks.append(similar_blocks)
-
-    return grouped_blocks
-
-
-def remove_hardcoded_values(block_disassembly):
-    pattern = re.compile(r"[0-9a-fA-F]+h")
-    return pattern.sub("", block_disassembly)
-
-
 def repr_hex_and_ascii(byte_pairs):
     hex_str_ida = " ".join(f"{ida:02X}" for ida, ctx in byte_pairs)
     ascii_str_ida = "".join(chr(ida) if 32 <= ida <= 126 else '.' for ida, ctx in byte_pairs)
@@ -437,79 +327,12 @@ def repr_hex_and_ascii(byte_pairs):
     ascii_str_ctx = "".join(chr(ctx) if 32 <= ctx <= 126 else '.' for ida, ctx in byte_pairs)
     return f"{hex_str_ida}  {ascii_str_ida}\n{hex_str_ctx}  {ascii_str_ctx}"
 
+
 def get_current_gid():
     tcontrol = idaapi.get_current_viewer()
     view = ida_graph.get_viewer_graph(tcontrol)
     return view.gid
 
-def color_common_blocks(blocks, color, cinside=True):
-    
-    blocks_start = [start for start, _ in blocks]
-    blocks_disassembly = [remove_hardcoded_values(diss) for _, diss in blocks]
-    
-    for current_bstart in blocks_start:
-        
-        # transform the disassembly into a set of instructions
-        instructions_set_per_block = []
-    
-        for diss in blocks_disassembly:
-            instructions_set_per_block.append(set())
-            for line in diss.split('\n'):
-                if ";" in line:
-                    line = line.split(';')[0]
-                instructions_set_per_block[-1].add(line)
-                
-        # create percentage of instructions
-        instructions_counter = dict()          
-        for i in range(len(instructions_set_per_block)):
-             for inst in instructions_set_per_block[i]:
-                if inst not in instructions_counter:
-                    instructions_counter[inst] = 0
-                instructions_counter[inst] += 1
-                
-        # convert to percentage
-        for inst in instructions_counter:
-            instructions_counter[inst] /= len(instructions_set_per_block)
-
-        
-        func = idaapi.get_func(current_bstart)
-        flow_chart = idaapi.FlowChart(func)
-        for block in flow_chart:
-            if block.start_ea == current_bstart:
-                p = idaapi.node_info_t()
-                p.bg_color = color
-                gid = get_current_gid()
-                if cinside:
-                    for head in idautils.Heads(block.start_ea, block.end_ea):
-                        # get current disassembly
-                        current_inst = remove_hardcoded_values(idc.GetDisasm(head))
-                        if ';' in current_inst:
-                            current_inst = current_inst.split(';')[0]
-                        try:
-                            if instructions_counter[current_inst] > 0.7 or current_inst.startswith("j"):
-                                idaapi.set_item_color(head, color)
-                        except KeyError:
-                            pass
-                idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
-                
-
-
-                
-def color_blocks(blocks, color, cinside=True):
-    if not isinstance(blocks, list):
-        blocks = [blocks]
-    for block_start in blocks:
-        func = idaapi.get_func(block_start)
-        flow_chart = idaapi.FlowChart(func)
-        for block in flow_chart:
-            if block.start_ea == block_start:
-                p = idaapi.node_info_t()
-                p.bg_color = color
-                gid = get_current_gid()
-                if cinside:
-                    for head in idautils.Heads(block.start_ea, block.end_ea):
-                        idaapi.set_item_color(head, color)
-                idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
 
 def query_model(query):
     """
@@ -558,7 +381,6 @@ def check_openai_api_key():
         return
    
     
-
 def get_op_values(ea):
     disassembly = idc.GetDisasm(ea)
     pattern = re.compile(r"0x[0-9a-fA-F]+")
@@ -580,6 +402,7 @@ def get_segment_name_bounds(name):
     
 def get_color(ea):
     return idc.get_color(ea, idc.CIC_ITEM)
+
 
 def check_memory_access(insn):
         # lea instruction is not a memory access

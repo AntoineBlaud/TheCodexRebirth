@@ -1,6 +1,6 @@
 import random 
 import sys
-
+from codexrebirth.util.misc import rbg_ida_color
 class Color:
     ANSI_COLOR_FORMAT = "\033[38;5;{}m"
 
@@ -29,3 +29,34 @@ class ANSIColors:
     ENDC = "\033[0m"
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
+
+
+def generate_visually_distinct_colors(num_colors, min_color_diff=60):
+    colors = []
+    
+    def generate_color():
+        # Generate random values for the red, green, and blue components
+        red = random.randint(0, 255)
+        green = random.randint(0, 255)
+        blue = random.randint(0, 255)
+        
+        
+        return red, green, blue
+
+    def color_distance(color1, color2):
+        # Calculate the Euclidean distance between two colors in RGB space
+        return sum((c1 - c2) ** 2 for c1, c2 in zip(color1, color2)) ** 0.5
+
+    while len(colors) < num_colors:
+        new_color = generate_color()
+        is_distinct = True
+        for existing_color in colors:
+            if color_distance(new_color, existing_color) < min_color_diff:
+                is_distinct = False
+                break
+        
+        if is_distinct:
+            colors.append(new_color)
+            
+    colors = [rbg_ida_color(r, g, b) for r, g, b in colors]
+    return colors

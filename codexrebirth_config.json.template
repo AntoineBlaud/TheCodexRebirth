@@ -3,5 +3,6 @@
     "log_plain": true,
     "debug_level": 1,
     "openai_key": "sk-1234567890abcdefg",
-    "timeout" : 120
+    "timeout" : 120,
+    "similarity_factor": 0.65
 }
