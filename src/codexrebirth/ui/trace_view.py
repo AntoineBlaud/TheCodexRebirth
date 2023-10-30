@@ -222,7 +222,6 @@ class TraceBar(QtWidgets.QWidget):
         self._last_trace_idx = min(len(self.reader._idx_trace_cache), self.end_idx)
 
         # refresh/redraw relevant elements
-        self._refresh_trace_highlights()
         self.refresh()
 
         # return the final / selected bounds
@@ -269,6 +268,7 @@ class TraceBar(QtWidgets.QWidget):
         Refresh the trace visualization.
         """
         self.update()
+        self._refresh_trace_highlights()
 
     #----------------------------------------------------------------------
     # Qt Overloads
@@ -774,6 +774,7 @@ class TraceBar(QtWidgets.QWidget):
 
 
 
+
     def _clamp_idx(self, idx):
         """
         Clamp the given idx to the bounds of this trace view.
@@ -834,8 +835,7 @@ class TraceBar(QtWidgets.QWidget):
         painter.drawImage(0, 0, self._image_cursor)
 
         #painter.drawImage(0, 0, self._image_final)
-        
-        self.pctx.update_disassembly_view()
+
 
     def _draw_base(self):
         """

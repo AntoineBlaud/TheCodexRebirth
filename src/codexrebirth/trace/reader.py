@@ -3,6 +3,7 @@ from codexrebirth.integration.api import disassembler, DisassemblerContextAPI
 from codexrebirth.trace.arch import ArchAMD64, ArchX86
 import idaapi
 import codexrebirth.util.misc as utils
+import idc 
 
 class TraceReader(object):
     """
@@ -24,7 +25,7 @@ class TraceReader(object):
         self._cached_registers = {}
         self._idx_trace_cache = {}
         self._highlighted_address = None
-        self.current_symbolic_id = None
+        self.current_taint_id = None
         
         self.construct_trace_cache()
         
@@ -76,6 +77,7 @@ class TraceReader(object):
         """
         Seek the trace to the given timestamp.
         """
+        print("Seeking to idx: {}".format(idx))
 
         # clamp the index if it goes past the end of the trace
         if idx >= self.length:
@@ -86,8 +88,12 @@ class TraceReader(object):
         # save the new position
         self.idx = idx
         
-        # set the ida instruction pointer
-        self.dctx.set_ip(self.get_ip(idx))
+        # set current symbolic id
+        self.current_taint_id = self.get_trace(idx).taint_id
+        
+        print("Current symbolic id: {}".format(self.current_taint_id))
+        addr = self.get_ip(idx)
+        idaapi.jumpto(addr)
         
     
     def get_current_function_bounds(self):
@@ -108,7 +114,9 @@ class TraceReader(object):
         """
         if idx not in self._idx_trace_cache:
             return False
-        return self.get_trace(idx).sym_id == self.current_symbolic_id
+        if self.current_taint_id is None or self.current_taint_id == -1:
+            return False
+        return self.get_trace(idx).taint_id == self.current_taint_id
     
     
     def get_trace(self, idx):
@@ -116,6 +124,7 @@ class TraceReader(object):
             return None
         return self._idx_trace_cache[idx][1]
     
+
     
     def get_Insn(self, idx):
         if idx not in self._idx_trace_cache:
@@ -137,6 +146,7 @@ class TraceReader(object):
         """
         target_idx = int(self.length * (percent / 100))
         self.seek(target_idx)
+        
 
     def seek_to_first(self, address):
         """
@@ -162,6 +172,14 @@ class TraceReader(object):
         """
        
         idx = self.find_next_execution(address, start_idx)
+        self.seek(idx)
+        return True
+    
+    def seek_to_current(self, address):
+        """
+        Seek to the given address.
+        """
+        idx = self.find_current_execution(address)
         self.seek(idx)
         return True
 
@@ -287,6 +305,25 @@ class TraceReader(object):
         # return the next timestamp
         if idx_index < len(addr_timestamps) - 1:
             return addr_timestamps[idx_index + 1]
+        # fail, reached start of trace
+        return self.idx
+    
+    
+    def find_current_execution(self, address, idx=None):
+        addr_timestamps = self._addr_trace_cache[address].keys()
+        print("addr_timestamps: {}".format(addr_timestamps))
+        # sort the timestamps
+        addr_timestamps = sorted(addr_timestamps)
+        # find the index of the current timestamp
+        if idx is None:
+            idx = self.idx
+        try:
+            idx_index = addr_timestamps.index(idx)
+        except ValueError:
+            idx_index = 0
+        # return the next timestamp
+        if idx_index < len(addr_timestamps) - 1:
+            return addr_timestamps[idx_index]
         # fail, reached start of trace
         return self.idx
 

@@ -4,9 +4,9 @@ from codexrebirth.backend.instruction import Instruction
 class TraceEntry:
     def __init__(self, Insn: Instruction) -> None:
         self.Insn = Insn
-        self.sym_id = -1
+        self.taint_id = -1
         if self.Insn.v_op_result:
-            self.sym_id = Insn.v_op_result.id
+            self.taint_id = Insn.v_op_result.id
 
     def __repr__(self) -> str:
         return f"{self.Insn}"

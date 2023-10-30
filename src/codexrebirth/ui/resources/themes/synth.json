@@ -83,7 +83,7 @@
         "mem_write_bg": "blue",
         "mem_write_fg": "white",
 
-        "trail_backward": "blue_azul",
+        "trail_backward": "light_red",
         "trail_current":  "purple",
         "trail_forward":  "dark_blue",
 

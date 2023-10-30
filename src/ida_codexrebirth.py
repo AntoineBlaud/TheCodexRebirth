@@ -64,6 +64,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.blocks_execution_count  = None
         self.ctx = Launcher()
         self.colors = generate_visually_distinct_colors(70)
+        self.cached_address = None
         
         
     def init(self):
@@ -147,7 +148,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         self.trace_dock = TraceDock(self)
         
-        self.update_disassembly_view(trail_length=0xFFFFF)
+        self.update_block_hits(trail_length=0xFFFFF)
         utils.print_banner("Symbolic Execution Finished. UI successfully loaded.")
 
 
@@ -179,6 +180,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.trace_dock.attach_reader(self.reader)
         
         self.show_ui()
+
         
 
     def show_ui(self):
@@ -509,103 +511,109 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             None
         """
         
-        current_address = idc.here()
-        current_color = utils.to_ida_color(self.palette.trail_current)
-        for section in lines_in.sections_lines:
-            for line in section:
-                address = line.at.toea()
-                if address == current_address:
-                    entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, current_color)
-                    lines_out.entries.push_back(entry)
-                    
-
-        
-    def update_disassembly_view(self, trail_length=0x50):
-        """
-        Update the disassembly view.
-        """
-    
-        is_quick_update = trail_length == 0x50
-        
         if not self.reader:
             return
         
+        trail_length = 0x100
         current_address = idc.here()
-        forward_color = self.palette.trail_forward
-        symbolic_color = self.palette.symbolic
-        end_address_color = self.palette.end_address
+        backward_color = utils.to_ida_color(self.palette.trail_backward)
+        forward_color = utils.to_ida_color(self.palette.trail_forward)
+        taint_color = utils.to_ida_color(self.palette.symbolic)
+        end_address_color = utils.to_ida_color(self.palette.end_address)
         current_color = utils.to_ida_color(self.palette.trail_current)
-        similar_block_color = utils.to_ida_color(self.palette.similar_block_color)
-        
-
         modifiers = QtGui.QGuiApplication.keyboardModifiers()
         step_over = bool(modifiers & QtCore.Qt.ShiftModifier)
 
-  
         trail = {}
-  
-        
-        if not is_quick_update:
-            blocks_info = utils.get_all_basic_blocks_bounds(current_address)
-            self.blocks_execution_count = {start: 0 for start, end in blocks_info}
             
         forward_ips = self.reader.get_next_ips(trail_length, step_over)
         backward_ips = self.reader.get_prev_ips(trail_length, step_over)
         current_address = self.reader.rebased_ip
 
         trails = [
-            (backward_ips, forward_color), 
+            (backward_ips, backward_color), 
             (forward_ips, forward_color)
         ]
         
-
         for j, (addresses, trail_color) in enumerate(trails):
             for i, address in enumerate(addresses):
 
                 # find the index of the current address in the trail
                 idx = self.reader.idx - i if j == 0 else self.reader.idx + i
-                color = trail_color
+                if address not in trail:
+                    trail[address] = (trail_color, self.reader.get_trace(idx))
 
-                # apply special color to symbolic addresses
-                if self.reader.is_symbolic(idx):
-                    color =  symbolic_color
-
-                # convert to bgr
-                ida_color = utils.to_ida_color(color)
-
-                if address not in trail or color == symbolic_color:
-                    trail[address] = (ida_color, self.reader.get_Insn(idx))
-                    
-                if not is_quick_update:
-                    if address in self.blocks_execution_count:
-                        self.blocks_execution_count[address] += 1
-        
       
-        for address in trail:
-            
-            color, Insn = trail[address]
-            
-            cmt = utils.remove_line(str(Insn))
-            idaapi.set_cmt(address, cmt, False)
-
-            if address == current_address:
-                color = current_color
-
-            # apply color for end address
-            if address == self.user_defined_end_address :
-                color = utils.to_ida_color(end_address_color)
-
-            # We dont overwrite the color if its a similar block
-            if utils.get_color(address) != similar_block_color:
-                idaapi.set_item_color(address, color)
+        for section in lines_in.sections_lines:
+            for line in section:
+                address = line.at.toea()
                 
-        if self.blocks_execution_count:       
-            # color block by execution count
-            for block_start, execution_count in self.blocks_execution_count.items():
-                idaapi.set_cmt(block_start, f"Executed {execution_count} times", False)
+                if address not in trail:
+                    continue
                 
-                if execution_count > 0 and utils.get_color(block_start) != similar_block_color:
-                    utils.color_blocks([block_start], utils.to_ida_color(self.palette.trail_forward), cinside=False)
+                color, Trace = trail[address]
+                
+                if not Trace:
+                    continue
+
+                # treat special cases
+                if address == current_address:
+                    color = current_color
+
+                # apply color for end address
+                if address == self.user_defined_end_address:
+                    color = end_address_color
+                    
+                # if the instruction is symbolic, apply a special color
+                if self.reader.current_taint_id == Trace.taint_id and Trace.taint_id != -1:
+                    color = taint_color
+
+                entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, color)
+                lines_out.entries.push_back(entry)
+                
+                if current_address == self.cached_address:
+                    continue
+                
+                cmt = idaapi.get_cmt(address, False)
+                separator = "@@ "
+                cmt = cmt.split(separator)[0] if cmt else ""
+                cmt += separator + Trace.Insn.__ida__repr__()
+                idaapi.set_cmt(address, cmt, False)
+                
+                
+        self.cached_address = current_address
+                
+
+        
+    def update_block_hits(self, trail_length=0xfffff):
+        """
+        Update the disassembly view.
+        """
+    
+        
+        if not self.reader:
+            return
+ 
+        blocks_info = self.similar_code.get_all_basic_block_bounds(current_address)
+        self.blocks_execution_count = {start: 0 for start, end in blocks_info}
+            
+        forward_ips = self.reader.get_next_ips(trail_length, step_over)
+        backward_ips = self.reader.get_prev_ips(trail_length, step_over)
+
+        trails = [
+            (backward_ips), 
+            (forward_ips)
+        ]
+        
+        for j, addresses in enumerate(trails):
+            for i, address in enumerate(addresses):
+                if address in self.blocks_execution_count:
+                    self.blocks_execution_count[address] += 1
+            
+        for block_start, execution_count in self.blocks_execution_count.items():
+            idaapi.set_cmt(block_start, f"Executed {execution_count} times", False)
+            print(f"Block at {hex(block_start)} executed {execution_count} times")
+
 
                 
 #------------------------------------------------------------------------------
