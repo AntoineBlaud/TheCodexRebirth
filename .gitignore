@@ -7,3 +7,5 @@ config.json
 TheCodexRebirth.code-workspace
 notes.txt
 codexrebirth_config.json
+test*
+test.py

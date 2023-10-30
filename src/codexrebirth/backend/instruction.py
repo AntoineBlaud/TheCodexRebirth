@@ -40,22 +40,23 @@ class Instruction:
                 return hex(int(op))
             except ValueError:
                 return op
+        return op
 
     def __repr__(self) -> str:
         res = f"{self.cinsn.mnemonic} {self.cinsn.op_str}\n"
-        if self.v_op1:
-            res += f"op1 = {self.v_op1}\n"
-        elif self.op1:
-            res += f"op1 = {self._convert_operand(self.r_op1)}\n" 
-        if self.v_op2:
-            res += f"op2 = {self.v_op2}\n"
-        elif self.op2:
-            res += f"op2 = {self._convert_operand(self.r_op2)}\n"
-        if self.v_op3:
-            res += f"op3 = {self.v_op3}\n"
-        elif self.op3:
-            res += f"op3 = {self._convert_operand(self.r_op3)}\n"
-        if self.v_op_result:
+        #if self.v_op1:
+        res += f"v_op1 = {self._convert_operand(str(self.v_op1))}\n"
+        #elif self.r_op1:
+        res += f"op1 = {self._convert_operand(self.r_op1)}\n" 
+        #if self.v_op2:
+        res += f"v_op2 = {self._convert_operand(str(self.v_op2))}\n"
+        #elif self.r_op2:
+        res += f"op2 = {self._convert_operand(self.r_op2)}\n"
+        #if self.v_op3:
+        res += f"v_op3 = {self._convert_operand(str(self.v_op3))}\n"
+        #elif self.r_op3:
+        res += f"op3 = {self._convert_operand(self.r_op3)}\n"
+        if self.v_op_result and self.v_op_result.id != -1:
             res += f"sym_result_id = {self.v_op_result.id}\n"
         if self.mem_access:
             res += f"mem_access = {hex(self.mem_access)}\n"

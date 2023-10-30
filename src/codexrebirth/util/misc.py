@@ -300,50 +300,7 @@ def delete_all_colors():
             idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
             
 
-            
-
-def taint_memory_with_string(codex, value, addr, name_pattern, chunk_size=1):
-    """
-    Taint memory with a string in chunks of a specified size.
-
-    Args:
-        codex: The Codex instance.
-        value: The input string to taint.
-        addr: The starting memory address to write the string.
-        name_pattern: A name pattern for tainting.
-        chunk_size: The size of each chunk (default is 1 byte).
-    """
-    for i in range(0, len(value), chunk_size):
-        chunk = value[i:i + chunk_size]
-        name = f"{name_pattern}_{i}"
-        _taint_memory_with_string_chunk(codex, addr, chunk, name)
-        addr += chunk_size
-
-def _taint_memory_with_string_chunk(codex, addr, chunk, name):
-    """
-    Taint memory with a string.
-
-    Args:
-        codex: The Codex instance.
-        offset: The memory offset to write the string.
-        value: The input string to taint.
-        name_pattern: A name pattern for tainting.
-    """
-    mask = 0xff << ((len(chunk) -1) * 8)
-    
-    if isinstance(chunk, str):
-        value_bytes = chunk.encode()
-    elif isinstance(chunk, bytearray):
-        value_bytes = bytes(chunk)
-    else:
-        value_bytes = chunk
         
-    assert isinstance(value_bytes, bytes)
-        
-    codex.ql.mem.write(addr, value_bytes)
-    value = int.from_bytes(value_bytes, byteorder='little')
-    codex.taint_memory(addr, name, value, mask)
-
 
 def open_console(func):
     @wraps(func)

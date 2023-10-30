@@ -13,7 +13,7 @@ from codexrebirth.util.qt import *
 from codexrebirth.ui.palette import PluginPalette
 from codexrebirth.ui.trace_view import TraceDock
 from codexrebirth.trace.reader import TraceReader
-from codexrebirth.context.qlbackend import QilingBackend
+from codexrebirth.context.launcher import Launcher
 from codexrebirth.context.var_explorer import VarExplorer
 from codexrebirth.context.msnapshot import SnapshotManager
 from codexrebirth.util.config import validate_config
@@ -54,10 +54,10 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
     def reset(self):
         self.user_defined_end_address = None
-        self.sym_engine_last_run = None
+        self.sym_runner_last_run = None
         self.reader = None
         self.blocks_execution_count  = None
-        self.ctx = QilingBackend()
+        self.ctx = Launcher()
         
         
     def init(self):
@@ -100,7 +100,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         if self.user_defined_end_address:
             # we set the end address to the symbolic engine after the initialization
-            self.ctx.sym_engine.set_emu_end(self.user_defined_end_address)
+            self.ctx.sym_runner.set_emu_end(self.user_defined_end_address)
 
         print("Running Symbolic Execution ...")
         print("UI refresh will be disabled until the end of the symbolic execution")
@@ -154,20 +154,20 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         This function loads a trace from a specified file path and creates a trace reader for navigation and querying.
         The trace reader provides access to the loaded trace and its records.
         """
-        if len(self.ctx.sym_engine.trace_records) < 1:
+        if len(self.ctx.sym_runner.trace_records) < 1:
             print("Trace records are not available.")
             return
         
         print("Loading trace records...")
-        self.reader = TraceReader(self.ctx.sym_engine.trace_records)
+        self.reader = TraceReader(self.ctx.sym_runner.trace_records)
         print(f"Trace loaded with {self.reader.length} records.")
 
         # Hook into the trace for further processing.
         self.hook()
         
         print("Register and memory state: ")
-        print(self.ctx.sym_engine.mem_sm)
-        print(self.ctx.sym_engine.reg_sm)
+        print(self.ctx.sym_runner.mem_sm)
+        print(self.ctx.sym_runner.reg_sm)
 
         # Attach the trace engine to various plugin UI controllers, granting them
         # access to the underlying trace reader.
@@ -446,7 +446,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         (Event) IDA is about to exit.
         """
-        if self.sym_engine_last_run:
+        if self.sym_runner_last_run:
             self._uninstall()
         return 0
 

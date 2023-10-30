@@ -34,6 +34,8 @@ class QilingEngine(EngineWrapper):
     
     def __init__(self, ql):
         self.ql = ql
+        # Configure the disassembler for detailed information
+        self.ql.arch.disassembler.detail = True
 
     def get_current_instruction_address(self):
         if self.ql.arch.type == QL_ARCH.X8664:
@@ -92,6 +94,33 @@ class QilingEngine(EngineWrapper):
     def read_reg(self, regname):
         return self.ql.arch.regs.read(regname)
     
+    def write_reg(self, regname, value):
+        self.ql.arch.regs.write(regname, value)
+        
+        
+    def check_instruction_scope(self, text_base, text_end):
+        if self.ql.arch.type == QL_ARCH.X8664:
+            pc = self.ql.arch.regs.rip
+        else:
+            pc = self.ql.arch.regs.eip
+
+        if pc < text_base or pc >= text_end:
+            return False
+        return True
+    
+    def clear(self):
+        self.ql.clear_hooks()
+        self.ql.clear_ql_hooks()
+        
+    def map(self, start, size):
+        self.ql.mem.map(start, size)
+        
+    def write(self, start, data):
+        self.ql.mem.write(start, data)
+        
+    def unmap_all(self):
+        self.ql.mem.unmap_all()
+        self.ql.mem.map_info = []
         
 
     def map_regs() -> Mapping[int, int]:

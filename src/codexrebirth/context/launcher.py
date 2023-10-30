@@ -11,15 +11,16 @@ import idc
 import ida_kernwin
 import ida_bytes
 from codexrebirth.backend.core import QilingRunner
+from codexrebirth.backend.engines import QilingEngine
 import codexrebirth.util.misc as utils
 import json
 from superglobals import setglobal
 from qiling import *
 from threading import Thread
 
-class QilingBackend:
+class Launcher:
     def __init__(self):
-        self.sym_engine = None
+        self.sym_runner = None
         self.config = None
         self.is_initialized = False
         # Create a temporary log file for debugging.
@@ -36,7 +37,7 @@ class QilingBackend:
         self.is_initialized = True
         
     def run_emulation_thread(self, callback, main_thread):
-        self.sym_engine.run_emulation()
+        self.sym_runner.run_emulation()
         # fetch the main thread
         # call the callback function with the main thread
         ida_kernwin.execute_sync(callback, ida_kernwin.MFF_FAST)
@@ -48,7 +49,7 @@ class QilingBackend:
         if not ida_dbg.is_debugger_on():
             utils.show_msgbox("Please start the debugger before running the emulation")
         # Map IDA Pro segments to Qiling.
-        self.map_segments_to_qiling()
+        self.map_segments_to_engine()
         # Set up the emulation environment.
         self.map_registers()
         # Run the emulation in a separate thread.
@@ -105,27 +106,25 @@ class QilingBackend:
             
             # Initialize the Qiling emulator.
             ql = Qiling([binary_path], rootfs_path, log_plain=log_plain)
-            self.sym_engine = QilingRunner(ql, debug_level, timeout)
+            self.sym_engine = QilingEngine(ql)
+            self.sym_runner = QilingRunner(self.sym_engine, debug_level, timeout)
 
         # Map IDA Pro segments to Qiling.
-        self.map_segments_to_qiling()
+        self.map_segments_to_engine()
         
         # Set up the emulation environment.
         self.map_registers()
 
 
 
-    def map_segments_to_qiling(self):
+    def map_segments_to_engine(self):
         """
         Map IDA Pro segments to Qiling's memory.
 
         This function aligns the segments to the page size and joins adjacent segments with the same permissions.
         """
-        ql = self.sym_engine.ql
-
         # Clear existing memory mappings in Qiling.
-        ql.mem.unmap_all()
-        ql.mem.map_info = []
+        self.sym_engine.unmap_all()
 
         # Get a list of segments in IDA Pro, including their start address, end address, and name.
         segments = [(idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg)) for seg in idautils.Segments()]
@@ -163,19 +162,19 @@ class QilingBackend:
         print("Registering memory mappings")
         # Map the segments to Qiling's memory.
         for start, end, size, name in to_map:
-            ql.mem.map(start, size)
+            self.sym_engine.map(start, size)
             print(hex(start), hex(end), hex(size), name)
             
             if abs(size) < 0xFFFFFF:
                 data = ida_bytes.get_bytes(start, size)
-                ql.mem.write(start, data)
+                self.sym_engine.write(start, data)
             else:
                 print("Segment too large to copy to Qiling's memory.")
                 
             #  update the start and end address of the text segment
             if ".text" in name:
-                self.sym_engine.text_start = start
-                self.sym_engine.text_end = end
+                self.sym_runner.text_start = start
+                self.sym_runner.text_end = end
 
     def map_registers(self):
         """
@@ -183,12 +182,12 @@ class QilingBackend:
         """
         # Get the current execution address as the emulation start.
         emu_start = utils.get_ea()
-        self.sym_engine.set_emu_start(emu_start)
+        self.sym_runner.set_emu_start(emu_start)
  
         # Set register values based on the current state.
         for regname in utils.get_regs_name():
             val = utils.get_reg_value(regname)
-            self.sym_engine.set_register(regname, val)
+            self.sym_runner.set_register(regname, val)
             print(regname, hex(val))
 
 

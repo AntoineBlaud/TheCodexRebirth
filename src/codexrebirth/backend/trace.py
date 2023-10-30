@@ -5,7 +5,7 @@ class TraceEntry:
     def __init__(self, Insn: Instruction) -> None:
         self.Insn = Insn
         self.sym_id = -1
-        if Insn.v_op_result:
+        if self.Insn.v_op_result:
             self.sym_id = Insn.v_op_result.id
 
     def __repr__(self) -> str:
