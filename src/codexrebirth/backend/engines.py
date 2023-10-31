@@ -5,7 +5,7 @@ import abc
 
 class EngineWrapper(abc.ABC):
     
-    def get_current_instruction_address(self):
+    def get_ea(self):
         raise NotImplementedError()
     
     def get_currrent_instruction_disass(self):
@@ -37,7 +37,7 @@ class QilingEngine(EngineWrapper):
         # Configure the disassembler for detailed information
         self.ql.arch.disassembler.detail = True
 
-    def get_current_instruction_address(self):
+    def get_ea(self):
         if self.ql.arch.type == QL_ARCH.X8664:
             return self.ql.arch.regs.rip
         elif self.ql.arch.type == QL_ARCH.X86:
@@ -47,7 +47,7 @@ class QilingEngine(EngineWrapper):
 
 
     def get_currrent_instruction_disass(self):
-        pc = self.get_current_instruction_address()
+        pc = self.get_ea()
         md = self.ql.arch.disassembler
         buf = self.ql.mem.read(pc, 0x10)
         return next(md.disasm(buf, pc))
@@ -123,7 +123,7 @@ class QilingEngine(EngineWrapper):
         self.ql.mem.map_info = []
         
 
-    def map_regs() -> Mapping[int, int]:
+    def map_regs(self) -> Mapping[int, int]:
         """Map Capstone x86 regs definitions to Unicorn's."""
 
         from capstone import x86_const as cs_x86_const

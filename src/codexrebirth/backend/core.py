@@ -221,19 +221,24 @@ class TaintedVariableState(dict):
 
     def __contains__(self, key_object: object) -> bool:
         # Check if a key_object (possibly processed) exists in the dictionary
-        if isinstance(key_object, int):
-            key_object =  "mem_" + hex(key_object)
+        key_object = create_name_from_addr(key_object)
+        if not isinstance(key_object, str):
+            return None
         return super().__contains__(key_object)
     
-    def __setitem__(self, key, value):
+    def __setitem__(self, key_object, value):
             # Set an item in the dictionary after processing the key
-        processed_key = create_name_from_addr(key)
-        super().__setitem__(processed_key, value)
+        key_object = create_name_from_addr(key_object)
+        if not isinstance(key_object, str):
+            return None
+        super().__setitem__(key_object, value)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key_object):
         # Get an item from the dictionary after processing the key
-        processed_key = create_name_from_addr(key)
-        return super().__getitem__(processed_key)
+        key_object = create_name_from_addr(key_object)
+        if not isinstance(key_object, str):
+            return None
+        return super().__getitem__(key_object)
 
     
     def create_sym_reg(self, name) -> SymRegister:
@@ -668,7 +673,7 @@ class InstructionEngineX86_64:
         SUPPORTED_INSTRUCTIONS = self.config["SUPPORTED_INSTRUCTIONS"]
         # Get the current instruction
         insn = self.engine.get_currrent_instruction_disass()
-        insn_addr = self.engine.get_current_instruction_address()
+        insn_addr = self.engine.get_ea()
         # Check if the instruction is the same as the last one executed
         if insn_addr == self.last_instruction_executed:
             return None
@@ -768,14 +773,15 @@ class Runner():
         assert isinstance(address, int)
         self.addr_emu_end.append(address)
         
-    def register_operations(self, Insn):
-        if Insn is None:
-            return
-        insn_addr = self.engine.get_current_instruction_address()
-        self.update_datastore(Insn)
-        return self.trace_records.register(
-            insn_addr, Insn
-        )
+    def set_register(self, register: str, value: int):
+        self.engine.write_reg(register.upper(), value)
+
+    def get_register(self, register: str):
+        return self.engine.read_reg(register.upper())
+    
+    
+    def get_current_pc(self):
+        return self.engine.get_ea()
 
     def memory_write_hook(
         self, ql: Qiling, access: int, address: int, size: int, value: int
@@ -785,8 +791,9 @@ class Runner():
         if not self.engine.check_instruction_scope(self.text_base, self.text_end):
             return
 
-        insn_addr = self.engine.get_current_instruction_address()
+        insn_addr = self.engine.get_ea()
         self.register_operations(self.instruction_engine.evaluate_instruction(address, self.taint_st))
+
 
     def memory_read_hook(
         self, ql: Qiling, access: int, address: int, size: int, value: int
@@ -796,20 +803,12 @@ class Runner():
         if not self.engine.check_instruction_scope(self.text_base, self.text_end):
             return
 
-        insn_addr = self.engine.get_current_instruction_address()
+        insn_addr = self.engine.get_ea()
         self.register_operations(self.instruction_engine.evaluate_instruction(address, self.taint_st))
             
-    
-    def set_register(self, register: str, value: int):
-        self.engine.write_reg(register.upper(), value)
-
-    def get_register(self, register: str):
-        return self.engine.read_reg(register.upper())
-
-    
+            
     def code_execution_hook(self, ql: Qiling, address: int, size):
         try:
-            
             if time.time() - self.start_time > self.timeout:
                 raise UserStoppedExecution(f"Reached timeout of {self.timeout} seconds")
             
@@ -817,7 +816,7 @@ class Runner():
                 return
                 
             # Get the current instruction and its address
-            insn, insn_addr = self.engine.get_currrent_instruction_disass(), self.engine.get_current_instruction_address()
+            insn, insn_addr = self.engine.get_currrent_instruction_disass(), self.engine.get_ea()
 
             # Check if we have reached the user-defined end address for emulation
             if insn_addr in self.addr_emu_end:
@@ -844,20 +843,102 @@ class Runner():
             # Increment the instruction executed count
             next(self.insn_executed_count)
             
+    
 
-    def get_current_pc(self):
-        return self.engine.get_current_instruction_address()
+    def register_operations(self, Insn):
+        if Insn is None:
+            return
+        
+        if Insn.mem_access:
+            self.mem_sm.register(Insn.mem_access, self.insn_executed_count.current - 1, Insn.op_result)
+            
+        self.update_datastore(Insn)
+        self.evaluate_current_symbolic_state(Insn)
+        self.evaluate_and_register_last_operation_result()
+        self.trace_records.register(self.engine.get_ea(), Insn)
+        
+        
+    def initialize_eval(self):
+        # register all symbolic registers
+        for reg_id in self.engine.map_regs():
+            reg_name = self.cs.reg_name(reg_id)
+            if not reg_name:
+                continue
+            try:
+                # register register value in the datastore
+                self.reg_sm.register(reg_name, 0,  self.engine.read_reg(reg_name.upper()))
+                globals()[reg_name] = self.reg_sm.get_state(reg_name, 0)
+            except KeyError:
+                pass
+            
+            
+    def evaluate_and_register_last_operation_result(self):
+        last_trace_entry = self.trace_records.get_last_entry()
+        
+        if not last_trace_entry:
+            return
+        
+        last_insn = last_trace_entry.Insn
+        v_op_result = last_insn.v_op_result
+        cinsn_operands = last_insn.cinsn.operands
+        
+        if v_op_result is not None and len(cinsn_operands) > 0:
+            op1 = cinsn_operands[0]
+            
+            if op1.type == X86_OP_REG:
+                reg_name = self.cs.reg_name(op1.reg).upper()
+                value = self.engine.read_reg(reg_name)
+            elif op1.type == X86_OP_MEM:
+                value = self.engine.read_memory_int(last_insn.mem_access)
+            
+            if value:
+                last_insn.op_result = value
+                last_insn.evaled_op_result = eval(str(v_op_result), globals())
+                print( last_insn.op_result, last_insn.evaled_op_result)
+        
+    def evaluate_current_symbolic_state(self, Insn):
+        # register new variables var_xxxxx
+        vars_to_register = sorted(set(self.taint_st.keys()).difference(set(globals().keys())))
+        for var_name in vars_to_register:
+            if var_name.startswith("var_"):
+                globals()[var_name] = eval(str(self.taint_st[var_name]), globals())
+                
+        # eval last mem access
+        if Insn.mem_access:
+            name = create_name_from_addr(Insn.mem_access)
+            if name in self.taint_st:
+                globals()[name] = eval(str(self.taint_st[name]), globals())
+            else:
+                globals()[name] = self.engine.read_memory_int(Insn.mem_access)
+        
+        # update registers values
+        for op in Insn.cinsn.operands:
+            if op.type == X86_OP_REG:
+                reg_name = self.cs.reg_name(op.reg)
+                if reg_name in self.taint_st:
+                    globals()[reg_name] = eval(str(self.taint_st[reg_name]), globals())
+        # update rax every time
+        if "rax" in self.taint_st:
+            globals()["rax"] = eval(str(self.taint_st["rax"]), globals())
+            
+            
     
-    
-    def update_datastore(self, Insn):
-        for i in range(min(len(Insn.cinsn.operands), 3)):
-            operand = Insn.cinsn.operands[i]
+    def update_datastore(self, insn):
+        for i in range(min(len(insn.cinsn.operands), 3)):
+            operand = insn.cinsn.operands[i]
+
             if operand.type == X86_OP_REG:
-                regname = self.cs.reg_name(operand.reg)
-                self.reg_sm.register(self.insn_executed_count.current, regname, self.engine.read_reg(regname.upper()))
-            elif operand.type == X86_OP_MEM:
-                self.mem_sm.register(self.insn_executed_count.current, Insn.mem_access, self.engine.read_memory_int(Insn.mem_access))
+                register_name = self.cs.reg_name(operand.reg)
+                register_value = self.engine.read_reg(register_name.upper())
+                self.reg_sm.register(register_name, self.insn_executed_count.current, register_value)
 
+            elif operand.type == X86_OP_MEM:
+                address = insn.mem_access
+                name = create_name_from_addr(address)
+                memory_value = self.engine.read_memory_int(address)
+                self.mem_sm.register(name, self.insn_executed_count.current, memory_value)
+
+                
 
     def clone(self):        
         # delete current ql hooks
@@ -934,6 +1015,7 @@ class QilingRunner(Runner):
         # Synchronize config with the global config
         self.initialize_configuration()
         self.instruction_engine.set_config(self.CONFIG)
+        self.initialize_eval()
         
         # Set up memory read, memory write, and code hooks
         self.ql.hook_mem_read(self.memory_read_hook)
@@ -983,8 +1065,9 @@ class QilingRunner(Runner):
             # print performance report
             global profile
             profile.print_stats()
+
             
-            print(self.taint_st)
+            
         
 
         return True

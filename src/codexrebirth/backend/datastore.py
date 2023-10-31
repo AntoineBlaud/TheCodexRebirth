@@ -46,16 +46,17 @@ class DataStoreManager:
     def __init__(self):
         self.chains = {}
 
-    def get_state(self, idx, item_name):
+    def get_state(self, item_name, idx):
         if item_name in self.chains:
             return self.chains[item_name].get(idx)
         else:
-           raise Exception(f"Item {item_name} not found in state manager")  
+           raise KeyError(f"Item {item_name} not found in state manager")  
+       
 
     def add_item(self, item_name):
         self.chains[item_name] = _StateChain(item_name)
         
-    def register(self, idx, item_name, value):
+    def register(self, item_name, idx, value):
         if item_name not in  self.chains:
             self.chains[item_name] = _StateChain(item_name)
         self.chains[item_name].add(idx, value)

@@ -21,6 +21,7 @@ class Trace(dict):
     def __init__(self):
         super().__init__()
         self.idx = 0
+        self.insn_access = []
 
     def register(self, insn_addr: int, Insn: Instruction) -> None:
         
@@ -31,6 +32,12 @@ class Trace(dict):
             self[insn_addr] = {}
         self[insn_addr][self.idx] = TraceEntry(Insn.clone())
         self.idx += 1
+        self.insn_access.append(insn_addr)
+        
+    def get_last_entry(self) -> TraceEntry:
+        if self.idx == 0:
+            return None
+        return self[self.insn_access[-1]][self.idx - 1]
 
     def __repr__(self) -> str:
         raise NotImplementedError()
