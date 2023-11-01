@@ -222,22 +222,16 @@ class TaintedVariableState(dict):
     def __contains__(self, key_object: object) -> bool:
         # Check if a key_object (possibly processed) exists in the dictionary
         key_object = create_name_from_addr(key_object)
-        if not isinstance(key_object, str):
-            return None
         return super().__contains__(key_object)
     
     def __setitem__(self, key_object, value):
             # Set an item in the dictionary after processing the key
         key_object = create_name_from_addr(key_object)
-        if not isinstance(key_object, str):
-            return None
         super().__setitem__(key_object, value)
 
     def __getitem__(self, key_object):
         # Get an item from the dictionary after processing the key
         key_object = create_name_from_addr(key_object)
-        if not isinstance(key_object, str):
-            return None
         return super().__getitem__(key_object)
 
     
@@ -849,16 +843,13 @@ class Runner():
         if Insn is None:
             return
         
-        if Insn.mem_access:
-            self.mem_sm.register(Insn.mem_access, self.insn_executed_count.current - 1, Insn.op_result)
-            
-        self.update_datastore(Insn)
+        self.register_current_execution_state(Insn)
         self.evaluate_current_symbolic_state(Insn)
         self.evaluate_and_register_last_operation_result()
         self.trace_records.register(self.engine.get_ea(), Insn)
         
         
-    def initialize_eval(self):
+    def initialize_symbolic_evaluator(self):
         # register all symbolic registers
         for reg_id in self.engine.map_regs():
             reg_name = self.cs.reg_name(reg_id)
@@ -866,7 +857,8 @@ class Runner():
                 continue
             try:
                 # register register value in the datastore
-                self.reg_sm.register(reg_name, 0,  self.engine.read_reg(reg_name.upper()))
+                value = self.engine.read_reg(reg_name.upper())
+                self.reg_sm.register_item(reg_name, 0,  value)
                 globals()[reg_name] = self.reg_sm.get_state(reg_name, 0)
             except KeyError:
                 pass
@@ -922,23 +914,21 @@ class Runner():
             globals()["rax"] = eval(str(self.taint_st["rax"]), globals())
             
             
-    
-    def update_datastore(self, insn):
+    def register_current_execution_state(self, insn):
         for i in range(min(len(insn.cinsn.operands), 3)):
             operand = insn.cinsn.operands[i]
 
             if operand.type == X86_OP_REG:
                 register_name = self.cs.reg_name(operand.reg)
                 register_value = self.engine.read_reg(register_name.upper())
-                self.reg_sm.register(register_name, self.insn_executed_count.current, register_value)
+                self.reg_sm.register_item(register_name, self.insn_executed_count.current, register_value)
 
             elif operand.type == X86_OP_MEM:
                 address = insn.mem_access
                 name = create_name_from_addr(address)
                 memory_value = self.engine.read_memory_int(address)
-                self.mem_sm.register(name, self.insn_executed_count.current, memory_value)
-
-                
+                self.mem_sm.register_item(name, self.insn_executed_count.current, memory_value)
+          
 
     def clone(self):        
         # delete current ql hooks
@@ -1015,7 +1005,7 @@ class QilingRunner(Runner):
         # Synchronize config with the global config
         self.initialize_configuration()
         self.instruction_engine.set_config(self.CONFIG)
-        self.initialize_eval()
+        self.initialize_symbolic_evaluator()
         
         # Set up memory read, memory write, and code hooks
         self.ql.hook_mem_read(self.memory_read_hook)

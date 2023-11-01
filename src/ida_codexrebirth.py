@@ -193,6 +193,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         mw = get_qmainwindow()
         mw.addToolBar(QtCore.Qt.RightToolBarArea, self.trace_dock)
         self.trace_dock.show()
+        print("UI successfully loaded.")
 
     def hook(self):
         """

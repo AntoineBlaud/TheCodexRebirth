@@ -45,6 +45,7 @@ class Trace(dict):
     def clone(self):
         clone = Trace()
         clone.idx = self.idx
+        clone.insn_access = self.insn_access.copy()
         for addr in self:
             clone[addr] = {}
             for idx in self[addr]:

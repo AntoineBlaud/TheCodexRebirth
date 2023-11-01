@@ -56,7 +56,9 @@ class DataStoreManager:
     def add_item(self, item_name):
         self.chains[item_name] = _StateChain(item_name)
         
-    def register(self, item_name, idx, value):
+    def register_item(self, item_name, idx, value):
+        if value is None:
+            return
         if item_name not in  self.chains:
             self.chains[item_name] = _StateChain(item_name)
         self.chains[item_name].add(idx, value)
@@ -69,4 +71,3 @@ class DataStoreManager:
     
     def __repr__(self):
         return str(self.chains)
-

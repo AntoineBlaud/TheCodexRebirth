@@ -92,4 +92,6 @@ class Instruction:
         clone.v_op2 = self.v_op2.clone() if self.v_op2 else None
         clone.v_op3 = self.v_op3.clone() if self.v_op3 else None
         clone.v_op_result = self.v_op_result.clone() if self.v_op_result else None
+        clone.op_result = self.op_result
+        clone.evaled_op_result = self.evaled_op_result
         return clone
