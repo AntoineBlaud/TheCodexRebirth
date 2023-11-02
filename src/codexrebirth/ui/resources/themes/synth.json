@@ -77,7 +77,7 @@
         "trace_selection":        "true_green",
         "trace_selection_border": "true_green",
 
-        "symbolic": "light_pink",
+        "trail_tainted": "light_pink",
         "mem_read_bg": "yellow",
         "mem_read_fg": "black",
         "mem_write_bg": "blue",

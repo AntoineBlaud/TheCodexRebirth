@@ -257,8 +257,17 @@ def to_ida_color(color):
     r, g, b, _ = color.getRgb()
     return 0xFF << 24 | b << 16 | g << 8 | r
 
+def get_rbga_color(color):
+    r = color & 0xFF
+    g = (color >> 8) & 0xFF
+    b = (color >> 16) & 0xFF
+    return r, g, b
+
+
 def rbg_ida_color(r, g, b):
     return 0xFF << 24 | b << 16 | g << 8 | r
+
+
 
 
 def address_to_segment_offset(address):
@@ -390,7 +399,6 @@ def get_vars(ea):
     disassembly = idc.GetDisasm(ea)
     pattern = re.compile(r"var_[0-9a-zA-Z_]+")
     return pattern.findall(disassembly)
-
 
 
 def get_segment_name_bounds(name):

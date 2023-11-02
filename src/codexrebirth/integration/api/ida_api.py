@@ -26,7 +26,7 @@ import idaapi
 
 from .api import DisassemblerCoreAPI, DisassemblerContextAPI
 from ...util.qt import *
-from ...util.misc import is_mainthread
+from ...util.common import is_mainthread
 
 logger = logging.getLogger("Tenet.API.IDA")
 

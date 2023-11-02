@@ -8,8 +8,7 @@ import idautils
 import idc
 import idaapi
 
-from codexrebirth.util.exceptions import UserStoppedExecution
-from codexrebirth.util.qt import *
+
 from codexrebirth.ui.palette import PluginPalette
 from codexrebirth.ui.trace_view import TraceDock
 from codexrebirth.trace.reader import TraceReader
@@ -17,9 +16,7 @@ from codexrebirth.context.launcher import Launcher
 from codexrebirth.context.var_explorer import VarExplorer
 from codexrebirth.context.similar_code import SimilarCode
 from codexrebirth.context.msnapshot import SnapshotManager
-from codexrebirth.util.config import validate_config
-from codexrebirth.util.color import generate_visually_distinct_colors
-import codexrebirth.util.misc as utils
+from codexrebirth.tools import *
 
 import time
 from PyQt5.QtWidgets import QMessageBox
@@ -93,7 +90,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.config = config
         
 
-    @utils.open_console
+    @open_console
     def _run(self):
         """
         Execute symbolic execution and handle various scenarios.
@@ -113,7 +110,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         print("UI refresh will be disabled until the end of the symbolic execution")
         ida_kernwin.refresh_idaview_anyway()
 
-        self.ctx.run_emulation(callback=self.load_trace_ui)
+        self.ctx.run_emulation(callback=self.on_emulation_complete)
 
 
     
@@ -147,13 +144,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.palette.warmup()
         
         self.trace_dock = TraceDock(self)
-        
-        self.update_block_hits(trail_length=0xFFFFF)
-        utils.print_banner("Symbolic Execution Finished. UI successfully loaded.")
+    
 
 
 
-    def load_trace_ui(self):
+    def on_emulation_complete(self):
         """
         Load a trace file and create a trace reader.
 
@@ -164,14 +159,13 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             print("Trace records are not available.")
             return
         
-        print("Loading trace records...")
         self.reader = TraceReader(self.ctx.sym_runner.trace_records)
         print(f"Trace loaded with {self.reader.length} records.")
 
         # Hook into the trace for further processing.
         self.hook()
         
-        print("Register and memory state: ")
+        print("Register and memory state :")
         print(self.ctx.sym_runner.mem_sm)
         print(self.ctx.sym_runner.reg_sm)
 
@@ -181,6 +175,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         self.show_ui()
 
+        self.update_block_hits()
+        print("Symbolic Execution Finished.")
         
 
     def show_ui(self):
@@ -214,7 +210,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self._ui_hooks.unhook()
         
 
-    @utils.open_console
+    @open_console
     def _interactive_end_address(self):
         """
         Set the user-defined end address.
@@ -237,11 +233,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         This function deletes all breakpoints, comments, and custom colors applied in the disassembly.
         """
-        utils.delete_all_bpts()
-        utils.delete_all_comments()
-        utils.delete_all_colors()
+        delete_all_bpts()
+        delete_all_comments()
+        delete_all_colors()
 
-    @utils.open_console
+    @open_console
     def _interactive_color_similar_blocks(self):
         """
         Color similar blocks in a function based on similarity.
@@ -257,7 +253,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 ida_kernwin.ask_str("", 0, "Enter a comment"))
         self.similar_code.run(*args)
  
-    @utils.open_console
+    @open_console
     def _interactive_hightligh_address(self):
         """
         Highlight the current address.
@@ -267,7 +263,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         self.reader.set_highlighted_address(idc.here())
                 
-    @utils.open_console
+    @open_console
     def _interactive_ida_create_execution_snapshot(self):
         """
         Take an IDA execution snapshot.
@@ -281,7 +277,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         print("Taking IDA execution snapshot ...")
         self.snap_manager.take_ida_execution_snapshot()
         
-    @utils.open_console
+    @open_console
     def _interactive_ida_restore_ida_execution_snapshot(self):
         """
         Restore an IDA execution snapshot.
@@ -317,6 +313,19 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         self.var_exp.update()
         
+    def _interactive_color_taint_id(self):
+        """
+        Color the current taint id.
+        """
+        if not self.reader:
+            return
+        
+        taint_id = self.reader.get_trace(self.reader.idx).taint_id
+        if taint_id == -1:
+            return
+        self.reader.set_taint_id_color(taint_id, self.colors.pop())
+        print(f"Coloring taint id {taint_id} with color {self.reader.get_taint_id_color(taint_id)}")
+        
  
     def _uninstall(self):
         """
@@ -327,7 +336,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         mw.removeToolBar(self.trace_dock)
         self.trace_dock.close()
         # clean IDA trace
-        utils.delete_all_colors()
+        delete_all_colors()
         # Reset the UI
         self.reset()
         
@@ -348,6 +357,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     ACTION_GO_PREV_EXECUTION = "codexrebirth:go_prev_execution"
     ACTION_HIGHLIGHT_ADDRESS = "codexrebirth:highlight_address"
     ACTION_SYNCHRONIZE_VARIABLES = "codexrebirth:synchronize_variables"
+    ACTION_COLOR_TAINT_ID = "codexrebirth:color_taint_id"
 
     
     
@@ -415,6 +425,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
     def _install_synchronize_variables(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_SYNCHRONIZE_VARIABLES, "Synchronize variables", self._interactive_synchronize_variables, shortcut="Shift+s")
+        
+    def _install_color_taint_id(self, widget, popup):
+        self._install_action(widget, popup, self.ACTION_COLOR_TAINT_ID, "Color taint id", self._interactive_color_taint_id)
     
     def _install_hooks(self):
         """
@@ -484,6 +497,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self._install_go_prev_execution(widget, popup)
             self._install_highlight_address(widget, popup)
             self._install_synchronize_variables(widget, popup)
+            self._install_color_taint_id(widget, popup)
      
             
         
@@ -512,16 +526,27 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             None
         """
         
+        def calculate_index(reader, i, j):
+            if j == 0:
+                return reader.idx - i
+            return reader.idx + i
+
+        def get_taint_color_and_trace(reader, idx, address, default_taint_color):
+            trace = reader.get_trace(idx)
+            taint_id = trace.taint_id if trace else -1
+            color = reader.get_taint_id_color(taint_id) or default_taint_color
+            return color, trace
+
         if not self.reader:
             return
         
         trail_length = 0x100
         current_address = idc.here()
-        backward_color = utils.to_ida_color(self.palette.trail_backward)
-        forward_color = utils.to_ida_color(self.palette.trail_forward)
-        taint_color = utils.to_ida_color(self.palette.symbolic)
-        end_address_color = utils.to_ida_color(self.palette.end_address)
-        current_color = utils.to_ida_color(self.palette.trail_current)
+        backward_color = to_ida_color(self.palette.trail_backward)
+        forward_color = to_ida_color(self.palette.trail_forward)
+        default_taint_color = to_ida_color(self.palette.trail_tainted)
+        end_address_color = to_ida_color(self.palette.end_address)
+        current_color = to_ida_color(self.palette.trail_current)
         modifiers = QtGui.QGuiApplication.keyboardModifiers()
         step_over = bool(modifiers & QtCore.Qt.ShiftModifier)
 
@@ -536,13 +561,19 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             (forward_ips, forward_color)
         ]
         
-        for j, (addresses, trail_color) in enumerate(trails):
-            for i, address in enumerate(addresses):
+        for j, (trail_addresses, trail_color) in enumerate(trails):
+            for i, address in enumerate(trail_addresses):
 
-                # find the index of the current address in the trail
-                idx = self.reader.idx - i if j == 0 else self.reader.idx + i
+                idx = calculate_index(self.reader, i, j)
                 if address not in trail:
-                    trail[address] = (trail_color, self.reader.get_trace(idx))
+                    color, trace = get_taint_color_and_trace(self.reader, idx, address, default_taint_color)
+                    # if the instruction taint_id is different from the current taint_id,
+                    # and the color is the default taint color, we use the trail color
+                    if not trace.taint_id == self.reader.current_taint_id and color == default_taint_color:
+                       color = trail_color
+                    if trace.taint_id == -1:
+                        color = trail_color
+                    trail[address] = (color, trace)
 
       
         for section in lines_in.sections_lines:
@@ -564,10 +595,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 # apply color for end address
                 if address == self.user_defined_end_address:
                     color = end_address_color
-                    
-                # if the instruction is symbolic, apply a special color
-                if self.reader.current_taint_id == Trace.taint_id and Trace.taint_id != -1:
-                    color = taint_color
 
                 entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, color)
                 lines_out.entries.push_back(entry)
@@ -586,33 +613,38 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 
 
         
-    def update_block_hits(self, trail_length=0xfffff):
+    def update_block_hits(self):
         """
         Update the disassembly view.
         """
-    
+        print("Block execution count :")
         
         if not self.reader:
             return
+        
+        trail_length = self.reader.length
+        current_address = idc.here()
  
-        blocks_info = self.similar_code.get_all_basic_block_bounds(current_address)
+        blocks_info = self.similar_code.get_all_basic_block_bounds(current_address)[1:] # remove first block
         self.blocks_execution_count = {start: 0 for start, end in blocks_info}
             
-        forward_ips = self.reader.get_next_ips(trail_length, step_over)
-        backward_ips = self.reader.get_prev_ips(trail_length, step_over)
+        forward_ips = self.reader.get_next_ips(trail_length)
+        backward_ips = self.reader.get_prev_ips(trail_length)
 
         trails = [
             (backward_ips), 
             (forward_ips)
         ]
         
-        for j, addresses in enumerate(trails):
-            for i, address in enumerate(addresses):
+     
+        for j, trail_addresses in enumerate(trails):
+            for i, address in enumerate(trail_addresses):
                 if address in self.blocks_execution_count:
                     self.blocks_execution_count[address] += 1
+                
             
         for block_start, execution_count in self.blocks_execution_count.items():
-            idaapi.set_cmt(block_start, f"Executed {execution_count} times", False)
+            idaapi.set_cmt(block_start, f"Executed {execution_count} times  ", False)
             print(f"Block at {hex(block_start)} executed {execution_count} times")
 
 

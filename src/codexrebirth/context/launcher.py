@@ -10,9 +10,8 @@ import idautils
 import idc
 import ida_kernwin
 import ida_bytes
-from codexrebirth.backend.core import QilingRunner
-from codexrebirth.backend.engines import QilingEngine
-import codexrebirth.util.misc as utils
+from codexrebirth.backend import QilingEngine, QilingRunner
+import codexrebirth.tools.common as utils
 import json
 from superglobals import setglobal
 from qiling import *

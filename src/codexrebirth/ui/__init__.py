@@ -1,4 +1,4 @@
-from codexrebirth.util.qt import QT_AVAILABLE
+from codexrebirth.tools.qt import QT_AVAILABLE
 
 # import Qt based plugin UI if available
 if QT_AVAILABLE:

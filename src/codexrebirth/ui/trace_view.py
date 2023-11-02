@@ -1,10 +1,11 @@
 import logging
 
-from codexrebirth.util.qt import *
-from codexrebirth.util.misc import register_callback, notify_callback, get_segment_name_bounds, to_ida_color, get_color
+from codexrebirth.tools.qt import *
+from codexrebirth.tools.common import register_callback, notify_callback, get_segment_name_bounds, to_ida_color, get_color
 from codexrebirth.integration.api import disassembler
 import idc 
 from codexrebirth.ui.palette import PluginPalette
+from codexrebirth.tools.common import get_rbga_color
 logger = logging.getLogger("Tenet.UI.TraceView")
 
 #
@@ -37,7 +38,7 @@ class TraceBar(QtWidgets.QWidget):
         self.reader = None
         self._is_zoom = zoom
 
-        # misc qt/widget settings
+        #.common qt/widget settings
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setMouseTracking(True)
         self.setMinimumSize(50, 50)
@@ -744,7 +745,7 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_other_funcs = []
         self._idx_highlighted_address = []
         
-        reader= self.reader
+        reader = self.reader
         if not (reader):
             return
         
@@ -769,7 +770,7 @@ class TraceBar(QtWidgets.QWidget):
             elif not (ea >= func_start and ea < func_end):
                 self._idx_other_funcs.append(idx)
   
-            elif reader.is_symbolic(idx):
+            elif reader.is_symbolic_instruction(idx):
                 self._idx_symbolic.append(idx)
 
 
@@ -966,15 +967,22 @@ class TraceBar(QtWidgets.QWidget):
         """
         viz_w, _ = self.viz_size
         viz_x, _ = self.viz_pos
-
+        
+        taint_color = self.pctx.palette.trail_tainted
+        if len(self._idx_symbolic) > 0:
+            color = self.reader.get_idx_color(self._idx_symbolic[0])
+            taint_color = QtGui.QColor(*get_rbga_color(color)) if color else taint_color
+                
+        
         access_sets = \
         [
-            (self._idx_symbolic, self.pctx.palette.symbolic),
+            (self._idx_symbolic, taint_color),
             (self._idx_library, self.pctx.palette.trace_library),
             (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
             (self._idx_highlighted_address, self.pctx.palette.trace_highlighted_address)
         ]
-
+        
+                
         painter.setPen(QtCore.Qt.NoPen)
 
         h = self._cell_height - self._cell_border
@@ -987,6 +995,8 @@ class TraceBar(QtWidgets.QWidget):
                 # skip entries that fall outside the visible zoom
                 if not(self.start_idx <= idx < self.end_idx):
                     continue
+                
+
 
                 # slight tweak of y because we are only drawing a highlighted
                 # cell body without borders
@@ -994,6 +1004,7 @@ class TraceBar(QtWidgets.QWidget):
 
                 # draw cell body
                 painter.drawRect(viz_x, y, viz_w, h)
+                
 
     def _draw_highlights_trace(self, painter):
         """
@@ -1002,13 +1013,20 @@ class TraceBar(QtWidgets.QWidget):
         viz_w, _ = self.viz_size
         viz_x, _ = self.viz_pos
 
+        taint_color = self.pctx.palette.trail_tainted
+        if len(self._idx_symbolic) > 0:
+            color = self.reader.get_idx_color(self._idx_symbolic[0])
+            taint_color = QtGui.QColor(*get_rbga_color(color)) if color else taint_color
+                
+        
         access_sets = \
         [
-            (self._idx_symbolic, self.pctx.palette.symbolic),
+            (self._idx_symbolic, taint_color),
             (self._idx_library, self.pctx.palette.trace_library),
             (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
             (self._idx_highlighted_address, self.pctx.palette.trace_highlighted_address)
         ]
+        
 
         for entries, color in access_sets:
             painter.setPen(color)

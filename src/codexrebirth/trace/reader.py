@@ -2,7 +2,7 @@
 from codexrebirth.integration.api import disassembler, DisassemblerContextAPI
 from codexrebirth.trace.arch import ArchAMD64, ArchX86
 import idaapi
-import codexrebirth.util.misc as utils
+import codexrebirth.tools.common as utils
 import idc 
 
 class TraceReader(object):
@@ -25,9 +25,9 @@ class TraceReader(object):
         self._cached_registers = {}
         self._idx_trace_cache = {}
         self._highlighted_address = None
-        self.current_taint_id = None
         
         self.construct_trace_cache()
+        self._taint_id_color_map = {}
         
 
     def construct_trace_cache(self):
@@ -64,6 +64,10 @@ class TraceReader(object):
         """
         return self._highlighted_address
     
+    @property
+    def current_taint_id(self):
+        return self.get_trace(self.idx).taint_id
+    
 
     #-------------------------------------------------------------------------
     # Trace Navigation
@@ -72,6 +76,23 @@ class TraceReader(object):
         if address in self._addr_trace_cache:
             self._highlighted_address = address
             return True
+        
+    def set_taint_id_color(self, taint_id, color):
+        if taint_id not in self._taint_id_color_map:
+            self._taint_id_color_map[taint_id] = color
+        
+    def get_taint_id_color(self, taint_id):
+        if taint_id in self._taint_id_color_map:
+            return self._taint_id_color_map[taint_id]
+        return None
+    
+    def get_idx_color(self, idx):
+        if idx not in self._idx_trace_cache:
+            return None
+        taint_id = self.get_trace(idx).taint_id
+        return self.get_taint_id_color(taint_id)
+    
+        
 
     def seek(self, idx):
         """
@@ -84,13 +105,8 @@ class TraceReader(object):
             idx = self.length - 1
         elif idx < 0:
             idx = 0
-
         # save the new position
         self.idx = idx
-        
-        # set current symbolic id
-        self.current_taint_id = self.get_trace(idx).taint_id
-        
         print("Current symbolic id: {}".format(self.current_taint_id))
         addr = self.get_ip(idx)
         idaapi.jumpto(addr)
@@ -108,7 +124,7 @@ class TraceReader(object):
             return 0, 0
     
         
-    def is_symbolic(self, idx):
+    def is_symbolic_instruction(self, idx):
         """
         Return True if the given address is symbolic.
         """
@@ -125,8 +141,7 @@ class TraceReader(object):
         return self._idx_trace_cache[idx][1]
     
 
-    
-    def get_Insn(self, idx):
+    def get_insn(self, idx):
         if idx not in self._idx_trace_cache:
             return None
         return self.get_trace(idx).Insn

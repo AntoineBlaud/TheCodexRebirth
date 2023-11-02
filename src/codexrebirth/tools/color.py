@@ -1,6 +1,6 @@
 import random 
 import sys
-from codexrebirth.util.misc import rbg_ida_color
+from codexrebirth.tools.common import rbg_ida_color
 class Color:
     ANSI_COLOR_FORMAT = "\033[38;5;{}m"
 

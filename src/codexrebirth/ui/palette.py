@@ -5,8 +5,8 @@ import logging
 
 from json.decoder import JSONDecodeError
 
-from codexrebirth.util.qt import *
-from codexrebirth.util.misc import *
+from codexrebirth.tools.qt import *
+from codexrebirth.tools.common import *
 
 from codexrebirth.integration.api import disassembler
 
