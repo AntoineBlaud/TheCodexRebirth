@@ -24,7 +24,6 @@ class TraceReader(object):
         self._idx_cached_registers = -1
         self._cached_registers = {}
         self._idx_trace_cache = {}
-        self._highlighted_address = None
         
         self.construct_trace_cache()
         self._taint_id_color_map = {}
@@ -56,13 +55,7 @@ class TraceReader(object):
         Return the length of the trace.
         """
         return len(self._idx_trace_cache)
-    
-    @property
-    def highlighted_address(self):
-        """
-        Return the currently highlighted address.
-        """
-        return self._highlighted_address
+
     
     @property
     def current_taint_id(self):
@@ -72,10 +65,6 @@ class TraceReader(object):
     #-------------------------------------------------------------------------
     # Trace Navigation
     #-------------------------------------------------------------------------
-    def set_highlighted_address(self, address):
-        if address in self._addr_trace_cache:
-            self._highlighted_address = address
-            return True
         
     def set_taint_id_color(self, taint_id, color):
         if taint_id not in self._taint_id_color_map:
@@ -91,6 +80,11 @@ class TraceReader(object):
             return None
         taint_id = self.get_trace(idx).taint_id
         return self.get_taint_id_color(taint_id)
+    
+    def is_computation_correct(self, idx):
+        if idx not in self._idx_trace_cache:
+            return False
+        return self.get_trace(idx).Insn.op_result == self.get_trace(idx).Insn.evaled_op_result
     
         
 

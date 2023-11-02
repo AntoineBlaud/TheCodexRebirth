@@ -17,6 +17,7 @@
         "light_red":      [170,  57,  57],
         "red":            [118,   0,   0],
         "dark_red":       [ 85,   0,   0],
+        "medium_green":   [  40,  105,   40],
         
         "orange":         [255, 165,   0],
 
@@ -83,7 +84,7 @@
         "mem_write_bg": "blue",
         "mem_write_fg": "white",
 
-        "trail_backward": "light_red",
+        "trail_backward": "medium_green",
         "trail_current":  "purple",
         "trail_forward":  "dark_blue",
 
@@ -96,7 +97,7 @@
         "common_block_color": "light_gray",
         "trace_library" : "true_yellow",
         "trace_other_funcs" : "orange",
-        "trace_highlighted_address" : "true_red"
+        "symbolic_compution_false" : "true_red"
     }
 }
 

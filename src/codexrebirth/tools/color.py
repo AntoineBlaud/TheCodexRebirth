@@ -31,14 +31,18 @@ class ANSIColors:
     UNDERLINE = "\033[4m"
 
 
-def generate_visually_distinct_colors(num_colors, min_color_diff=60):
+def generate_visually_distinct_colors(num_colors, min_color_diff=40):
     colors = []
+    # set random seed
+    random.seed(0)
     
     def generate_color():
+        
+        
         # Generate random values for the red, green, and blue components
-        red = random.randint(0, 255)
-        green = random.randint(0, 255)
-        blue = random.randint(0, 255)
+        red = random.randint(0, 150)
+        green = random.randint(0, 150)
+        blue = random.randint(0, 150)
         
         
         return red, green, blue

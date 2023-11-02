@@ -259,7 +259,6 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_symbolic = []
         self._idx_library = []
         self._idx_other_funcs = []
-        self._idx_highlighted_address = []
 
         self._refresh_painting_metrics()
         self.refresh()
@@ -743,7 +742,6 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_symbolic = []
         self._idx_library = []
         self._idx_other_funcs = []
-        self._idx_highlighted_address = []
         
         reader = self.reader
         if not (reader):
@@ -760,11 +758,8 @@ class TraceBar(QtWidgets.QWidget):
                 continue
             # get current text start/end
             ea = reader.get_ip(idx)
-            
-            if ea == self.reader.highlighted_address:
-                self._idx_highlighted_address.append(idx)
-            
-            elif not (ea >= text_start and ea < text_end):
+
+            if not (ea >= text_start and ea < text_end):
                 self._idx_library.append(idx)
                 
             elif not (ea >= func_start and ea < func_end):
@@ -955,11 +950,8 @@ class TraceBar(QtWidgets.QWidget):
         self._image_highlights = QtGui.QImage(self.width(), self.height(), QtGui.QImage.Format_ARGB32)
         self._image_highlights.fill(QtCore.Qt.transparent)
         self._painter_highlights = QtGui.QPainter(self._image_highlights)
-
-        if self.cells_visible:
-            self._draw_highlights_cells(self._painter_highlights)
-        else:
-            self._draw_highlights_trace(self._painter_highlights)
+        self._draw_highlights_cells(self._painter_highlights)
+ 
 
     def _draw_highlights_cells(self, painter):
         """
@@ -969,6 +961,9 @@ class TraceBar(QtWidgets.QWidget):
         viz_x, _ = self.viz_pos
         
         taint_color = self.pctx.palette.trail_tainted
+        false_color = self.pctx.palette.symbolic_compution_false
+        
+        # fetch the color set by the user
         if len(self._idx_symbolic) > 0:
             color = self.reader.get_idx_color(self._idx_symbolic[0])
             taint_color = QtGui.QColor(*get_rbga_color(color)) if color else taint_color
@@ -979,66 +974,35 @@ class TraceBar(QtWidgets.QWidget):
             (self._idx_symbolic, taint_color),
             (self._idx_library, self.pctx.palette.trace_library),
             (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
-            (self._idx_highlighted_address, self.pctx.palette.trace_highlighted_address)
         ]
         
-                
-        painter.setPen(QtCore.Qt.NoPen)
+        if self.cells_visible:        
+            painter.setPen(QtCore.Qt.NoPen)
 
-        h = self._cell_height - self._cell_border
-
+        p = painter.setBrush if self.cells_visible else painter.setPen
+        
         for entries, cell_color in access_sets:
-            painter.setBrush(cell_color)
-
             for idx in entries:
-
+                
+                p(cell_color)
+                
                 # skip entries that fall outside the visible zoom
                 if not(self.start_idx <= idx < self.end_idx):
                     continue
                 
-
-
-                # slight tweak of y because we are only drawing a highlighted
-                # cell body without borders
-                y = self._idx2pos(idx) + self._cell_border
-
-                # draw cell body
-                painter.drawRect(viz_x, y, viz_w, h)
+                if not self.reader.is_computation_correct(idx):
+                    p(false_color)
                 
+                if self.cells_visible:
+                    # slight tweak of y because we are only drawing a highlighted
+                    # draw cell body
+                    y = self._idx2pos(idx) + self._cell_border
+                    painter.drawRect(viz_x, y, viz_w, self._cell_height - self._cell_border)
+                    
+                else:
+                    y = self._idx2pos(idx)
+                    painter.drawLine(viz_x, y, viz_w, y)
 
-    def _draw_highlights_trace(self, painter):
-        """
-        Draw trace-based event highlights.
-        """
-        viz_w, _ = self.viz_size
-        viz_x, _ = self.viz_pos
-
-        taint_color = self.pctx.palette.trail_tainted
-        if len(self._idx_symbolic) > 0:
-            color = self.reader.get_idx_color(self._idx_symbolic[0])
-            taint_color = QtGui.QColor(*get_rbga_color(color)) if color else taint_color
-                
-        
-        access_sets = \
-        [
-            (self._idx_symbolic, taint_color),
-            (self._idx_library, self.pctx.palette.trace_library),
-            (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
-            (self._idx_highlighted_address, self.pctx.palette.trace_highlighted_address)
-        ]
-        
-
-        for entries, color in access_sets:
-            painter.setPen(color)
-
-            for idx in entries:
-
-                # skip entries that fall outside the visible zoom
-                if not(self.start_idx <= idx < self.end_idx):
-                    continue
-
-                y = self._idx2pos(idx)
-                painter.drawLine(viz_x, y, viz_w, y)
 
     def _draw_cursor(self):
         """

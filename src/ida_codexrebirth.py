@@ -60,7 +60,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.reader = None
         self.blocks_execution_count  = None
         self.ctx = Launcher()
-        self.colors = generate_visually_distinct_colors(70)
+        self.colors = generate_visually_distinct_colors(40)
         self.cached_address = None
         
         
@@ -165,10 +165,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # Hook into the trace for further processing.
         self.hook()
         
-        print("Register and memory state :")
-        print(self.ctx.sym_runner.mem_sm)
-        print(self.ctx.sym_runner.reg_sm)
-
         # Attach the trace engine to various plugin UI controllers, granting them
         # access to the underlying trace reader.
         self.trace_dock.attach_reader(self.reader)
@@ -253,15 +249,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 ida_kernwin.ask_str("", 0, "Enter a comment"))
         self.similar_code.run(*args)
  
-    @open_console
-    def _interactive_hightligh_address(self):
-        """
-        Highlight the current address.
-        """
-        if not self.reader:
-            return
-        
-        self.reader.set_highlighted_address(idc.here())
                 
     @open_console
     def _interactive_ida_create_execution_snapshot(self):
@@ -355,7 +342,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT = "codexrebirth:ida_restore_ida_execution_snapshot"
     ACTION_GO_NEXT_EXECUTION = "codexrebirth:go_next_execution"
     ACTION_GO_PREV_EXECUTION = "codexrebirth:go_prev_execution"
-    ACTION_HIGHLIGHT_ADDRESS = "codexrebirth:highlight_address"
     ACTION_SYNCHRONIZE_VARIABLES = "codexrebirth:synchronize_variables"
     ACTION_COLOR_TAINT_ID = "codexrebirth:color_taint_id"
 
@@ -419,9 +405,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
     def _install_go_prev_execution(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_GO_PREV_EXECUTION, "Go to previous execution", self._interactive_go_prev_execution, shortcut="Shift+p")
-        
-    def _install_highlight_address(self, widget, popup):
-        self._install_action(widget, popup, self.ACTION_HIGHLIGHT_ADDRESS, "Highlight address", self._interactive_hightligh_address)
         
     def _install_synchronize_variables(self, widget, popup):
         self._install_action(widget, popup, self.ACTION_SYNCHRONIZE_VARIABLES, "Synchronize variables", self._interactive_synchronize_variables, shortcut="Shift+s")
@@ -495,7 +478,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self._install_ida_restore_ida_execution_snapshot(widget, popup)
             self._install_go_next_execution(widget, popup)
             self._install_go_prev_execution(widget, popup)
-            self._install_highlight_address(widget, popup)
             self._install_synchronize_variables(widget, popup)
             self._install_color_taint_id(widget, popup)
      
@@ -617,7 +599,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         Update the disassembly view.
         """
-        print("Block execution count :")
         
         if not self.reader:
             return
@@ -642,10 +623,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 if address in self.blocks_execution_count:
                     self.blocks_execution_count[address] += 1
                 
-            
         for block_start, execution_count in self.blocks_execution_count.items():
             idaapi.set_cmt(block_start, f"Executed {execution_count} times  ", False)
-            print(f"Block at {hex(block_start)} executed {execution_count} times")
 
 
                 
