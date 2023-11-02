@@ -251,7 +251,9 @@ def show_msgbox(text, title="Codex Rebirth"):
 def delete_all_comments():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
-            idc.set_cmt(head, "", 0)
+            cmt = idc.get_cmt(head, 0)
+            cmt = cmt.split("@@ ")[0]
+            idc.set_cmt(head, cmt, 0)
             
 def to_ida_color(color):
     r, g, b, _ = color.getRgb()

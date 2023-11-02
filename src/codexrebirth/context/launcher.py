@@ -16,6 +16,7 @@ import json
 from superglobals import setglobal
 from qiling import *
 from threading import Thread
+import shutil
 
 class Launcher:
     def __init__(self):
@@ -84,10 +85,12 @@ class Launcher:
         
         # Extract configuration parameters.
         binary_path = self.get_binary_path()
+        binary_name = os.path.basename(binary_path)
         rootfs_path = config["rootfs_path"]
         log_plain = config["log_plain"]
         debug_level = config["debug_level"]
         timeout = config["timeout"]
+        symbolic_check = config["symbolic_check"]
 
         # Determine the file type from IDA Pro.
         file_type = idaapi.get_file_type_name()
@@ -95,6 +98,13 @@ class Launcher:
         # Configure the rootfs path based on the binary's architecture and file type.
         if file_type.startswith("Portable executable"):
             rootfs_path = os.path.join(rootfs_path, "x8664_windows" if "AMD64" in file_type else "x86_windows")
+            # on windows the binary must be placed in the rootfs path
+            # copy the binary to the rootfs path
+            new_binary_path = os.path.join(rootfs_path, binary_name)
+            if not os.path.exists(new_binary_path):         
+                shutil.copy(binary_path, new_binary_path)
+            binary_path = new_binary_path
+            
         elif file_type.startswith("ELF"):
             rootfs_path = os.path.join(rootfs_path, "x8664_linux" if "64" in file_type else "x86_linux")
 
@@ -106,7 +116,7 @@ class Launcher:
             # Initialize the Qiling emulator.
             ql = Qiling([binary_path], rootfs_path, log_plain=log_plain)
             self.sym_engine = QilingEngine(ql)
-            self.sym_runner = QilingRunner(self.sym_engine, debug_level, timeout)
+            self.sym_runner = QilingRunner(self.sym_engine, debug_level, timeout, symbolic_check)
 
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_engine()

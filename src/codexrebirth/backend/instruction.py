@@ -76,7 +76,7 @@ class Instruction:
         result_str += self.operand_str("v_op1", self.v_op1)
         result_str += self.operand_str("v_op2", self.v_op2)
         result_str += self.operand_str("v_op3", self.v_op3)
-        return result_str
+        return result_str[:-1]
 
 
     def clone(self):

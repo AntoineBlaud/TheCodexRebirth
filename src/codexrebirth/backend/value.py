@@ -4,6 +4,7 @@ import uuid
 import re 
 from codexrebirth.tools import *
 from z3 import BitVec, BitVecVal, Extract, RotateLeft, RotateRight, Not, BitVecRef, BitVecNumRef
+import codexrebirth.tools.bitwise_math as bitwise_math
 import line_profiler
 import inspect
 
@@ -109,6 +110,10 @@ class RealValue:
     @property
     def size(self):
         return BINARY_ARCH_SIZE
+    
+    @property
+    def binary_mask(self):
+        return ((1 << self.size) - 1)
 
     def clone(self):
         clone =  RealValue(self.value)
@@ -139,7 +144,7 @@ class RealValue:
     def __add__(self, other):
         other = other.clone()
         other.value += self.value
-        other.value &= BINARY_MAX_MASK
+        other.value &= self.binary_mask
         return other
 
     def __sub__(self, other):
@@ -162,7 +167,7 @@ class RealValue:
     def __mul__(self, other):
         other = other.clone()
         other.value *= self.value
-        other.value &= BINARY_MAX_MASK
+        other.value &= self.binary_mask
         return other
 
     def __or__(self, other):
@@ -178,27 +183,37 @@ class RealValue:
     def __rshift__(self, other):
         other = other.clone()
         other.value >>= self.value
-        other.value &= BINARY_MAX_MASK
+        other.value &= self.binary_mask
         return other
 
     def __lshift__(self, other):
         other = other.clone()
         other.value <<= self.value
-        other.value &= BINARY_MAX_MASK
+        other.value &= self.binary_mask
         return other
 
     def ror(self, other):
         other = other.clone()
-        other.value = RotateRight(
-            other.value , self.value
-        )
+        if instance(other.value, int):
+            other.value = bitwise_math.RotateRight(
+                other.value , self.value
+            )
+        else:    
+            other.value = RotateRight(
+                other.value , self.value
+            )
         return other
 
     def rol(self, other):
         other = other.clone()
-        other.value = RotateLeft(
-            other.value , self.value
-        )
+        if instance(other.value, int):
+            other.value = bitwise_math.RotateLeft(
+                other.value , self.value
+            )
+        else:
+            other.value = RotateLeft(
+                other.value , self.value
+            )
         return other
 
     def _not(self):
@@ -232,9 +247,15 @@ class SymValue:
         assert isinstance(self.v_wrapper, (_SymValue, _RealValue))
         return self.v_wrapper.value
     
+    @property
+    def binary_mask(self):
+        return ((1 << self.size) - 1)
+    
     @value.setter
     def value(self, target):
         self.v_wrapper.value = target
+ 
+
 
     
     def update(self, target):
@@ -264,7 +285,7 @@ class SymValue:
 
     def __add__(self, other):
         self.value += other.value 
-        self.value &= BINARY_MAX_MASK
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
@@ -272,63 +293,75 @@ class SymValue:
         self.value = binary_subtraction(
             self.value, other.value 
         )
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __xor__(self, other):
         self.value ^= other.value 
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __and__(self, other):
         self.value &= other.value
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __mul__(self, other):
         self.value *= other.value 
-        self.value &= BINARY_MAX_MASK
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __or__(self, other):
-        self.value |= other.value 
+        self.value |= other.value
         self.update_id(other)
         return self
 
     def __div__(self, other):
         self.value /= other.value 
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __rshift__(self, other):
         self.value >>= other.value 
-        self.value &= BINARY_MAX_MASK
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __lshift__(self, other):
         self.value <<= other.value 
-        self.value &= BINARY_MAX_MASK
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def ror(self, other):
-        self.value = RotateRight(
-            self.value, other.value 
-        )
+        if isinstance(self.value, int) and isinstance(other.value, int):
+            self.value = bitwise_math.RotateRight(self.value, other.value)
+        else:
+            self.value = RotateRight(
+                self.value, other.value 
+            )
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def rol(self, other):
-        self.value = RotateLeft(
-            self.value, other.value 
-        )
+        if isinstance(self.value, int) and isinstance(other.value, int):
+            self.value = bitwise_math.RotateLeft(self.value, other.value)
+        else:
+            self.value = RotateLeft(
+                self.value, other.value 
+            )
+        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def _not(self):
-        self.value = ~self.value & BINARY_MAX_MASK
+        self.value = ~self.value & self.binary_mask
         return self
     
     
@@ -355,6 +388,7 @@ class SymRegister(SymValue):
     # It is used to propagate values to all registers that are part of the same register
     # self.
 
+    @initialize_global
     def __init__(self, name, high, low, value = None, parent=None):
         super().__init__(None, name=name)
         self.parent = parent
@@ -365,7 +399,7 @@ class SymRegister(SymValue):
             assert self.high <= parent.high
             self.v_wrapper = parent.v_wrapper.clone()
         else:
-            self.v_wrapper = _SymValue(BitVec(str(name), high - low + 1))
+            self.v_wrapper = _SymValue(BitVec(str(name), BINARY_ARCH_SIZE))
 
         assert high >= low
         
@@ -380,6 +414,10 @@ class SymRegister(SymValue):
     @property
     def size(self):
         return self.high - self.low + 1
+    
+    @property
+    def binary_mask(self):
+        return ((1 << self.size) - 1) << self.low
 
 
     def _update(self, target):
@@ -393,8 +431,7 @@ class SymRegister(SymValue):
             raise Exception("Target type unknown '{}'".format(type(target)))
         
         if self.size != BINARY_ARCH_SIZE:
-            clear_mask = ((1 << self.size) - 1) << self.low
-            self.v_wrapper.value &= clear_mask
+            self.v_wrapper.value &= self.binary_mask
 
 
     @initialize_global

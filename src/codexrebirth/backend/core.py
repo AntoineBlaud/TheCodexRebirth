@@ -80,130 +80,134 @@ SUPPORTED_INSTRUCTIONS_X86_64 = [".?mov.*", "lea", "add","sub","xor","and","or",
 INSN_EXECUTED_COUNT = alt_count()
 VAR_COUNTER = alt_count()
 
-rax = SymRegister("rax", 63, 0)
-rcx = SymRegister("rcx", 63, 0)
-rdx = SymRegister("rdx", 63, 0)
-rbx = SymRegister("rbx", 63, 0)
-rsi = SymRegister("rsi", 63, 0)
-rdi = SymRegister("rdi", 63, 0)
-r8 = SymRegister("r8", 63, 0)
-r9 = SymRegister("r9", 63, 0)
-r10 = SymRegister("r10", 63, 0)
-r11 = SymRegister("r11", 63, 0)
-r12 = SymRegister("r12", 63, 0)
-r13 = SymRegister("r13", 63, 0)
-r14 = SymRegister("r14", 63, 0)
-r15 = SymRegister("r15", 63, 0)
-eax = SymRegister("eax", 31, 0, rax)
-ecx = SymRegister("ecx", 31, 0, rcx)
-edx = SymRegister("edx", 31, 0, rdx)
-ebx = SymRegister("ebx", 31, 0, rbx)
-edi = SymRegister("edi", 31, 0, rdi)
-esi = SymRegister("esi", 31, 0, rsi)
-r8d = SymRegister("r8d", 31, 0, r8)
-r9d = SymRegister("r9d", 31, 0, r9)
-r10d = SymRegister("r10d", 31, 0, r10)
-r11d = SymRegister("r11d", 31, 0, r11)
-r12d = SymRegister("r12d", 31, 0, r12)
-r13d = SymRegister("r13d", 31, 0, r13)
-r14d = SymRegister("r14d", 31, 0, r14)
-r15d = SymRegister("r15d", 31, 0, r15)
-ax = SymRegister("ax", 15, 0, eax)
-cx = SymRegister("cx", 15, 0, ecx)
-dx = SymRegister("dx", 15, 0, edx)
-bx = SymRegister("bx", 15, 0, ebx)
-si = SymRegister("si", 15, 0, esi)
-di = SymRegister("di", 15, 0, edi)
-r8w = SymRegister("r8w", 15, 0, r8d)
-r9w = SymRegister("r9w", 15, 0, r9d)
-r10w = SymRegister("r10w", 15, 0, r10d)
-r11w = SymRegister("r11w", 15, 0, r11d)
-r12w = SymRegister("r12w", 15, 0, r12d)
-r13w = SymRegister("r13w", 15, 0, r13d)
-r14w = SymRegister("r14w", 15, 0, r14d)
-r15w = SymRegister("r15w", 15, 0, r15d)
-al = SymRegister("al", 7, 0, ax)
-cl = SymRegister("cl", 7, 0, cx)
-dl = SymRegister("dl", 7, 0, dx)
-bl = SymRegister("bl", 7, 0, bx)
-dil = SymRegister("dil", 7, 0, di)
-sil = SymRegister("sil", 7, 0, si)
-r8b = SymRegister("r8b", 7, 0, r8w)
-r9b = SymRegister("r9b", 7, 0, r9w)
-r10b = SymRegister("r10b", 7, 0, r10w)
-r11b = SymRegister("r11b", 7, 0, r11w)
-r12b = SymRegister("r12b", 7, 0, r12w)
-r13b = SymRegister("r13b", 7, 0, r13w)
-r14b = SymRegister("r14b", 7, 0, r14w)
-r15b = SymRegister("r15b", 7, 0, r15w)
-ah = SymRegister("ah", 15, 8, ax)
-ch = SymRegister("ch", 15, 8, cx)
-dh = SymRegister("dh", 15, 8, dx)
-bh = SymRegister("bh", 15, 8, bx)
+
+def instanciate_register():
+    global SYM_REGISTER_FACTORY
+    rax = SymRegister("rax", 63, 0)
+    rcx = SymRegister("rcx", 63, 0)
+    rdx = SymRegister("rdx", 63, 0)
+    rbx = SymRegister("rbx", 63, 0)
+    rsi = SymRegister("rsi", 63, 0)
+    rdi = SymRegister("rdi", 63, 0)
+    r8 = SymRegister("r8", 63, 0)
+    r9 = SymRegister("r9", 63, 0)
+    r10 = SymRegister("r10", 63, 0)
+    r11 = SymRegister("r11", 63, 0)
+    r12 = SymRegister("r12", 63, 0)
+    r13 = SymRegister("r13", 63, 0)
+    r14 = SymRegister("r14", 63, 0)
+    r15 = SymRegister("r15", 63, 0)
+    eax = SymRegister("eax", 31, 0, rax)
+    ecx = SymRegister("ecx", 31, 0, rcx)
+    edx = SymRegister("edx", 31, 0, rdx)
+    ebx = SymRegister("ebx", 31, 0, rbx)
+    edi = SymRegister("edi", 31, 0, rdi)
+    esi = SymRegister("esi", 31, 0, rsi)
+    r8d = SymRegister("r8d", 31, 0, r8)
+    r9d = SymRegister("r9d", 31, 0, r9)
+    r10d = SymRegister("r10d", 31, 0, r10)
+    r11d = SymRegister("r11d", 31, 0, r11)
+    r12d = SymRegister("r12d", 31, 0, r12)
+    r13d = SymRegister("r13d", 31, 0, r13)
+    r14d = SymRegister("r14d", 31, 0, r14)
+    r15d = SymRegister("r15d", 31, 0, r15)
+    ax = SymRegister("ax", 15, 0, eax)
+    cx = SymRegister("cx", 15, 0, ecx)
+    dx = SymRegister("dx", 15, 0, edx)
+    bx = SymRegister("bx", 15, 0, ebx)
+    si = SymRegister("si", 15, 0, esi)
+    di = SymRegister("di", 15, 0, edi)
+    r8w = SymRegister("r8w", 15, 0, r8d)
+    r9w = SymRegister("r9w", 15, 0, r9d)
+    r10w = SymRegister("r10w", 15, 0, r10d)
+    r11w = SymRegister("r11w", 15, 0, r11d)
+    r12w = SymRegister("r12w", 15, 0, r12d)
+    r13w = SymRegister("r13w", 15, 0, r13d)
+    r14w = SymRegister("r14w", 15, 0, r14d)
+    r15w = SymRegister("r15w", 15, 0, r15d)
+    al = SymRegister("al", 7, 0, ax)
+    cl = SymRegister("cl", 7, 0, cx)
+    dl = SymRegister("dl", 7, 0, dx)
+    bl = SymRegister("bl", 7, 0, bx)
+    dil = SymRegister("dil", 7, 0, di)
+    sil = SymRegister("sil", 7, 0, si)
+    r8b = SymRegister("r8b", 7, 0, r8w)
+    r9b = SymRegister("r9b", 7, 0, r9w)
+    r10b = SymRegister("r10b", 7, 0, r10w)
+    r11b = SymRegister("r11b", 7, 0, r11w)
+    r12b = SymRegister("r12b", 7, 0, r12w)
+    r13b = SymRegister("r13b", 7, 0, r13w)
+    r14b = SymRegister("r14b", 7, 0, r14w)
+    r15b = SymRegister("r15b", 7, 0, r15w)
+    ah = SymRegister("ah", 15, 8, ax)
+    ch = SymRegister("ch", 15, 8, cx)
+    dh = SymRegister("dh", 15, 8, dx)
+    bh = SymRegister("bh", 15, 8, bx)
 
 
-SYM_REGISTER_FACTORY = {
-    "ah": [rax, eax, ax, ah, al],
-    "al": [rax, eax, ax, ah, al],
-    "ax": [rax, eax, ax, ah, al],
-    "bh": [rbx, ebx, bx, bh, bl],
-    "bl": [rbx, ebx, bx, bh, bl],
-    "bx": [rbx, ebx, bx, bh, bl],
-    "ch": [rcx, ecx, cx, ch, cl],
-    "cl": [rcx, ecx, cx, ch, cl],
-    "cx": [rcx, ecx, cx, ch, cl],
-    "dh": [rdx, edx, dx, dh, dl],
-    "di": [rdi, edi, di, dil],
-    "dil": [rdi, edi, di, dil],
-    "dl": [rdx, edx, dx, dh, dl],
-    "dx": [rdx, edx, dx, dh, dl],
-    "eax": [rax, eax, ax, ah, al],
-    "ebx": [rbx, ebx, bx, bh, bl],
-    "ecx": [rcx, ecx, cx, ch, cl],
-    "edi": [rdi, edi, di, dil],
-    "edx": [rdx, edx, dx, dh, dl],
-    "esi": [rsi, esi, si, sil],
-    "r10": [r10, r10d, r10w, r10b],
-    "r10b": [r10, r10d, r10w, r10b],
-    "r10d": [r10, r10d, r10w, r10b],
-    "r10w": [r10, r10d, r10w, r10b],
-    "r11": [r11, r11d, r11w, r11b],
-    "r11b": [r11, r11d, r11w, r11b],
-    "r11d": [r11, r11d, r11w, r11b],
-    "r11w": [r11, r11d, r11w, r11b],
-    "r12": [r12, r12d, r12w, r12b],
-    "r12b": [r12, r12d, r12w, r12b],
-    "r12d": [r12, r12d, r12w, r12b],
-    "r12w": [r12, r12d, r12w, r12b],
-    "r13": [r13, r13d, r13w, r13b],
-    "r13b": [r13, r13d, r13w, r13b],
-    "r13d": [r13, r13d, r13w, r13b],
-    "r13w": [r13, r13d, r13w, r13b],
-    "r14": [r14, r14d, r14w, r14b],
-    "r14b": [r14, r14d, r14w, r14b],
-    "r14d": [r14, r14d, r14w, r14b],
-    "r14w": [r14, r14d, r14w, r14b],
-    "r15": [r15, r15d, r15w, r15b],
-    "r15b": [r15, r15d, r15w, r15b],
-    "r15d": [r15, r15d, r15w, r15b],
-    "r15w": [r15, r15d, r15w, r15b],
-    "r8": [r8, r8d, r8w, r8b],
-    "r8b": [r8, r8d, r8w, r8b],
-    "r8d": [r8, r8d, r8w, r8b],
-    "r8w": [r8, r8d, r8w, r8b],
-    "r9": [r9, r9d, r9w, r9b],
-    "r9b": [r9, r9d, r9w, r9b],
-    "r9d": [r9, r9d, r9w, r9b],
-    "r9w": [r9, r9d, r9w, r9b],
-    "rax": [rax, eax, ax, ah, al],
-    "rbx": [rbx, ebx, bx, bh, bl],
-    "rcx": [rcx, ecx, cx, ch, cl],
-    "rdi": [rdi, edi, di, dil],
-    "rdx": [rdx, edx, dx, dh, dl],
-    "rsi": [rsi, esi, si, sil],
-    "si": [rsi, esi, si, sil],
-    "sil": [rsi, esi, si, sil],
-}
+    SYM_REGISTER_FACTORY = {
+        "ah": [rax, eax, ax, ah, al],
+        "al": [rax, eax, ax, ah, al],
+        "ax": [rax, eax, ax, ah, al],
+        "bh": [rbx, ebx, bx, bh, bl],
+        "bl": [rbx, ebx, bx, bh, bl],
+        "bx": [rbx, ebx, bx, bh, bl],
+        "ch": [rcx, ecx, cx, ch, cl],
+        "cl": [rcx, ecx, cx, ch, cl],
+        "cx": [rcx, ecx, cx, ch, cl],
+        "dh": [rdx, edx, dx, dh, dl],
+        "di": [rdi, edi, di, dil],
+        "dil": [rdi, edi, di, dil],
+        "dl": [rdx, edx, dx, dh, dl],
+        "dx": [rdx, edx, dx, dh, dl],
+        "eax": [rax, eax, ax, ah, al],
+        "ebx": [rbx, ebx, bx, bh, bl],
+        "ecx": [rcx, ecx, cx, ch, cl],
+        "edi": [rdi, edi, di, dil],
+        "edx": [rdx, edx, dx, dh, dl],
+        "esi": [rsi, esi, si, sil],
+        "r10": [r10, r10d, r10w, r10b],
+        "r10b": [r10, r10d, r10w, r10b],
+        "r10d": [r10, r10d, r10w, r10b],
+        "r10w": [r10, r10d, r10w, r10b],
+        "r11": [r11, r11d, r11w, r11b],
+        "r11b": [r11, r11d, r11w, r11b],
+        "r11d": [r11, r11d, r11w, r11b],
+        "r11w": [r11, r11d, r11w, r11b],
+        "r12": [r12, r12d, r12w, r12b],
+        "r12b": [r12, r12d, r12w, r12b],
+        "r12d": [r12, r12d, r12w, r12b],
+        "r12w": [r12, r12d, r12w, r12b],
+        "r13": [r13, r13d, r13w, r13b],
+        "r13b": [r13, r13d, r13w, r13b],
+        "r13d": [r13, r13d, r13w, r13b],
+        "r13w": [r13, r13d, r13w, r13b],
+        "r14": [r14, r14d, r14w, r14b],
+        "r14b": [r14, r14d, r14w, r14b],
+        "r14d": [r14, r14d, r14w, r14b],
+        "r14w": [r14, r14d, r14w, r14b],
+        "r15": [r15, r15d, r15w, r15b],
+        "r15b": [r15, r15d, r15w, r15b],
+        "r15d": [r15, r15d, r15w, r15b],
+        "r15w": [r15, r15d, r15w, r15b],
+        "r8": [r8, r8d, r8w, r8b],
+        "r8b": [r8, r8d, r8w, r8b],
+        "r8d": [r8, r8d, r8w, r8b],
+        "r8w": [r8, r8d, r8w, r8b],
+        "r9": [r9, r9d, r9w, r9b],
+        "r9b": [r9, r9d, r9w, r9b],
+        "r9d": [r9, r9d, r9w, r9b],
+        "r9w": [r9, r9d, r9w, r9b],
+        "rax": [rax, eax, ax, ah, al],
+        "rbx": [rbx, ebx, bx, bh, bl],
+        "rcx": [rcx, ecx, cx, ch, cl],
+        "rdi": [rdi, edi, di, dil],
+        "rdx": [rdx, edx, dx, dh, dl],
+        "rsi": [rsi, esi, si, sil],
+        "si": [rsi, esi, si, sil],
+        "sil": [rsi, esi, si, sil],
+    }
+    return SYM_REGISTER_FACTORY
 
 
 class TaintedVariableState(dict):
@@ -274,7 +278,8 @@ class TaintedVariableState(dict):
 
 class OperationEngineX86_64:
     
-    def __init__(self, cs, engine, Insn, insn, mem_access, taint_st):
+    def __init__(self, config, cs, engine, Insn, insn, mem_access, taint_st):
+        self.config = config
         self.cs = cs
         self.Insn = Insn
         self.insn = insn
@@ -339,6 +344,7 @@ class OperationEngineX86_64:
     def _push(self, Insn, taint_st):
         stack_pointer = self.engine.get_stack_pointer()
         taint_st[stack_pointer] = Insn.v_op1.clone()
+        return taint_st[stack_pointer]
 
     def _pop(self, Insn, taint_st):
         stack_pointer = self.engine.get_stack_pointer()
@@ -372,6 +378,9 @@ class OperationEngineX86_64:
     
     def _lea(self, Insn, taint_st, mem_access):
         regname = self.cs.reg_name(Insn.op1.reg)
+        # round mem_access to next 4 bytes
+        size = self.config["BINARY_ARCH_SIZE"] // 8
+        mem_access = mem_access + (mem_access % size)
         taint_st[regname].update(RealValue(mem_access))
         taint_st[regname].id = -1
         return taint_st[regname]
@@ -593,8 +602,6 @@ class InstructionEngineX86_64:
     def make_var_substitutions(self, taint_st: TaintedVariableState, tainted_var_name: str):
         
         # we do not fetch from global config because it is to slow
-        BINARY_ARCH_SIZE = self.config["BINARY_ARCH_SIZE"]
-        MAX_RAW_REPR_LENGTH = self.config["MAX_RAW_REPR_LENGTH"]
         global VAR_COUNTER
         
         if tainted_var_name not in taint_st:
@@ -608,7 +615,7 @@ class InstructionEngineX86_64:
         raw_repr = tainted_var_value.v_wrapper.__raw_repr__()
 
         # if not, then we didn't updated yet, so we create a new varname and assign it to the tainted_var_value
-        if len(raw_repr) > MAX_RAW_REPR_LENGTH:
+        if len(raw_repr) > self.config["MAX_RAW_REPR_LENGTH"]:
             new_var = f"var_{next(VAR_COUNTER):06d}"
             taint_st[new_var] = tainted_var_value.v_wrapper.clone()
             log(
@@ -653,9 +660,6 @@ class InstructionEngineX86_64:
 
 
     def evaluate_instruction(self, mem_access, taint_st: TaintedVariableState):
-        
-        BAD_OPERANDS = self.config["BAD_OPERANDS"]
-        SUPPORTED_INSTRUCTIONS = self.config["SUPPORTED_INSTRUCTIONS"]
         # Get the current instruction
         insn = self.engine.get_currrent_instruction_disass()
         insn_addr = self.engine.get_ea()
@@ -663,11 +667,11 @@ class InstructionEngineX86_64:
         if insn_addr == self.last_instruction_executed:
             return None
         # check if the operands are not supported
-        for bad_op_pattern in BAD_OPERANDS:
+        for bad_op_pattern in self.config["BAD_OPERANDS"]:
             if re.match(bad_op_pattern, insn.op_str):
                 return None
         # check if the instruction is in the current list of supported instructions
-        if insn.mnemonic not in SUPPORTED_INSTRUCTIONS:
+        if insn.mnemonic not in self.config["SUPPORTED_INSTRUCTIONS"]:
             log(
                 DebugLevel.DEBUG,
                 f"Instrution is not supported",
@@ -689,7 +693,7 @@ class InstructionEngineX86_64:
         # All the results are stored in the Instruction object (v_op1, v_op2, v_op3)
         Insn = self.parse_insn_operands(insn, mem_access, taint_st)
         # Compute the result of the operation
-        op_engine = OperationEngineX86_64(self.cs, self.engine, Insn, insn, mem_access, taint_st)
+        op_engine = OperationEngineX86_64(self.config, self.cs, self.engine, Insn, insn, mem_access, taint_st)
         op_result = op_engine.process()
         Insn.v_op_result = op_result
         print(hex(insn_addr), Insn)
@@ -702,10 +706,11 @@ class InstructionEngineX86_64:
 
 
 class Runner():
-    def __init__(self, engine, debug_level, timeout, *args):
+    def __init__(self, engine, debug_level, timeout, symbolic_check, *args):
                 # Set the debug level and create a TaintedVariableState instance
         self.debug_level = debug_level
         self.timeout = timeout
+        self.symbolic_check = symbolic_check
         self.taint_st = TaintedVariableState()
         # Create an empty dictionary for callbacks
         self.callbacks = {}
@@ -737,7 +742,7 @@ class Runner():
             "BAD_OPERANDS": None,
             "CS_UC_REGS": None,
             "TRACE_RECORDS": self.trace_records,
-            "SYM_REGISTER_FACTORY": SYM_REGISTER_FACTORY,
+            "SYM_REGISTER_FACTORY": None,
             "INSN_EXECUTED_COUNT": INSN_EXECUTED_COUNT
         }
         
@@ -772,33 +777,25 @@ class Runner():
         self, ql: Qiling, access: int, address: int, size: int, value: int
     ):
         assert access == UC_MEM_WRITE
-        # process instruction only if it is in the text section
-        if not self.engine.check_instruction_scope(self.text_base, self.text_end):
-            return
-
         insn_addr = self.engine.get_ea()
+
         self.register_operations(self.instruction_engine.evaluate_instruction(address, self.taint_st))
+
 
 
     def memory_read_hook(
         self, ql: Qiling, access: int, address: int, size: int, value: int
     ):
         assert access == UC_MEM_READ
-        # process instruction only if it is in the text section
-        if not self.engine.check_instruction_scope(self.text_base, self.text_end):
-            return
-
         insn_addr = self.engine.get_ea()
+        
         self.register_operations(self.instruction_engine.evaluate_instruction(address, self.taint_st))
-            
-            
+       
+             
     def code_execution_hook(self, ql: Qiling, address: int, size):
         try:
             if time.time() - self.start_time > self.timeout:
                 raise UserStoppedExecution(f"Reached timeout of {self.timeout} seconds")
-            
-            if not self.engine.check_instruction_scope(self.text_base, self.text_end):
-                return
                 
             # Get the current instruction and its address
             insn, insn_addr = self.engine.get_currrent_instruction_disass(), self.engine.get_ea()
@@ -820,9 +817,11 @@ class Runner():
             if check_memory_access(insn):
                 return
 
+           
             # Evaluate the instruction with the current codex state
             Insn = self.instruction_engine.evaluate_instruction(None, self.taint_st)
             self.register_operations(Insn)
+
                 
         finally:
             # Increment the instruction executed count
@@ -833,11 +832,13 @@ class Runner():
     def register_operations(self, Insn):
         if Insn is None:
             return
-        
+        # registering context change (mem and registers)
         self.register_current_execution_state(Insn)
-        self.evaluate_current_symbolic_state(Insn)
-        self.evaluate_and_register_last_operation_result()
+        if self.symbolic_check:
+            self.evaluate_current_symbolic_state(Insn)
+            self.evaluate_and_register_last_operation_result()
         self.trace_records.register(self.engine.get_ea(), Insn)
+        print("")
         
         
     def initialize_symbolic_evaluator(self):
@@ -877,7 +878,7 @@ class Runner():
             if value:
                 last_insn.op_result = value
                 last_insn.evaled_op_result = eval(str(v_op_result), globals())
-                print( last_insn.op_result, last_insn.evaled_op_result)
+                print("idx", self.insn_executed_count.current - 1, "op_result", hex(last_insn.op_result), "evaled_op_result", hex(last_insn.evaled_op_result))
         
     def evaluate_current_symbolic_state(self, Insn):
         # register new variables var_xxxxx
@@ -951,8 +952,8 @@ class Runner():
 
 
 class QilingRunner(Runner):
-    def __init__(self, engine, debug_level, timeout, *args):
-        super().__init__(engine, debug_level, timeout, *args)
+    def __init__(self, engine, debug_level, timeout, symbolic_check, *args):
+        super().__init__(engine, debug_level, timeout, symbolic_check, *args)
         
         self.ql = engine.ql
         
@@ -987,6 +988,12 @@ class QilingRunner(Runner):
             self.CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFF
             self.CONFIG["BINARY_ARCH_SIZE"] = 32
             
+        # make first update
+        setglobal("CONFIG", self.CONFIG)
+        
+        self.CONFIG["SYM_REGISTER_FACTORY"] = instanciate_register()
+        
+        # make second update
         setglobal("CONFIG", self.CONFIG)
             
         
@@ -1046,9 +1053,4 @@ class QilingRunner(Runner):
             # print performance report
             global profile
             profile.print_stats()
-
-            
-            
         
-
-        return True

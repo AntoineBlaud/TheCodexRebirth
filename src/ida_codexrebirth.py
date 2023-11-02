@@ -56,7 +56,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
     def reset(self):
         self.user_defined_end_address = None
-        self.sym_runner_last_run = None
         self.reader = None
         self.blocks_execution_count  = None
         self.ctx = Launcher()
@@ -161,17 +160,16 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         self.reader = TraceReader(self.ctx.sym_runner.trace_records)
         print(f"Trace loaded with {self.reader.length} records.")
-
         # Hook into the trace for further processing.
         self.hook()
-        
         # Attach the trace engine to various plugin UI controllers, granting them
         # access to the underlying trace reader.
         self.trace_dock.attach_reader(self.reader)
         
         self.show_ui()
-
         self.update_block_hits()
+        print(self.ctx.sym_runner.taint_st)
+        
         print("Symbolic Execution Finished.")
         
 
@@ -284,7 +282,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         self.reader.seek_to_next(idc.here())
-        self.trace_dock.update()
+        self.trace_dock.refresh()
         
         
     def  _interactive_go_prev_execution(self):
@@ -292,7 +290,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         self.reader.seek_to_prev(idc.here())
-        self.trace_dock.update()
+        self.trace_dock.refresh()
         
     def _interactive_synchronize_variables(self):
         """
@@ -324,9 +322,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.trace_dock.close()
         # clean IDA trace
         delete_all_colors()
+        delete_all_comments()
         # Reset the UI
         self.reset()
-        
         return
 
     #--------------------------------------------------------------------------
@@ -432,8 +430,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         (Event) IDA is about to exit.
         """
-        if self.sym_runner_last_run:
-            self._uninstall()
+        
+        self._uninstall()
         return 0
 
 
@@ -521,8 +519,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         if not self.reader:
             return
-        
-        trail_length = 0x100
+    
         current_address = idc.here()
         backward_color = to_ida_color(self.palette.trail_backward)
         forward_color = to_ida_color(self.palette.trail_forward)
@@ -534,13 +531,13 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         trail = {}
             
-        forward_ips = self.reader.get_next_ips(trail_length, step_over)
-        backward_ips = self.reader.get_prev_ips(trail_length, step_over)
+        forward_ips = self.reader.get_next_ips(0x100, step_over)
+        backward_ips = self.reader.get_prev_ips(0x6, step_over)
         current_address = self.reader.rebased_ip
 
         trails = [
-            (backward_ips, backward_color), 
-            (forward_ips, forward_color)
+            (forward_ips, forward_color),
+            (backward_ips, backward_color)
         ]
         
         for j, (trail_addresses, trail_color) in enumerate(trails):
@@ -549,6 +546,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 idx = calculate_index(self.reader, i, j)
                 if address not in trail:
                     color, trace = get_taint_color_and_trace(self.reader, idx, address, default_taint_color)
+                    if not trace:
+                        continue
                     # if the instruction taint_id is different from the current taint_id,
                     # and the color is the default taint color, we use the trail color
                     if not trace.taint_id == self.reader.current_taint_id and color == default_taint_color:

@@ -38,9 +38,11 @@ def binary_subtraction(X, Y):
 # Must only be used with 'eval' function to evaluate the expression
 @set_global
 def RotateLeft(x, n):
+    n = n % BINARY_ARCH_SIZE
     return ((x << n) | (x >> (BINARY_ARCH_SIZE - n))) & BINARY_MAX_MASK
 
 # Must only be used with 'eval' function to evaluate the expression
 @set_global
 def RotateRight(x, n):
+    n = n % BINARY_ARCH_SIZE
     return ((x >> n) | (x << (BINARY_ARCH_SIZE - n))) & BINARY_MAX_MASK

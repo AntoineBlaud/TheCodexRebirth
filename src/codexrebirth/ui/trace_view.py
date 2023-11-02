@@ -6,6 +6,7 @@ from codexrebirth.integration.api import disassembler
 import idc 
 from codexrebirth.ui.palette import PluginPalette
 from codexrebirth.tools.common import get_rbga_color
+from math import log
 logger = logging.getLogger("Tenet.UI.TraceView")
 
 #
@@ -185,7 +186,7 @@ class TraceBar(QtWidgets.QWidget):
         Return (width, height) of the drawable trace visualization.
         """
         w = max(0, int(self.width() - (self._trace_border * 2)))
-        h = max(0, int(self.height() - (self._trace_border * 2)))
+        h = max(0, int(self.height() - (self._trace_border * 2))) * self.resolution_step
         return (w, h)
 
     #-------------------------------------------------------------------------
@@ -203,6 +204,13 @@ class TraceBar(QtWidgets.QWidget):
 
         # initialize state based on the reader
         self.set_bounds(0, reader.length)
+        
+    @property
+    def resolution_step(self):
+        x = self.length
+        if x < 5000:
+            return 1
+        return int((log(x, 3)/4)**3)
 
 
     def set_bounds(self, start_idx, end_idx):
@@ -358,7 +366,7 @@ class TraceBar(QtWidgets.QWidget):
         if event.angleDelta().y() > 0:
             self.reader.step_backward(1, step_over)
             ea = self.reader.get_ip(self.reader.idx)
-            while get_color(ea) == common_block_color or idc.GetDisasm(ea).startswith("j"):
+            while idc.GetDisasm(ea).startswith("j"):
                 self.reader.step_backward(1, step_over)
                 ea = self.reader.get_ip(self.reader.idx)
 
@@ -366,7 +374,7 @@ class TraceBar(QtWidgets.QWidget):
         elif event.angleDelta().y() < 0:
             self.reader.step_forward(1, step_over)
             ea = self.reader.get_ip(self.reader.idx)
-            while get_color(ea) == common_block_color or idc.GetDisasm(ea).startswith("j"):
+            while idc.GetDisasm(ea).startswith("j"):
                 self.reader.step_forward(1, step_over)
                 ea = self.reader.get_ip(self.reader.idx)
 
@@ -576,7 +584,7 @@ class TraceBar(QtWidgets.QWidget):
 
         # see if there's an interesting trace event close to the hover
         hovered_idx = self._pos2idx(current_y)
-        closest_idx = self._get_closest_highlighted_idx(hovered_idx)
+        closest_idx = hovered_idx
 
         #
         # if the closest highlighted event (mem access, breakpoint)
@@ -720,20 +728,6 @@ class TraceBar(QtWidgets.QWidget):
         # notify listeners of our selection change
         self._notify_selection_changed(new_start, new_end)
 
-    def _get_closest_highlighted_idx(self, idx):
-        """
-        Return the closest idx (timestamp) to the given idx.
-        """
-        closest_idx = INVALID_IDX
-        smallest_distace = 999999999999999999999999
-        for entries in [self._idx_reads, self._idx_writes, self._idx_symbolic]:
-            for current_idx in entries:
-                distance = abs(idx - current_idx)
-                if distance < smallest_distace:
-                    closest_idx = current_idx
-                    smallest_distace = distance
-        return closest_idx
-
 
     def _refresh_trace_highlights(self):
         """
@@ -749,10 +743,9 @@ class TraceBar(QtWidgets.QWidget):
         
         text_start, text_end = get_segment_name_bounds(".text")
         func_start, func_end = self.reader.get_current_function_bounds()
-
-       
         
-        for idx in reader.get_executions_between(self.start_idx, self.end_idx):
+        
+        for idx in reader.get_executions_between(self.start_idx, self.end_idx, self.resolution_step):
             
             if not reader.get_ip(idx):
                 continue
@@ -971,9 +964,9 @@ class TraceBar(QtWidgets.QWidget):
         
         access_sets = \
         [
-            (self._idx_symbolic, taint_color),
             (self._idx_library, self.pctx.palette.trace_library),
             (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
+            (self._idx_symbolic, taint_color)
         ]
         
         if self.cells_visible:        
