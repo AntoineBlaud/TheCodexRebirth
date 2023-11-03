@@ -377,7 +377,7 @@ class IndirectSymValue(SymValue):
     
 class SymMemory(SymValue):
     def __init__(self, address, value):
-        name = create_name_from_addr(address)
+        name = create_name_from_address(address)
         super().__init__(hex(value))
         
 

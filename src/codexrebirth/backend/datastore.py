@@ -24,7 +24,8 @@ class _StateChain:
                 right = mid - 1
             else:
                 left = mid + 1
-        
+                
+        right = max(0, right)    
         return self.states[right].value
     
     def add(self, idx, value):
@@ -49,6 +50,7 @@ class DataStoreManager:
     def get_state(self, item_name, idx):
         item_name = item_name.lower()
         if item_name in self.chains:
+            print(item_name, idx, hex(self.chains[item_name].get(idx)))
             return self.chains[item_name].get(idx)
         else:
            return None  

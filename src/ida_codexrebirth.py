@@ -16,7 +16,7 @@ from codexrebirth.context.launcher import SymbolicEngineLauncher
 from codexrebirth.context.var_explorer import VarExplorerTool
 from codexrebirth.context.similar_code import SimilarCodeTool
 from codexrebirth.context.snapshot_manager import SnapshotManagerTool
-from codexrebirth.controller.register import RegisterController
+from codexrebirth.controller import RegisterController, MemoryController
 from codexrebirth.integration.api import DisassemblerContextAPI
 from codexrebirth.trace.arch import ArchAMD64, ArchX86
 from codexrebirth.tools import *
@@ -61,6 +61,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.similar_code = SimilarCodeTool()
         # Register controller
         self.registers = RegisterController(self)
+        # Memory controller
+        self.memory = MemoryController(self)
         
         print("IDA Plugin successfully loaded.")
         
@@ -71,6 +73,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # Symbolic engine context, map IDA context to Qiling context
         self.ctx = SymbolicEngineLauncher()
         self.colors = generate_visually_distinct_colors(40)
+        self.last_current_address  = None
 
             
     def init(self):
@@ -146,6 +149,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # access to the underlying trace reader.
         self.trace_dock.attach_reader(self.reader)
         self.registers.attach_reader(self.reader)
+        self.memory.attach_reader(self.reader)
         
         self.show_ui()
         self._update_block_hits()
@@ -162,6 +166,10 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         mw.addToolBar(QtCore.Qt.RightToolBarArea, self.trace_dock)
         self.trace_dock.show()
         self.registers.show(position=ida_kernwin.DP_RIGHT)
+        self.memory.show("Hex View-1", ida_kernwin.DP_TAB | ida_kernwin.DP_BEFORE)
+        # close Hex View-1
+        widget = ida_kernwin.find_widget("Hex View-1")
+        ida_kernwin.close_widget(widget, 0)
         print("UI successfully loaded.")
         
 
@@ -534,31 +542,35 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                         
                     trail[address] = (item_color, item_trace)
 
-      
+        
         for section in lines_in.sections_lines:
             for line in section:
                 address = line.at.toea()
                 if address not in trail:
                     continue
                 
-                color, Trace = trail[address]
+                item_color, item_trace = trail[address]
+                
+                if address == self.last_current_address:
+                    self.memory.navigate(item_trace.Insn.mem_access - 0x40)
 
                 # treat special cases
                 if address == current_address:
-                    color = current_color
+                    item_color = current_color
+                    self.last_current_address = current_address
 
                 # apply color for end address
                 if address == self.user_defined_end_address:
-                    color = end_address_color
+                    item_color = end_address_color
 
-                entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, color)
+                entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, item_color)
                 lines_out.entries.push_back(entry)
                 
                 # comment the instruction with the trace record
                 cmt = idaapi.get_cmt(address, False)
                 separator = "@@ "
                 cmt = cmt.split(separator)[0] if cmt else ""
-                cmt += separator + Trace.Insn.__ida__repr__()
+                cmt += separator + item_trace.Insn.__ida__repr__()
                 idaapi.set_cmt(address, cmt, False)
                 
                 

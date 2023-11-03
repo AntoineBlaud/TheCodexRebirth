@@ -6,3 +6,4 @@ if QT_AVAILABLE:
     
 from codexrebirth.ui.reg_view import RegisterView
 from codexrebirth.ui.trace_view import TraceView
+from codexrebirth.ui.hex_view import HexView

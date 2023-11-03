@@ -1,3 +1,12 @@
+
+import idaapi
+import idautils
+import ida_bytes
+import idc
+import pickle
+import tempfile
+import os
+
 class SnapshotManagerTool(object):
     def __init__(self):
         self.snapshot_file = None
@@ -18,9 +27,11 @@ class SnapshotManagerTool(object):
             except:
                 pass
         # Create a temporary directory to store the snapshot
-        temp_dir = tempfile.mkdtemp()
+        temp_dir = tempfile.gettempdir()
         # get current binary name
         temp_dir = os.path.join(temp_dir, idc.get_root_filename())
+        # create it
+        os.mkdir(temp_dir)
         self.snapshot_file = os.path.join(temp_dir, 'ida_snapshot.pkl')
             
         # Serialize and save the data to a file
@@ -54,7 +65,6 @@ class SnapshotManagerTool(object):
         for seg, (seg_start, _, seg_data) in segments.items():
             ida_bytes.patch_bytes(seg_start, seg_data)
             i += 1
-            print(f"Percentage of segments restored: {i / len(segments) * 100:.2f}%", end='\r')
             
         # Restore registers
         for reg, value in registers.items():

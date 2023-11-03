@@ -81,7 +81,7 @@
         "trail_tainted": "light_pink",
         "mem_read_bg": "yellow",
         "mem_read_fg": "black",
-        "mem_write_bg": "blue",
+        "mem_write_bg": "true_red",
         "mem_write_fg": "white",
 
         "trail_backward": "medium_green",

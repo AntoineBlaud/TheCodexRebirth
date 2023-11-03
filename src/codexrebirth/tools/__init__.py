@@ -8,3 +8,4 @@ from codexrebirth.tools.exceptions import *
 from codexrebirth.tools.log import *
 from codexrebirth.tools.ustring import *
 from codexrebirth.tools.qt import *
+from codexrebirth.tools.types import *

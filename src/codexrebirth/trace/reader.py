@@ -128,6 +128,29 @@ class TraceReader(object):
 
         # return the register set for this trace index
         return output_registers
+    
+    
+    def get_memory(self, address, length):
+        """
+        Return a memory region.
+        """
+        output = []
+        idx = self.idx
+        for addr in range(address, address + length, self.arch.POINTER_SIZE):
+            name = create_name_from_address(addr)
+            mem_state = self.memory_state.get_state(name, idx)
+            if mem_state:
+                output.append(mem_state)
+            else:
+                output.append(read_memory_int(addr, self.arch.POINTER_SIZE))
+                
+        # transform output to ByteArray
+        bytes_data = bytearray()
+        for interger in output:
+            bytes_data += interger.to_bytes(self.arch.POINTER_SIZE, byteorder="little")
+            
+        
+        return bytes_data
 
     
         
@@ -409,6 +432,7 @@ class TraceReader(object):
         Subscribe a callback for a trace navigation event.
         """
         register_callback(self._idx_changed_callbacks, callback)
+        
 
     def _notify_idx_changed(self):
         """

@@ -117,6 +117,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         self.setMouseTracking(True)
 
         self._init_reg_positions()
+        self._init_ctx_menu()
 
         self.model.registers_changed(self.refresh)
         
@@ -125,6 +126,20 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         width = self._default_width
         height = (len(self._reg_fields) + 2) * self._char_height # +2 for line break before IP, and after IP
         return QtCore.QSize(width, height)
+    
+    def _init_ctx_menu(self):
+        """
+        Initialize the right click context menu actions.
+        """
+
+        # create actions to show in the context menu
+        self._action_copy_value = QtWidgets.QAction("Copy value", None)
+        self._action_follow_in_dump = QtWidgets.QAction("Follow in dump", None)
+        self._action_follow_in_disassembly = QtWidgets.QAction("Follow in disassembler", None)
+
+        # install the right click context menu
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._ctx_menu_handler)
 
 
 
@@ -177,6 +192,62 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
 
             # increment y (to the next line)
             y += self._char_height
+            
+    def _ctx_menu_handler(self, position):
+        """
+        Handle a right click event (populate/show context menu).
+        """
+        menu = QtWidgets.QMenu()
+
+        # if a register was right clicked, fetch its name
+        reg_name = self._pos_to_reg(position)
+        if reg_name:
+
+            #
+            # fetch the disassembler context and register value as we may use them
+            # based on the user's context, or the action they select
+            #
+
+            dctx = self.controller.pctx.dctx
+            reg_value = self.model.registers[reg_name]
+
+            #
+            # dynamically populate the right click context menu
+            #
+
+            menu.addAction(self._action_copy_value)
+            menu.addAction(self._action_follow_in_dump)
+
+            #
+            # if the register conatins a value that falls within the database,
+            # we want to show it and ensure it's active
+            #
+
+            menu.addAction(self._action_follow_in_disassembly)
+            if dctx.is_mapped(reg_value):
+                self._action_follow_in_disassembly.setEnabled(True)
+            else:
+                self._action_follow_in_disassembly.setEnabled(False)
+
+
+
+        #
+        # show the right click menu and wait for the user to selection an
+        # action from the list of visible/active actions
+        #
+
+        action = menu.exec_(self.mapToGlobal(position))
+
+        #
+        # handle the user selected action
+        #
+
+        if action == self._action_copy_value:
+            copy_to_clipboard("0x%08X" % reg_value)
+        elif action == self._action_follow_in_disassembly:
+            dctx.navigate(reg_value)
+        elif action == self._action_follow_in_dump:
+            self.controller.follow_in_dump(reg_name)
 
 
 

@@ -74,7 +74,6 @@ class DebugLevel:
 
 BAD_OPERANDS_X86_64 =  [".*pl", ".*il", ".*z", ".*h"]
 INSN_EXECUTED_COUNT = alt_count()
-next(INSN_EXECUTED_COUNT)
 VAR_COUNTER = alt_count()
 
 
@@ -213,17 +212,17 @@ class TaintedVariableState(dict):
 
     def __contains__(self, key_object: object) -> bool:
         # Check if a key_object (possibly processed) exists in the dictionary
-        key_object = create_name_from_addr(key_object)
+        key_object = create_name_from_address(key_object)
         return super().__contains__(key_object)
     
     def __setitem__(self, key_object, value):
             # Set an item in the dictionary after processing the key
-        key_object = create_name_from_addr(key_object)
+        key_object = create_name_from_address(key_object)
         super().__setitem__(key_object, value)
 
     def __getitem__(self, key_object):
         # Get an item from the dictionary after processing the key
-        key_object = create_name_from_addr(key_object)
+        key_object = create_name_from_address(key_object)
         return super().__getitem__(key_object)
 
     
@@ -240,7 +239,7 @@ class TaintedVariableState(dict):
     def create_sym_mem(self, address, value):
         global INSN_EXECUTED_COUNT
         # Create a new symbolic memory object
-        name = create_name_from_addr(address)
+        name = create_name_from_address(address)
         self[name] = SymMemory(name, value)
         self[name].id = INSN_EXECUTED_COUNT.current
         return self[name]
@@ -248,7 +247,7 @@ class TaintedVariableState(dict):
     def del_sym_var(self, name):
         # Delete a symbolic variable, handling register parts and 
         # individual variables
-        name = create_name_from_addr(name)
+        name = create_name_from_address(name)
         if name not in self:
             return
         if isinstance(self[name], SymRegister):
@@ -778,8 +777,14 @@ class Runner():
     def register_operations(self, Insn):
         if Insn is None:
             return
-        # registering context change (mem and registers)
-        self.register_current_execution_state(Insn)
+        
+        last_insn = None
+         # registering context change (mem and registers)
+        if  self.trace_records.get_last_entry():
+            last_insn = self.trace_records.get_last_entry().Insn
+
+        self.register_execution_state(Insn, last_insn)
+            
         if self.symbolic_check:
             self.evaluate_current_symbolic_state(Insn)
             self.evaluate_and_register_last_operation_result()
@@ -824,7 +829,7 @@ class Runner():
             if value:
                 last_insn.op_result = value
                 last_insn.evaled_op_result = eval(str(v_op_result), globals())
-                print("idx", self.insn_executed_count.current - 1, "op_result", hex(last_insn.op_result), "evaled_op_result", hex(last_insn.evaled_op_result))
+                print("idx", self.insn_executed_count.current , "op_result", hex(last_insn.op_result), "evaled_op_result", hex(last_insn.evaled_op_result))
         
         
     def evaluate_current_symbolic_state(self, Insn):
@@ -836,7 +841,7 @@ class Runner():
                 
         # eval last mem access
         if Insn.mem_access:
-            name = create_name_from_addr(Insn.mem_access)
+            name = create_name_from_address(Insn.mem_access)
             if name in self.symbolic_taint_store:
                 globals()[name] = eval(str(self.symbolic_taint_store[name]), globals())
             else:
@@ -850,25 +855,35 @@ class Runner():
                     globals()[reg_name] = eval(str(self.symbolic_taint_store[reg_name]), globals())
 
 
-    def register_current_execution_state(self, insn):
-        for i in range(min(len(insn.cinsn.operands), 3)):
-            operand = insn.cinsn.operands[i]
+    def register_execution_state(self, current_insn, last_insn):
+        
+        idx = self.insn_executed_count.current - 1
+        
+        for insn in (current_insn, last_insn):
+        
+            if insn is None:
+                continue
+        
+            # Register last instructions changes
+            for i in range(min(len(insn.cinsn.operands), 3)):
+                operand = insn.cinsn.operands[i]
 
-            if operand.type == X86_OP_REG:
-                # update the parent register
-                register_name = get_parent_register(self.cs.reg_name(operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
-                register_value = self.engine.read_reg(register_name.upper())
-                self.registers_state.register_item(register_name, self.insn_executed_count.current, register_value)
+                if operand.type == X86_OP_REG:
+                    # update the parent register
+                    register_name = get_parent_register(self.cs.reg_name(operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
+                    register_value = self.engine.read_reg(register_name.upper())
+                    self.registers_state.register_item(register_name, idx, register_value)
 
-            elif operand.type == X86_OP_MEM:
-                address = insn.mem_access
-                name = create_name_from_addr(address)
-                memory_value = self.engine.read_memory_int(address)
-                self.memory_state.register_item(name, self.insn_executed_count.current, memory_value)
-                
-            # register pc 
-            pc_name = "RIP" if self.CONFIG["BINARY_ARCH_SIZE"] == 64 else "EIP"
-            self.registers_state.register_item(pc_name, self.insn_executed_count.current, self.engine.get_ea())
+                elif operand.type == X86_OP_MEM:
+                    address = insn.mem_access
+                    name = create_name_from_address(address)
+                    memory_value = self.engine.read_memory_int(address)
+                    self.memory_state.register_item(name, idx, memory_value)
+     
+        
+        # register pc 
+        pc_name = "RIP" if self.CONFIG["BINARY_ARCH_SIZE"] == 64 else "EIP"
+        self.registers_state.register_item(pc_name, idx, self.engine.get_ea())
                 
                 
     def initialize_execution_state(self):

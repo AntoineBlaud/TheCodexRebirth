@@ -46,7 +46,7 @@ def reformat_expression(expression):
     expression = simplify_mask(expression)
     return expression
 
-def create_name_from_addr(name):
+def create_name_from_address(name):
     # Process the name, converting integers to 'mem_0xXXXX' format
     if isinstance(name, int):
         return "mem_" + hex(name)

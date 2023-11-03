@@ -210,6 +210,9 @@ def msgbox(text, title="Codex Rebirth"):
     msg.setWindowTitle(title)
     msg.exec_()
     
+def read_memory_int(address, size):
+    return int.from_bytes(ida_bytes.get_bytes(address, size), byteorder='little')
+    
     
 def get_ea() :
     rv = idaapi.regval_t()
