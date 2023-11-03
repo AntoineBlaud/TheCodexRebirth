@@ -11,14 +11,16 @@ import idc
 import ida_kernwin
 import ida_bytes
 from codexrebirth.backend import QilingEngine, QilingRunner
+from codexrebirth.trace.arch import ArchX86, ArchAMD64
 import codexrebirth.tools.common as utils
 import json
 from superglobals import setglobal
 from qiling import *
 from threading import Thread
 import shutil
+import time
 
-class Launcher:
+class SymbolicEngineLauncher:
     def __init__(self):
         self.sym_runner = None
         self.config = None
@@ -91,13 +93,16 @@ class Launcher:
         debug_level = config["debug_level"]
         timeout = config["timeout"]
         symbolic_check = config["symbolic_check"]
-
-        # Determine the file type from IDA Pro.
-        file_type = idaapi.get_file_type_name()
-
-        # Configure the rootfs path based on the binary's architecture and file type.
-        if file_type.startswith("Portable executable"):
-            rootfs_path = os.path.join(rootfs_path, "x8664_windows" if "AMD64" in file_type else "x86_windows")
+        info = idaapi.get_inf_structure()
+        
+        if info.is_64bit():
+            self.arch = ArchAMD64()
+        else:
+            self.arch = ArchX86()
+            
+        # Configure the Qiling rootfs path based on the binary's architecture and file type.
+        if info.filetype == 11:
+            rootfs_path = os.path.join(rootfs_path, "x8664_windows" if self.arch.POINTER_SIZE == 8 else "x86_windows")
             # on windows the binary must be placed in the rootfs path
             # copy the binary to the rootfs path
             new_binary_path = os.path.join(rootfs_path, binary_name)
@@ -105,8 +110,16 @@ class Launcher:
                 shutil.copy(binary_path, new_binary_path)
             binary_path = new_binary_path
             
-        elif file_type.startswith("ELF"):
-            rootfs_path = os.path.join(rootfs_path, "x8664_linux" if "64" in file_type else "x86_linux")
+            print("[INFO] For Windows binaries, the Qiling initialization process can take up to 60 seconds ... Please be patient")
+            ida_kernwin.refresh_idaview_anyway()
+            time.sleep(0.2)
+            
+        elif info.filetype == 18:
+            rootfs_path = os.path.join(rootfs_path, "x8664_linux" if self.arch.POINTER_SIZE == 8 else "x86_linux")
+            
+        else:
+            utils.show_msgbox("Unsupported file type")
+            return
 
         # Redirect standard output and standard error to the log file.
         with contextlib.redirect_stdout(self.log_file), contextlib.redirect_stderr(self.log_file):

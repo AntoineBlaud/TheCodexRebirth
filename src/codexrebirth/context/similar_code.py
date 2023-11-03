@@ -5,7 +5,7 @@ import idaapi
 import re
 from collections import Counter
 
-class SimilarCode:
+class SimilarCodeTool:
     def __init__(self):
         pass
     
@@ -57,7 +57,7 @@ class SimilarCode:
             block_start = block.start_ea
             block_end = block.end_ea
             block_disassembly = []
-            blocks_info.append(SimilarCode.get_disass(block_start, block_end))
+            blocks_info.append(SimilarCodeTool.get_disass(block_start, block_end))
         return blocks_info
 
     @staticmethod
@@ -73,7 +73,7 @@ class SimilarCode:
         while len(block_disass) > 0:
             collected_instructions = []
             for (c_ea, current_instruction), (b_ea, block_instruction) in zip(current_disass, block_disass):
-                similarity = SimilarCode.token_similarity(current_instruction, block_instruction)
+                similarity = SimilarCodeTool.token_similarity(current_instruction, block_instruction)
                 if similarity < similarity_factor:
                     break
                 else:
@@ -93,13 +93,13 @@ class SimilarCode:
 
     @staticmethod
     def run(similarity_factor, color, comment):
-        ea_start, ea_end = SimilarCode.get_selection()
-        current_disass = SimilarCode.get_disass(ea_start, ea_end)
+        ea_start, ea_end = SimilarCodeTool.get_selection()
+        current_disass = SimilarCodeTool.get_disass(ea_start, ea_end)
         
         # Specify the address (EA) of the function you want to analyze
         function_address = idc.here()  # Change this to the address of your function
 
-        for block_disass in SimilarCode.get_all_basic_block_disassembly(function_address):
-            SimilarCode.color_similar_instructions(current_disass, block_disass, similarity_factor, color, comment)
+        for block_disass in SimilarCodeTool.get_all_basic_block_disassembly(function_address):
+            SimilarCodeTool.color_similar_instructions(current_disass, block_disass, similarity_factor, color, comment)
             ida_kernwin.refresh_idaview_anyway()
 

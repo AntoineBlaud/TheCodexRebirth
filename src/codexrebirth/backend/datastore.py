@@ -51,7 +51,7 @@ class DataStoreManager:
         if item_name in self.chains:
             return self.chains[item_name].get(idx)
         else:
-           raise KeyError(f"Item {item_name} not found in state manager")  
+           return None  
        
 
     def add_item(self, item_name):

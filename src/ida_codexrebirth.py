@@ -12,10 +12,10 @@ import idaapi
 from codexrebirth.ui.palette import PluginPalette
 from codexrebirth.ui.trace_view import TraceDock
 from codexrebirth.trace.reader import TraceReader
-from codexrebirth.context.launcher import Launcher
-from codexrebirth.context.var_explorer import VarExplorer
-from codexrebirth.context.similar_code import SimilarCode
-from codexrebirth.context.msnapshot import SnapshotManager
+from codexrebirth.context.launcher import SymbolicEngineLauncher
+from codexrebirth.context.var_explorer import VarExplorerTool
+from codexrebirth.context.similar_code import SimilarCodeTool
+from codexrebirth.context.snapshot_manager import SnapshotManagerTool
 from codexrebirth.controller.register import RegisterController
 from codexrebirth.integration.api import DisassemblerContextAPI
 from codexrebirth.trace.arch import ArchAMD64, ArchX86
@@ -30,6 +30,7 @@ import os
 import json
 import threading
 
+CONFIG_FILE_NAME = "codexrebirth_config.json"
 
 
 class CodexRebirthIDA(ida_idaapi.plugin_t):
@@ -38,7 +39,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
     """
     
     flags = ida_idaapi.PLUGIN_MULTI | ida_idaapi.PLUGIN_HIDE | ida_idaapi.PLUGIN_PROC 
-    comment = "Codex Rebirth"
+    comment = ""
     help = ""
     wanted_name = "CodexRebirth"
     wanted_hotkey = ""
@@ -52,27 +53,26 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             self.arch = ArchAMD64()
         else:
             self.arch = ArchX86()
-        # OpenAI API key
-        openai.api_key = self.config["openai_key"]
-        # Var explorer, used to renamed registers in disassembly view
-        self.var_exp = VarExplorer()
-        # Snapshot manager, used to take and restore IDA execution snapshots
-        self.snap_manager = SnapshotManager()
-        # Similar code, used to find similar code in the disassembly view
-        self.similar_code = SimilarCode()
+        # used to renamed registers in disassembly view
+        self.var_explorer = VarExplorerTool()
+        # used to take and restore IDA execution snapshots
+        self.snapshot_manager = SnapshotManagerTool()
+        # used to find similar code in the disassembly view
+        self.similar_code = SimilarCodeTool()
         # Register controller
         self.registers = RegisterController(self)
-        print("CodexRebirth: IDA Plugin Loaded")
+        
+        print("IDA Plugin successfully loaded.")
         
     def reset(self):
         self.user_defined_end_address = None
         self.reader = None
         self.blocks_execution_count  = None
-        self.ctx = Launcher()
+        # Symbolic engine context, map IDA context to Qiling context
+        self.ctx = SymbolicEngineLauncher()
         self.colors = generate_visually_distinct_colors(40)
-        self.cached_address = None
-        
-        
+
+            
     def init(self):
         return ida_idaapi.PLUGIN_OK
     
@@ -83,42 +83,17 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         pass
     
     def load_config(self):
-        """
-        Load the config script selected by the user.
-
-        Raises:
-            Exception: If no config is selected or loading fails.
-
-        Returns:
-            str: Path to the loaded config script.
-        """
         # load config from IDA plugin directory
-        config_path = os.path.join(os.path.dirname(__file__), "codexrebirth_config.json")
-        config = json.load(open(config_path, "r"))
-        validate_config(config)
-        self.config = config
+        config_path = os.path.join(os.path.dirname(__file__), CONFIG_FILE_NAME)
+        self.config = load_config(config_path)        
+        # OpenAI API key
+        openai.api_key = self.config["openai_key"]
         
 
     @open_console
     def _run(self):
-        """
-        Execute symbolic execution and handle various scenarios.
-
-        This function performs symbolic execution, handles restoration of the symbolic engine state,
-        and checks for specific instructions during execution.
-
-        """
-        
         self.ctx.initialize(self.config)
-        
-        if self.user_defined_end_address:
-            # we set the end address to the symbolic engine after the initialization
-            self.ctx.sym_runner.set_emu_end(self.user_defined_end_address)
-
-        print("Running Symbolic Execution ...")
-        print("UI refresh will be disabled until the end of the symbolic execution")
         ida_kernwin.refresh_idaview_anyway()
-
         self.ctx.run_emulation(callback=self.on_emulation_complete)
 
 
@@ -151,25 +126,20 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # Mark the core as loaded and perform necessary warm-up tasks.
         self.loaded = True
         self.palette.warmup()
-        
         self.trace_dock = TraceDock(self)
     
-
 
 
     def on_emulation_complete(self):
         """
         Load a trace file and create a trace reader.
-
-        This function loads a trace from a specified file path and creates a trace reader for navigation and querying.
-        The trace reader provides access to the loaded trace and its records.
         """
-        if len(self.ctx.sym_runner.trace_records) < 1:
+        sym_r = self.ctx.sym_runner
+        if len(sym_r.trace_records) < 1:
             print("Trace records are not available.")
             return
         
-        self.reader = TraceReader(self.ctx.sym_runner.trace_records, self.ctx.sym_runner.reg_sm, self.ctx.sym_runner.mem_sm)
-        print(f"Trace loaded with {self.reader.length} records.")
+        self.reader = TraceReader(sym_r.trace_records, sym_r.registers_state, sym_r.memory_state)
         # Hook into the trace for further processing.
         self.hook()
         # Attach the trace engine to various plugin UI controllers, granting them
@@ -178,25 +148,22 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.registers.attach_reader(self.reader)
         
         self.show_ui()
-        self.update_block_hits()
-        print(self.ctx.sym_runner.taint_st)
-        print(self.ctx.sym_runner.reg_sm)
+        self._update_block_hits()
         
+        print(f"Trace loaded with {self.reader.length} records.")
         print("Symbolic Execution Finished.")
         
 
     def show_ui(self):
         """
         Integrate and display the plugin's UI in the IDA Pro disassembler.
-
-        This function integrates the plugin's UI elements and displays them in the IDA Pro disassembler interface.
         """
-
         mw = get_qmainwindow()
         mw.addToolBar(QtCore.Qt.RightToolBarArea, self.trace_dock)
         self.trace_dock.show()
         self.registers.show(position=ida_kernwin.DP_RIGHT)
         print("UI successfully loaded.")
+        
 
     def hook(self):
         """
@@ -204,6 +171,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         if self._hooked:
             return
+        
         self._hooked = True
         self._ui_hooks.hook()
 
@@ -213,6 +181,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         if not self._hooked:
             return
+        
         self._hooked = False
         self._ui_hooks.unhook()
         
@@ -225,13 +194,13 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         This function is called when the user clicks on the context menu item "Set End Address."
         """
         self.user_defined_end_address = idc.here()
-        print(f"End address set to {hex(self.user_defined_end_address)}")
-        
         # Set a comment at the end address
         idaapi.set_cmt(self.user_defined_end_address, " ===== End address =====", False)
-        
         # Set a breakpoint at the end address
         ida_dbg.add_bpt(self.user_defined_end_address, 1, idc.BPT_SOFT)
+        # Set the end address in the symbolic engine
+        self.ctx.sym_runner.set_emu_end(self.user_defined_end_address)
+        print(f"End address set to {hex(self.user_defined_end_address)}")
 
 
     def _interactive_clean(self):
@@ -273,7 +242,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         print("Taking IDA execution snapshot ...")
-        self.snap_manager.take_ida_execution_snapshot()
+        self.snapshot_manager.take_ida_execution_snapshot()
         
     @open_console
     def _interactive_ida_restore_ida_execution_snapshot(self):
@@ -287,7 +256,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         print("Restoring IDA execution snapshot ...")
-        self.snap_manager.restore_ida_execution_snapshot()
+        self.snapshot_manager.restore_ida_execution_snapshot()
         
         
     def _interactive_go_next_execution(self):
@@ -309,7 +278,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         Synchronize variables between IDA Pro and Qiling.
         """
-        self.var_exp.update()
+        self.var_explorer.update()
         
     def _interactive_color_taint_id(self):
         """
@@ -319,10 +288,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             return
         
         taint_id = self.reader.get_trace(self.reader.idx).taint_id
-        if taint_id == -1:
-            return
-        self.reader.set_taint_id_color(taint_id, self.colors.pop())
-        print(f"Coloring taint id {taint_id} with color {self.reader.get_taint_id_color(taint_id)}")
+        # if the taint id is -1, it means that the instruction is not tainted
+        if taint_id != -1:
+            color = self.colors.pop()
+            self.reader.set_taint_id_color(taint_id, color)
+            print(f"Coloring taint id {taint_id} with color {self.reader.get_taint_id_color(taint_id)}")
         
  
     def _uninstall(self):
@@ -333,12 +303,12 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         mw = get_qmainwindow()
         mw.removeToolBar(self.trace_dock)
         self.trace_dock.close()
+        self.registers.close()
         # clean IDA trace
         delete_all_colors()
         delete_all_comments()
         # Reset the UI
         self.reset()
-        return
 
     #--------------------------------------------------------------------------
     # IDA Actions
@@ -443,7 +413,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         (Event) IDA is about to exit.
         """
-        
         self._uninstall()
         return 0
 
@@ -460,6 +429,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             bool: True if the action was successfully uninstalled, False otherwise.
         """
         result = ida_kernwin.unregister_action(action)
+        
         if not result:
             print(f"Failed to unregister {action}...")
             return False
@@ -499,30 +469,15 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         (Event) IDA is about to render code viewer lines.
         """
         widget_type = ida_kernwin.get_widget_type(widget)
-
         if widget_type == ida_kernwin.BWN_DISASM:
             self._highlight_disassembly(lines_out, widget, lines_in)
-
         return
     
 
     def _highlight_disassembly(self, lines_out, widget, lines_in):
         """
         Highlights the disassembly in IDA Pro with different colors based on the current instruction and its context.
-
-        Args:
-            lines_out: The output lines.
-            widget: The widget to highlight.
-            lines_in: The input lines.
-
-        Returns:
-            None
         """
-        
-        def calculate_index(reader, i, j):
-            if j == 1:
-                return reader.idx - i
-            return reader.idx + i
 
         def get_taint_color_and_trace(reader, idx, address, default_taint_color):
             trace = reader.get_trace(idx)
@@ -542,7 +497,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
 
         trail = {}
             
-        forward_ips = self.reader.get_next_ips(10)
+        forward_ips = self.reader.get_next_ips(0x10)
         backward_ips = self.reader.get_prev_ips(0x100)
         current_address = self.reader.rebased_ip
 
@@ -553,30 +508,40 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         
         for j, (trail_addresses, trail_color) in enumerate(trails):
             for i, address in enumerate(trail_addresses):
-
-                idx = calculate_index(self.reader, i, j)
+                
+                if trail_addresses == forward_ips:
+                    idx = self.reader.idx + i
+                    
+                elif trail_addresses == backward_ips:
+                    idx = self.reader.idx - i
+                
+                # there is a priority order give by trails list
                 if address not in trail:
-                    color, trace = get_taint_color_and_trace(self.reader, idx, address, default_taint_color)
-                    if not trace:
+                    
+                    item_color, item_trace = get_taint_color_and_trace(self.reader, idx, address, default_taint_color)
+                    
+                    if not item_trace:
                         continue
+                    
                     # if the instruction taint_id is different from the current taint_id,
                     # and the color is the default taint color, we use the trail color
-                    if not trace.taint_id == self.reader.current_taint_id and color == default_taint_color:
-                       color = trail_color
-                    if trace.taint_id == -1:
-                        color = trail_color
-                    trail[address] = (color, trace)
+                    if not item_trace.taint_id == self.reader.current_taint_id and item_color == default_taint_color:
+                       item_color = trail_color
+                       
+                    # if the instruction taint_id is -1, it means that the instruction is not tainted
+                    elif item_trace.taint_id == -1:
+                        item_color = trail_color
+                        
+                    trail[address] = (item_color, item_trace)
 
       
         for section in lines_in.sections_lines:
             for line in section:
                 address = line.at.toea()
-                
                 if address not in trail:
                     continue
                 
                 color, Trace = trail[address]
-                
 
                 # treat special cases
                 if address == current_address:
@@ -589,9 +554,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, color)
                 lines_out.entries.push_back(entry)
                 
-                if current_address == self.cached_address:
-                    continue
-                
+                # comment the instruction with the trace record
                 cmt = idaapi.get_cmt(address, False)
                 separator = "@@ "
                 cmt = cmt.split(separator)[0] if cmt else ""
@@ -599,11 +562,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 idaapi.set_cmt(address, cmt, False)
                 
                 
-        self.cached_address = current_address
-                
-
-        
-    def update_block_hits(self):
+     
+    def _update_block_hits(self):
         """
         Update the disassembly view.
         """

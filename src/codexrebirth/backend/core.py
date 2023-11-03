@@ -57,7 +57,6 @@ profile = line_profiler.LineProfiler()
 
 __all__ = ["DebugLevel", "QilingRunner"]
 
-
 # Set z3 options
 set_option(rational_to_decimal=True)
 set_option(
@@ -74,15 +73,12 @@ class DebugLevel:
 
 
 BAD_OPERANDS_X86_64 =  [".*pl", ".*il", ".*z", ".*h"]
-SUPPORTED_INSTRUCTIONS_X86_64 = [".?mov.*", "lea", "add","sub","xor","and","or",
-                                 "imul","shl","shr","sar","cdq","rol","ror","mul",
-                                 "not","cmp","test", "push","pop", "sete", "cdq"]
 INSN_EXECUTED_COUNT = alt_count()
 next(INSN_EXECUTED_COUNT)
 VAR_COUNTER = alt_count()
 
 
-def instanciate_register():
+def create_sym_register_factory():
     global SYM_REGISTER_FACTORY
     rax = SymRegister("rax", 63, 0)
     rcx = SymRegister("rcx", 63, 0)
@@ -253,16 +249,16 @@ class TaintedVariableState(dict):
         # Delete a symbolic variable, handling register parts and 
         # individual variables
         name = create_name_from_addr(name)
-            
-        if name in self:
-            if isinstance(self[name], SymRegister):
-                for reg in SYM_REGISTER_FACTORY[name]:
-                    try:
-                        del self[reg.name]
-                    except KeyError:
-                        pass
-            else:
-                del self[name]
+        if name not in self:
+            return
+        if isinstance(self[name], SymRegister):
+            for reg in SYM_REGISTER_FACTORY[name]:
+                try:
+                    del self[reg.name]
+                except KeyError:
+                    pass
+        else:
+            del self[name]
 
     def __repr__(self) -> str:
         res = ""
@@ -277,155 +273,149 @@ class TaintedVariableState(dict):
         return clone
     
 
-class OperationEngineX86_64:
+class OperationX86_64:
     
-    def __init__(self, config, cs, engine, Insn, insn, mem_access, taint_st):
+    def __init__(self, config, cs, engine, Insn, insn, mem_access, symbolic_taint_store):
         self.config = config
         self.cs = cs
         self.Insn = Insn
         self.insn = insn
         self.mem_access = mem_access
-        self.taint_st = taint_st
+        self.symbolic_taint_store = symbolic_taint_store
         self.engine = engine
         self.tainted_var_name = self.get_tainted_var_name(Insn, mem_access)
                 
-    
     def get_tainted_var_name(self, Insn: Instruction, mem_access: int):
         if not Insn.op1:
             return None
         return mem_access if Insn.op1.type == X86_OP_MEM else self.cs.reg_name(Insn.op1.reg)
 
     
-    def _add(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1 + Insn.v_op2)
+    def _add(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 + Insn.v_op2)
 
-    def _imul(self, Insn, taint_st):
+    def _imul(self, Insn, symbolic_taint_store):
         if Insn.v_op3 is not None:
-            return taint_st[self.tainted_var_name].update(Insn.v_op2 * Insn.v_op3)
+            return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op2 * Insn.v_op3)
         if Insn.v_op2 is not None:
-            return taint_st[self.tainted_var_name].update(Insn.v_op1 * Insn.v_op2)
+            return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 * Insn.v_op2)
         else:
-            if "rax" in taint_st:
-                return taint_st["rax"].update((taint_st["rax"] * Insn.v_op1))
+            if "rax" in symbolic_taint_store:
+                return symbolic_taint_store["rax"].update((symbolic_taint_store["rax"] * Insn.v_op1))
 
-    def _sub(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1 - Insn.v_op2)
+    def _sub(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 - Insn.v_op2)
 
-    def _xor(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1 ^ Insn.v_op2)
+    def _xor(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 ^ Insn.v_op2)
 
-    def _and(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1 & Insn.v_op2)
+    def _and(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 & Insn.v_op2)
 
-    def _or(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1 | Insn.v_op2)
+    def _or(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 | Insn.v_op2)
 
-    def _shl(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1 << Insn.v_op2)
+    def _shl(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 << Insn.v_op2)
 
-    def _shr(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1 >> Insn.v_op2)
+    def _shr(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1 >> Insn.v_op2)
 
-    def _ror(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1.ror(Insn.v_op2))
+    def _ror(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1.ror(Insn.v_op2))
     
-    def _rol(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1.rol(Insn.v_op2))
+    def _rol(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1.rol(Insn.v_op2))
 
-    def _mul(self, Insn, taint_st):
-        return taint_st["rax"].update(taint_st[self.tainted_var_name] * Insn.v_op1)
+    def _mul(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store["rax"].update(symbolic_taint_store[self.tainted_var_name] * Insn.v_op1)
 
-    def _not(self, Insn, taint_st):
-        return taint_st[self.tainted_var_name].update(Insn.v_op1._not())
+    def _not(self, Insn, symbolic_taint_store):
+        return symbolic_taint_store[self.tainted_var_name].update(Insn.v_op1._not())
         
-    def _cdq(self, Insn, taint_st):
-        taint_st.del_sym_var("rdx")
+    def _cdq(self, Insn, symbolic_taint_store):
+        symbolic_taint_store.del_sym_var("rdx")
         return None
 
-    def _push(self, Insn, taint_st):
+    def _push(self, Insn, symbolic_taint_store):
         stack_pointer = self.engine.get_stack_pointer()
-        taint_st[stack_pointer] = Insn.v_op1.clone()
-        return taint_st[stack_pointer]
+        symbolic_taint_store[stack_pointer] = Insn.v_op1.clone()
+        return symbolic_taint_store[stack_pointer]
 
-    def _pop(self, Insn, taint_st):
+    def _pop(self, Insn, symbolic_taint_store):
         stack_pointer = self.engine.get_stack_pointer()
         reg = self.cs.reg_name(Insn.op1.reg)
         # Delete the symbolic register
-        if reg in taint_st:
-            taint_st.del_sym_var(reg)
+        if reg in symbolic_taint_store:
+            symbolic_taint_store.del_sym_var(reg)
         # Copy the value from the stack to the register
-        if stack_pointer in taint_st:
-            taint_st[reg] = taint_st[stack_pointer]
-            taint_st.del_sym_var(stack_pointer)
-            return taint_st[reg]
+        if stack_pointer in symbolic_taint_store:
+            symbolic_taint_store[reg] = symbolic_taint_store[stack_pointer]
+            symbolic_taint_store.del_sym_var(stack_pointer)
+            return symbolic_taint_store[reg]
         
-    def _mov(self, Insn, taint_st, mem_access):
+    def _mov(self, Insn, symbolic_taint_store, mem_access):
         # instanciate a new symbolic register if needed
         # if condition is not met, then delete the symbolic register
-        
         if Insn.op1.type == X86_OP_REG:
             regname = self.cs.reg_name(Insn.op1.reg)
-            taint_st[regname].update(Insn.v_op2)
-            taint_st[regname].id = Insn.v_op2.id
-            return taint_st[regname]
+            symbolic_taint_store[regname].update(Insn.v_op2)
+            symbolic_taint_store[regname].id = Insn.v_op2.id
+            return symbolic_taint_store[regname]
 
         elif Insn.op1.type == X86_OP_MEM:
-            taint_st[mem_access].update(Insn.v_op2)
-            taint_st[mem_access].id = Insn.v_op2.id
-            return taint_st[mem_access]
+            symbolic_taint_store[mem_access].update(Insn.v_op2)
+            symbolic_taint_store[mem_access].id = Insn.v_op2.id
+            return symbolic_taint_store[mem_access]
 
         raise Exception(f"Operation {Insn.cinsn.mnemonic} not supported")
     
-    
-    def _lea(self, Insn, taint_st, mem_access):
+    def _lea(self, Insn, symbolic_taint_store, mem_access):
         regname = self.cs.reg_name(Insn.op1.reg)
         # round mem_access to next 4 bytes
         size = self.config["BINARY_ARCH_SIZE"] // 8
         mem_access = mem_access + (mem_access % size)
-        taint_st[regname].update(RealValue(mem_access))
-        taint_st[regname].id = -1
-        return taint_st[regname]
+        symbolic_taint_store[regname].update(RealValue(mem_access))
+        symbolic_taint_store[regname].id = -1
+        return symbolic_taint_store[regname]
 
-    
     def process(self):
-
-        if self.tainted_var_name not in self.taint_st:
+        if self.tainted_var_name not in self.symbolic_taint_store:
             return None
-        
         if "mov" in self.insn.mnemonic:
-            return self._mov(self.Insn, self.taint_st, self.mem_access)
+            return self._mov(self.Insn, self.symbolic_taint_store, self.mem_access)
         elif "lea" in self.insn.mnemonic:
-            return self._lea(self.Insn, self.taint_st, self.mem_access)
+            return self._lea(self.Insn, self.symbolic_taint_store, self.mem_access)
         elif self.insn.mnemonic.startswith("add"):
-            return self._add(self.Insn, self.taint_st)
+            return self._add(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("imul"):
-            return self._imul(self.Insn, self.taint_st)
+            return self._imul(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("sub"):
-            return self._sub(self.Insn, self.taint_st)
+            return self._sub(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("xor"):
-            return self._xor(self.Insn, self.taint_st)
+            return self._xor(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("and"):
-            return self._and(self.Insn, self.taint_st)
+            return self._and(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("or"):
-            return self._or(self.Insn, self.taint_st)
+            return self._or(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("shl"):
-            return self._shl(self.Insn, self.taint_st)
+            return self._shl(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("shr") or self.insn.mnemonic.startswith("sar"):
-            return self._shr(self.Insn, self.taint_st)
+            return self._shr(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("ror"):
-            return self._ror(self.Insn, self.taint_st)
+            return self._ror(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("rol"):
-            return self._rol(self.Insn, self.taint_st)
+            return self._rol(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("mul"):
-            return self._mul(self.Insn, self.taint_st)
+            return self._mul(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("not"):
-            return self._not(self.Insn, self.taint_st)
+            return self._not(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("push"):
-            return self._push(self.Insn, self.taint_st)
+            return self._push(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("pop"):
-            return self._pop(self.Insn, self.taint_st)
+            return self._pop(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("cdq"):
-            return self._cdq(self.Insn, self.taint_st)
+            return self._cdq(self.Insn, self.symbolic_taint_store)
         elif self.insn.mnemonic.startswith("test") or self.insn.mnemonic.startswith("cmp"):
             return self.Insn.v_op1
         else:
@@ -464,32 +454,8 @@ class InstructionEngineX86_64:
     def set_config(self, config):
         self.config = config
         
-
-    def check_symop_div(self, insn, taint_st: TaintedVariableState):
-        if insn.mnemonic == "div":
-            for reg in SYM_REGISTER_FACTORY["rax"]:
-                if reg in taint_st:
-                    log(
-                        DebugLevel.DEBUG,
-                        f"Symbolic register found in {reg.name} => {taint_st[reg.name]}",
-                        self.debug_level,
-                        ANSIColors.PURPLE,
-                    )
-                    return True
-            op1 = insn.operands[0]
-            regname = self.cs.reg_name(op1.reg)
-            if regname in taint_st:
-                log(
-                    DebugLevel.DEBUG,
-                    f"Symbolic register found in {regname} => {taint_st[regname]}",
-                    self.debug_level,
-                    ANSIColors.PURPLE,
-                )
-                return True
-            return False
-
     
-    def process_mem_access(self, op, taint_st: TaintedVariableState):
+    def process_mem_access(self, op, symbolic_taint_store: TaintedVariableState):
         # Return the symbolic register that is used in the mem_access instruction (ex: lea rbx, [rax + 5]) with
         # rax symbolic
         # if no symbolic register is used, Create a symbolic memory object
@@ -497,21 +463,21 @@ class InstructionEngineX86_64:
 
         if op.mem.base != 0:
             reg_name = self.cs.reg_name(op.mem.base)
-            # if the register is symbolic, fetch it from the taint_st
-            if reg_name in taint_st and isinstance(taint_st[reg_name], SymValue):
-                mem_value = taint_st[reg_name].clone()
+            # if the register is symbolic, fetch it from the symbolic_taint_store
+            if reg_name in symbolic_taint_store and isinstance(symbolic_taint_store[reg_name], SymValue):
+                mem_value = symbolic_taint_store[reg_name].clone()
             else:
                 mem_value = RealValue(self.engine.read_reg(reg_name.upper()))
 
         if op.mem.index != 0:
             reg_name = self.cs.reg_name(op.mem.base)
             index = self.engine.read_reg(reg_name)
-            if self.cs.reg_name(op.mem.index) in taint_st:
+            if self.cs.reg_name(op.mem.index) in symbolic_taint_store:
                 if not mem_value:
-                    mem_value = taint_st[self.cs.reg_name(op.mem.index)].clone()
+                    mem_value = symbolic_taint_store[self.cs.reg_name(op.mem.index)].clone()
                 else:
                     # process in this order to avoid adding a SymValue to a RealValue
-                    mem_value = taint_st[self.cs.reg_name(op.mem.index)].clone() + mem_value
+                    mem_value = symbolic_taint_store[self.cs.reg_name(op.mem.index)].clone() + mem_value
             else:
                 if not mem_value:
                     mem_value = RealValue(index)
@@ -532,7 +498,7 @@ class InstructionEngineX86_64:
 
     
     def parse_insn_operands(
-        self, insn: CsInsn, mem_access: int, taint_st: TaintedVariableState
+        self, insn: CsInsn, mem_access: int, symbolic_taint_store: TaintedVariableState
     ) -> Instruction:
         # Parse the operands of the instruction, create symbolic values if needed, and return the Instruction object
         Insn = Instruction(insn)
@@ -541,19 +507,12 @@ class InstructionEngineX86_64:
         
         Insn.mem_access = mem_access
 
-        # Check if the operand is a symbolic memory access and create a symbolic value
+        # Check if the operand is a symbolic memory access and create a symbolic value [CURRENTLY DISABLED]
         for op in insn.operands:
             if op.type == X86_OP_MEM:
-                sym_access = self.process_mem_access(op, taint_st)
+                sym_access = self.process_mem_access(op, symbolic_taint_store)
                 if isinstance(sym_access, SymValue):
-                    log(
-                        DebugLevel.INFO,
-                        f"Adding symbolic memory {hex(mem_access)} => {sym_access.value}",
-                        self.debug_level,
-                        ANSIColors.PURPLE,
-                    )
-                    taint_st[mem_access] = sym_access
-                    break
+                    symbolic_taint_store[mem_access] = sym_access
         #
         # Process the symbolic data of the operands
         #
@@ -563,10 +522,10 @@ class InstructionEngineX86_64:
             # Process REG operands
             if operand.type == X86_OP_REG:
                 regname = self.cs.reg_name(operand.reg)
-                if regname not in taint_st and regname in SYM_REGISTER_FACTORY:
-                    taint_st.create_sym_reg(regname)
-                if regname in taint_st:
-                    setattr(Insn, f"v_op{i+1}", taint_st[regname])
+                if regname not in symbolic_taint_store and regname in SYM_REGISTER_FACTORY:
+                    symbolic_taint_store.create_sym_reg(regname)
+                if regname in symbolic_taint_store:
+                    setattr(Insn, f"v_op{i+1}", symbolic_taint_store[regname])
                 else:
                     setattr(Insn, f"v_op{i+1}", RealValue(self.engine.read_reg(regname.upper())))
             # Process IMM operands
@@ -574,10 +533,10 @@ class InstructionEngineX86_64:
                 setattr(Insn, f"v_op{i+1}", RealValue(operand.imm))
             # Process MEM operands
             elif operand.type == X86_OP_MEM:
-                if mem_access not in taint_st and self.engine.is_mapped(mem_access):
-                    taint_st.create_sym_mem(mem_access, self.engine.read_memory_int(mem_access))
-                if mem_access in taint_st:
-                    setattr(Insn, f"v_op{i+1}", taint_st[mem_access])
+                if mem_access not in symbolic_taint_store and self.engine.is_mapped(mem_access):
+                    symbolic_taint_store.create_sym_mem(mem_access, self.engine.read_memory_int(mem_access))
+                if mem_access in symbolic_taint_store:
+                    setattr(Insn, f"v_op{i+1}", symbolic_taint_store[mem_access])
                 else:
                     setattr(Insn, f"v_op{i+1}", RealValue(0))
    
@@ -600,15 +559,15 @@ class InstructionEngineX86_64:
         return Insn
 
     
-    def make_var_substitutions(self, taint_st: TaintedVariableState, tainted_var_name: str):
+    def make_var_substitutions(self, symbolic_taint_store: TaintedVariableState, tainted_var_name: str):
         
         # we do not fetch from global config because it is to slow
         global VAR_COUNTER
         
-        if tainted_var_name not in taint_st:
+        if tainted_var_name not in symbolic_taint_store:
             return
         
-        tainted_var_value = taint_st[tainted_var_name]
+        tainted_var_value = symbolic_taint_store[tainted_var_name]
 
         if not isinstance(tainted_var_value, SymValue):
             return 
@@ -618,14 +577,14 @@ class InstructionEngineX86_64:
         # if not, then we didn't updated yet, so we create a new varname and assign it to the tainted_var_value
         if len(raw_repr) > self.config["MAX_RAW_REPR_LENGTH"]:
             new_var = f"var_{next(VAR_COUNTER):06d}"
-            taint_st[new_var] = tainted_var_value.v_wrapper.clone()
+            symbolic_taint_store[new_var] = tainted_var_value.v_wrapper.clone()
             log(
                 DebugLevel.DEBUG,
                 f"Creating new varname {new_var} for {tainted_var_name}=>{tainted_var_value.value}",
                 self.debug_level,
                 ANSIColors.PURPLE,
             )
-            taint_st[tainted_var_name].update(
+            symbolic_taint_store[tainted_var_name].update(
                 SymValue(new_var, id=tainted_var_value.id)
             )
          
@@ -660,31 +619,26 @@ class InstructionEngineX86_64:
         return mem_access
 
 
-    def evaluate_instruction(self, mem_access, taint_st: TaintedVariableState):
+    def evaluate_instruction(self, mem_access, symbolic_taint_store: TaintedVariableState):
+        
+        if self.config is None:
+            raise Exception("Config not set")
+        
         # Get the current instruction
         insn = self.engine.get_currrent_instruction_disass()
         insn_addr = self.engine.get_ea()
         # Check if the instruction is the same as the last one executed
         if insn_addr == self.last_instruction_executed:
             return None
+        
         # check if the operands are not supported
         for bad_op_pattern in self.config["BAD_OPERANDS"]:
             if re.match(bad_op_pattern, insn.op_str):
                 return None
-        # check if the instruction is in the current list of supported instructions
-        if insn.mnemonic not in self.config["SUPPORTED_INSTRUCTIONS"]:
-            log(
-                DebugLevel.DEBUG,
-                f"Instrution is not supported",
-                self.debug_level,
-                ANSIColors.WARNING,
-            )
-            return None
-        
+
         # mem_access can be calculated from insn of directly
         # read base, index, disp and scale from insn operands
-        if mem_access is None:
-            mem_access = self.compute_mem_access(insn)
+        mem_access = self.compute_mem_access(insn) if mem_access is None else mem_access
             
         # store the last instruction executed
         self.last_instruction_executed = insn_addr
@@ -692,15 +646,15 @@ class InstructionEngineX86_64:
 
         # Parse operands do a lot of things, like creating symbolic values, fetching values from memory
         # All the results are stored in the Instruction object (v_op1, v_op2, v_op3)
-        Insn = self.parse_insn_operands(insn, mem_access, taint_st)
+        Insn = self.parse_insn_operands(insn, mem_access, symbolic_taint_store)
         # Compute the result of the operation
-        op_engine = OperationEngineX86_64(self.config, self.cs, self.engine, Insn, insn, mem_access, taint_st)
-        op_result = op_engine.process()
+        operation = OperationX86_64(self.config, self.cs, self.engine, Insn, insn, mem_access, symbolic_taint_store)
+        op_result = operation.process()
         Insn.v_op_result = op_result
         print(hex(insn_addr), Insn)
         
-        # Update variables in taint_st
-        self.make_var_substitutions(taint_st, op_engine.tainted_var_name)
+        # Update variables in symbolic_taint_store
+        self.make_var_substitutions(symbolic_taint_store, operation.tainted_var_name)
         
 
         return Insn.clone()
@@ -712,7 +666,7 @@ class Runner():
         self.debug_level = debug_level
         self.timeout = timeout
         self.symbolic_check = symbolic_check
-        self.taint_st = TaintedVariableState()
+        self.symbolic_taint_store = TaintedVariableState()
         # Create an empty dictionary for callbacks
         self.callbacks = {}
         # Initialize start and end addresses for emulation
@@ -720,8 +674,8 @@ class Runner():
         self.addr_emu_end = []
         self.trace_records = Trace()
         self.insn_executed_count = INSN_EXECUTED_COUNT
-        self.reg_sm = DataStoreManager()
-        self.mem_sm = DataStoreManager()
+        self.registers_state = DataStoreManager()
+        self.memory_state = DataStoreManager()
         # instantiate the engine
         self.engine = engine
         # Create an instance of the CodexInstructionEngine
@@ -735,11 +689,9 @@ class Runner():
         self.text_end = None
         
         self.CONFIG = {
-            "BINARY_ARCH": None,
             "BINARY_ARCH_SIZE": None,
             "BINARY_MAX_MASK": None,
             "MAX_RAW_REPR_LENGTH": 44,
-            "SUPPORTED_INSTRUCTIONS": None,
             "BAD_OPERANDS": None,
             "CS_UC_REGS": None,
             "TRACE_RECORDS": self.trace_records,
@@ -770,7 +722,6 @@ class Runner():
     def get_register(self, register: str):
         return self.engine.read_reg(register.upper())
     
-    
     def get_current_pc(self):
         return self.engine.get_ea()
 
@@ -779,9 +730,7 @@ class Runner():
     ):
         assert access == UC_MEM_WRITE
         insn_addr = self.engine.get_ea()
-
-        self.register_operations(self.instruction_engine.evaluate_instruction(address, self.taint_st))
-
+        self.register_operations(self.instruction_engine.evaluate_instruction(address, self.symbolic_taint_store))
 
 
     def memory_read_hook(
@@ -789,8 +738,7 @@ class Runner():
     ):
         assert access == UC_MEM_READ
         insn_addr = self.engine.get_ea()
-        
-        self.register_operations(self.instruction_engine.evaluate_instruction(address, self.taint_st))
+        self.register_operations(self.instruction_engine.evaluate_instruction(address, self.symbolic_taint_store))
        
              
     def code_execution_hook(self, ql: Qiling, address: int, size):
@@ -800,7 +748,6 @@ class Runner():
                 
             # Get the current instruction and its address
             insn, insn_addr = self.engine.get_currrent_instruction_disass(), self.engine.get_ea()
-
             # Check if we have reached the user-defined end address for emulation
             if insn_addr in self.addr_emu_end:
                 raise UserStoppedExecution("Reached user-defined end address")
@@ -818,12 +765,10 @@ class Runner():
             if check_memory_access(insn):
                 return
 
-           
             # Evaluate the instruction with the current codex state
-            Insn = self.instruction_engine.evaluate_instruction(None, self.taint_st)
+            Insn = self.instruction_engine.evaluate_instruction(None, self.symbolic_taint_store)
             self.register_operations(Insn)
-
-                
+                       
         finally:
             # Increment the instruction executed count
             next(self.insn_executed_count)
@@ -851,8 +796,8 @@ class Runner():
             try:
                 # register register value in the datastore
                 value = self.engine.read_reg(reg_name.upper())
-                self.reg_sm.register_item(reg_name, 0,  value)
-                globals()[reg_name] = self.reg_sm.get_state(reg_name, 0)
+                self.registers_state.register_item(reg_name, 0,  value)
+                globals()[reg_name] = self.registers_state.get_state(reg_name, 0)
             except KeyError:
                 pass
             
@@ -881,18 +826,19 @@ class Runner():
                 last_insn.evaled_op_result = eval(str(v_op_result), globals())
                 print("idx", self.insn_executed_count.current - 1, "op_result", hex(last_insn.op_result), "evaled_op_result", hex(last_insn.evaled_op_result))
         
+        
     def evaluate_current_symbolic_state(self, Insn):
         # register new variables var_xxxxx
-        vars_to_register = sorted(set(self.taint_st.keys()).difference(set(globals().keys())))
+        vars_to_register = sorted(set(self.symbolic_taint_store.keys()).difference(set(globals().keys())))
         for var_name in vars_to_register:
             if var_name.startswith("var_"):
-                globals()[var_name] = eval(str(self.taint_st[var_name]), globals())
+                globals()[var_name] = eval(str(self.symbolic_taint_store[var_name]), globals())
                 
         # eval last mem access
         if Insn.mem_access:
             name = create_name_from_addr(Insn.mem_access)
-            if name in self.taint_st:
-                globals()[name] = eval(str(self.taint_st[name]), globals())
+            if name in self.symbolic_taint_store:
+                globals()[name] = eval(str(self.symbolic_taint_store[name]), globals())
             else:
                 globals()[name] = self.engine.read_memory_int(Insn.mem_access)
         
@@ -900,18 +846,10 @@ class Runner():
         for op in Insn.cinsn.operands:
             if op.type == X86_OP_REG:
                 reg_name = self.cs.reg_name(op.reg)
-                if reg_name in self.taint_st:
-                    globals()[reg_name] = eval(str(self.taint_st[reg_name]), globals())
-        # update rax every time
-        if "rax" in self.taint_st:
-            globals()["rax"] = eval(str(self.taint_st["rax"]), globals())
-        if "eax" in self.taint_st:
-            globals()["eax"] = eval(str(self.taint_st["eax"]), globals())
-            
-            
-        
-            
-            
+                if reg_name in self.symbolic_taint_store:
+                    globals()[reg_name] = eval(str(self.symbolic_taint_store[reg_name]), globals())
+
+
     def register_current_execution_state(self, insn):
         for i in range(min(len(insn.cinsn.operands), 3)):
             operand = insn.cinsn.operands[i]
@@ -920,20 +858,25 @@ class Runner():
                 # update the parent register
                 register_name = get_parent_register(self.cs.reg_name(operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
                 register_value = self.engine.read_reg(register_name.upper())
-                self.reg_sm.register_item(register_name, self.insn_executed_count.current, register_value)
+                self.registers_state.register_item(register_name, self.insn_executed_count.current, register_value)
 
             elif operand.type == X86_OP_MEM:
                 address = insn.mem_access
                 name = create_name_from_addr(address)
                 memory_value = self.engine.read_memory_int(address)
-                self.mem_sm.register_item(name, self.insn_executed_count.current, memory_value)
+                self.memory_state.register_item(name, self.insn_executed_count.current, memory_value)
+                
+            # register pc 
+            pc_name = "RIP" if self.CONFIG["BINARY_ARCH_SIZE"] == 64 else "EIP"
+            self.registers_state.register_item(pc_name, self.insn_executed_count.current, self.engine.get_ea())
+                
                 
     def initialize_execution_state(self):
         for reg_id in self.engine.map_regs():
             try:
                 reg_name = self.cs.reg_name(reg_id)
                 register_value = self.engine.read_reg(reg_name.upper())
-                self.reg_sm.register_item(reg_name, 0, register_value)
+                self.registers_state.register_item(reg_name, 0, register_value)
             except (KeyError, AttributeError):
                 pass
           
@@ -943,7 +886,7 @@ class Runner():
         self.engine.clear()
         new_runner = self.__class__(self.engine, self.debug_level, self.timeout)
         # Copy the state of TaintedVariableState
-        new_runner.state = self.taint_st.clone()
+        new_runner.state = self.symbolic_taint_store.clone()
         # Copy architecture-specific attributes
         new_runner.cs = self.cs
         new_runner.ks = self.ks
@@ -961,8 +904,8 @@ class Runner():
         # Copy executed instructions count
         new_runner.insn_executed_count = self.insn_executed_count
         # copy data store
-        new_runner.reg_sm = self.reg_sm.clone()
-        new_runner.mem_sm = self.mem_sm.clone()
+        new_runner.registers_state = self.registers_state.clone()
+        new_runner.memory_state = self.memory_state.clone()
         return new_runner
     
 
@@ -977,6 +920,7 @@ class QilingRunner(Runner):
         if self.ql.arch.type == QL_ARCH.X8664:
             self.cs = Cs(CS_ARCH_X86, CS_MODE_64)
             self.ks = Ks(KS_ARCH_X86, KS_MODE_64)
+            
         elif self.ql.arch.type == QL_ARCH.X86:
             self.cs = Cs(CS_ARCH_X86, CS_MODE_32)
             self.ks = Ks(KS_ARCH_X86, KS_MODE_32)
@@ -987,35 +931,32 @@ class QilingRunner(Runner):
     
     
     def initialize_configuration(self):
+        """
+        Initialize the global shared among all the modules via superglobal library
+        """
         
-        BINARY_ARCH = self.ql.arch.type
-        
-        self.CONFIG["BINARY_ARCH"] = BINARY_ARCH
-        
-        if BINARY_ARCH in (QL_ARCH.X86, QL_ARCH.X8664):
-            self.CONFIG["SUPPORTED_INSTRUCTIONS"] = InstructionSet(SUPPORTED_INSTRUCTIONS_X86_64)
+        if self.ql.arch.type in (QL_ARCH.X86, QL_ARCH.X8664):
             self.CONFIG["BAD_OPERANDS"] = BAD_OPERANDS_X86_64
             
-        if BINARY_ARCH == QL_ARCH.X8664:
+        if self.ql.arch.type== QL_ARCH.X8664:
             self.CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFFFFFFFFFF
             self.CONFIG["BINARY_ARCH_SIZE"] = 64
             
-        elif BINARY_ARCH == QL_ARCH.X86:
+        elif self.ql.arch.type == QL_ARCH.X86:
             self.CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFF
             self.CONFIG["BINARY_ARCH_SIZE"] = 32
             
         # make first update
         setglobal("CONFIG", self.CONFIG)
         
-        self.CONFIG["SYM_REGISTER_FACTORY"] = instanciate_register()
+        # Must be called after CONFIG BINARY_MAX_MASK and BINARY_ARCH_SIZE are set
+        self.CONFIG["SYM_REGISTER_FACTORY"] = create_sym_register_factory()
         
         # make second update
         setglobal("CONFIG", self.CONFIG)
-            
         
-
-    def run_emulation(self):
         
+    def prepare_run(self):
         # Synchronize config with the global config
         self.initialize_configuration()
         self.instruction_engine.set_config(self.CONFIG)
@@ -1026,44 +967,32 @@ class QilingRunner(Runner):
         self.ql.hook_mem_read(self.memory_read_hook)
         self.ql.hook_mem_write(self.memory_write_hook)
         self.ql.hook_code(self.code_execution_hook)
-
+            
+        
+    def run_emulation(self):
+        self.prepare_run()
+        
         # Start measuring emulation time
         self.start_time = time.time()
-        
         try:
-
-            # Start Qiling engine emulation within the specified address range
-            if self.addr_emu_start:
-                self.ql.run(self.addr_emu_start)
-            else:
-                self.ql.run()
-                
+            # Start Qiling engine emulation
+            self.ql.run(self.addr_emu_start)
         except (UserStoppedExecution, unicorn.UcError) as e:
-            log(
-                DebugLevel.ERROR,
-                f"Emulation stopped: {e}",
-                self.debug_level,
-                ANSIColors.ERROR,
-            )
-            
+            log( DebugLevel.ERROR, f"Emulation stopped: {e}",
+                self.debug_level, ANSIColors.ERROR)
         finally:
             # Calculate emulation time and instructions per second
             end_time = time.time()
             emulation_time = end_time - self.start_time
             instructions_per_second = self.insn_executed_count.current / emulation_time
-
-            # Create a separator line for output formatting
-            separator_line = "=" * 80
-
             # Format the output message
             output = "\n".join([
-            f"{separator_line}",
+            "=" * 80,
             f"Emulation time: {emulation_time:.1f} seconds",
             f"{self.insn_executed_count.current} instructions executed",
             f"Instructions per second: {instructions_per_second:.1f}",
-            f"{separator_line}"
+            "=" * 80
             ])
-
             # Log emulation results
             log(DebugLevel.ERROR, output, self.debug_level, ANSIColors.OKGREEN)
             

@@ -1,4 +1,4 @@
-class SnapshotManager(object):
+class SnapshotManagerTool(object):
     def __init__(self):
         self.snapshot_file = None
             

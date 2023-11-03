@@ -3,7 +3,7 @@ import idc
 import idautils
 import re
 
-class VarExplorer:
+class VarExplorerTool:
     class RegVar:
         def __init__(self):
             self.reg = None
@@ -12,7 +12,7 @@ class VarExplorer:
             self.end = None
     
         def clone(self):
-            regvar = VarExplorer.RegVar()
+            regvar = VarExplorerTool.RegVar()
             regvar.reg = self.reg
             regvar.name = self.name
             regvar.start = self.start
@@ -26,7 +26,7 @@ class VarExplorer:
         self.log = log
         
     def update(self):
-        self = VarExplorer()
+        self = VarExplorerTool()
         self.clear()
         self.propagate_operands()
         
@@ -153,7 +153,7 @@ class VarExplorer:
         idaapi.add_regvar(func, start, end, reg, name, f'{reg} = {name}')
         
     def instantiate(self, addr, inst, reg):
-        regvar = VarExplorer.RegVar()
+        regvar = VarExplorerTool.RegVar()
         regvar.reg = reg
         regvar.name = f"{reg}_{self.find_stack_vars(inst)}"
         regvar.start = addr

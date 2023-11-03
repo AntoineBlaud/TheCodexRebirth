@@ -95,7 +95,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         self.controller = controller
         self.model = model
 
-        font = QtGui.QFont("Courier", pointSize=normalize_font(9))
+        font = QtGui.QFont("Courier", pointSize=normalize_font(10))
         font.setStyleHint(QtGui.QFont.TypeWriter)
         self.setFont(font)
 
@@ -104,7 +104,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         self._char_height = fm.height()
 
         # default to fit roughly 50 
-        self._default_width = self._char_width * (self.pctx.arch.POINTER_SIZE * 2 + 16)
+        self._default_width = self._char_width * (self.pctx.arch.POINTER_SIZE * 2 + 8)
 
         # register drawing information
         self._reg_pos = (self._char_width, self._char_height)

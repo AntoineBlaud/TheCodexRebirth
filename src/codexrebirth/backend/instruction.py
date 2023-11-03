@@ -58,9 +58,12 @@ class Instruction:
         result_op = self.operand_str("op1", self.r_op1)
         result_op += self.operand_str("op2", self.r_op2)
         result_op += self.operand_str("op3", self.r_op3)
-        result_op += self.operand_str("v_op1", self.v_op1)
-        result_op += self.operand_str("real_res", self.op_result)
-        result_op += self.operand_str("eval_res", self.evaled_op_result)
+        if not self.evaled_op_result:
+            result_op += self.operand_str("v_res", self.v_op_result) if self.v_op_result else self.operand_str("v_res", self.v_op1)
+        else:
+            result_op += self.operand_str("v_res", self.v_op_result)
+            result_op += self.operand_str("real_res", self.op_result)
+            result_op += self.operand_str("eval_res", self.evaled_op_result)
         result_str = result_op.replace("\n", ", ")
         self.cache_repr = result_str[:-2]
         return self.cache_repr

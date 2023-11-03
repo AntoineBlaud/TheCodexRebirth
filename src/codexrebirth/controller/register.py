@@ -69,16 +69,21 @@ class RegisterController(object):
         self.dockable.hide()
         self.view = None
         self.dockable = None
+        
+    def close(self):
+        """
+        Close the window attached to this controller.
+        """
+        self.hide()
+        
 
     def attach_reader(self, reader):
         """
         Attach a trace reader to this controller.
         """
         self.reader = reader
-
         # attach trace reader signals to this controller / window
         reader.idx_changed(self._idx_changed)
-
         #
         # directly call our event handler quick with the current idx since
         # it's the first time we're seeing this. this ensures that our widget
@@ -247,8 +252,6 @@ class RegistersModel(object):
         self.focused_reg_value = None
 
     def set_registers(self, registers, delta=None):
-        print("set_registers called")
-
         # compute which registers changed as a result of navigation
         unchanged = dict(set(self.registers.items()) & set(registers.items()))
         self.delta_navigation = set([k for k in registers if k not in unchanged])

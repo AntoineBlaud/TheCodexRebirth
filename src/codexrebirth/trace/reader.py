@@ -10,7 +10,7 @@ class TraceReader(object):
     A high level, debugger-like interface for querying Tenet traces.
     """
 
-    def __init__(self, trace, reg_sm, mem_sm):
+    def __init__(self, trace, registers_state, memory_state):
         self.idx = 0
         self.dctx = DisassemblerContextAPI()
         self._addr_trace_cache = trace
@@ -30,8 +30,8 @@ class TraceReader(object):
         
         self._idx_changed_callbacks = []
         
-        self.reg_sm = reg_sm
-        self.mem_sm = mem_sm
+        self.registers_state = registers_state
+        self.memory_state = memory_state
         
 
     def construct_trace_cache(self):
@@ -123,7 +123,7 @@ class TraceReader(object):
         output_registers = {}
             
         for reg_name in reg_names:
-            output_registers[reg_name] = self.reg_sm.get_state(reg_name, idx)
+            output_registers[reg_name] = self.registers_state.get_state(reg_name, idx)
 
 
         # return the register set for this trace index
