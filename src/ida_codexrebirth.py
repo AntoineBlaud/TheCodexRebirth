@@ -16,6 +16,9 @@ from codexrebirth.context.launcher import Launcher
 from codexrebirth.context.var_explorer import VarExplorer
 from codexrebirth.context.similar_code import SimilarCode
 from codexrebirth.context.msnapshot import SnapshotManager
+from codexrebirth.controller.register import RegisterController
+from codexrebirth.integration.api import DisassemblerContextAPI
+from codexrebirth.trace.arch import ArchAMD64, ArchX86
 from codexrebirth.tools import *
 
 import time
@@ -44,6 +47,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.load_config()
         self.reset()
         self.load_ui()
+        self.dctx = DisassemblerContextAPI()
+        if self.dctx.is_64bit():
+            self.arch = ArchAMD64()
+        else:
+            self.arch = ArchX86()
         # OpenAI API key
         openai.api_key = self.config["openai_key"]
         # Var explorer, used to renamed registers in disassembly view
@@ -52,6 +60,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         self.snap_manager = SnapshotManager()
         # Similar code, used to find similar code in the disassembly view
         self.similar_code = SimilarCode()
+        # Register controller
+        self.registers = RegisterController(self)
         print("CodexRebirth: IDA Plugin Loaded")
         
     def reset(self):
@@ -158,17 +168,19 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
             print("Trace records are not available.")
             return
         
-        self.reader = TraceReader(self.ctx.sym_runner.trace_records)
+        self.reader = TraceReader(self.ctx.sym_runner.trace_records, self.ctx.sym_runner.reg_sm, self.ctx.sym_runner.mem_sm)
         print(f"Trace loaded with {self.reader.length} records.")
         # Hook into the trace for further processing.
         self.hook()
         # Attach the trace engine to various plugin UI controllers, granting them
         # access to the underlying trace reader.
         self.trace_dock.attach_reader(self.reader)
+        self.registers.attach_reader(self.reader)
         
         self.show_ui()
         self.update_block_hits()
         print(self.ctx.sym_runner.taint_st)
+        print(self.ctx.sym_runner.reg_sm)
         
         print("Symbolic Execution Finished.")
         
@@ -183,6 +195,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         mw = get_qmainwindow()
         mw.addToolBar(QtCore.Qt.RightToolBarArea, self.trace_dock)
         self.trace_dock.show()
+        self.registers.show(position=ida_kernwin.DP_RIGHT)
         print("UI successfully loaded.")
 
     def hook(self):
@@ -507,7 +520,7 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         
         def calculate_index(reader, i, j):
-            if j == 0:
+            if j == 1:
                 return reader.idx - i
             return reader.idx + i
 
@@ -526,13 +539,11 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         default_taint_color = to_ida_color(self.palette.trail_tainted)
         end_address_color = to_ida_color(self.palette.end_address)
         current_color = to_ida_color(self.palette.trail_current)
-        modifiers = QtGui.QGuiApplication.keyboardModifiers()
-        step_over = bool(modifiers & QtCore.Qt.ShiftModifier)
 
         trail = {}
             
-        forward_ips = self.reader.get_next_ips(0x100, step_over)
-        backward_ips = self.reader.get_prev_ips(0x6, step_over)
+        forward_ips = self.reader.get_next_ips(10)
+        backward_ips = self.reader.get_prev_ips(0x100)
         current_address = self.reader.rebased_ip
 
         trails = [
@@ -566,8 +577,6 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 
                 color, Trace = trail[address]
                 
-                if not Trace:
-                    continue
 
                 # treat special cases
                 if address == current_address:

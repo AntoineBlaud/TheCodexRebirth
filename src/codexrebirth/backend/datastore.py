@@ -47,6 +47,7 @@ class DataStoreManager:
         self.chains = {}
 
     def get_state(self, item_name, idx):
+        item_name = item_name.lower()
         if item_name in self.chains:
             return self.chains[item_name].get(idx)
         else:
@@ -54,9 +55,11 @@ class DataStoreManager:
        
 
     def add_item(self, item_name):
+        item_name = item_name.lower()
         self.chains[item_name] = _StateChain(item_name)
         
     def register_item(self, item_name, idx, value):
+        item_name = item_name.lower()
         if value is None:
             return
         if item_name not in  self.chains:

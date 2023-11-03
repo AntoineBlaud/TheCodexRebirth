@@ -78,6 +78,7 @@ SUPPORTED_INSTRUCTIONS_X86_64 = [".?mov.*", "lea", "add","sub","xor","and","or",
                                  "imul","shl","shr","sar","cdq","rol","ror","mul",
                                  "not","cmp","test", "push","pop", "sete", "cdq"]
 INSN_EXECUTED_COUNT = alt_count()
+next(INSN_EXECUTED_COUNT)
 VAR_COUNTER = alt_count()
 
 
@@ -904,6 +905,11 @@ class Runner():
         # update rax every time
         if "rax" in self.taint_st:
             globals()["rax"] = eval(str(self.taint_st["rax"]), globals())
+        if "eax" in self.taint_st:
+            globals()["eax"] = eval(str(self.taint_st["eax"]), globals())
+            
+            
+        
             
             
     def register_current_execution_state(self, insn):
@@ -911,7 +917,8 @@ class Runner():
             operand = insn.cinsn.operands[i]
 
             if operand.type == X86_OP_REG:
-                register_name = self.cs.reg_name(operand.reg)
+                # update the parent register
+                register_name = get_parent_register(self.cs.reg_name(operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
                 register_value = self.engine.read_reg(register_name.upper())
                 self.reg_sm.register_item(register_name, self.insn_executed_count.current, register_value)
 
@@ -920,6 +927,15 @@ class Runner():
                 name = create_name_from_addr(address)
                 memory_value = self.engine.read_memory_int(address)
                 self.mem_sm.register_item(name, self.insn_executed_count.current, memory_value)
+                
+    def initialize_execution_state(self):
+        for reg_id in self.engine.map_regs():
+            try:
+                reg_name = self.cs.reg_name(reg_id)
+                register_value = self.engine.read_reg(reg_name.upper())
+                self.reg_sm.register_item(reg_name, 0, register_value)
+            except (KeyError, AttributeError):
+                pass
           
 
     def clone(self):        
@@ -1003,6 +1019,7 @@ class QilingRunner(Runner):
         # Synchronize config with the global config
         self.initialize_configuration()
         self.instruction_engine.set_config(self.CONFIG)
+        self.initialize_execution_state()
         self.initialize_symbolic_evaluator()
         
         # Set up memory read, memory write, and code hooks

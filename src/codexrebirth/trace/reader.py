@@ -2,7 +2,7 @@
 from codexrebirth.integration.api import disassembler, DisassemblerContextAPI
 from codexrebirth.trace.arch import ArchAMD64, ArchX86
 import idaapi
-import codexrebirth.tools.common as utils
+from codexrebirth.tools import *
 import idc 
 
 class TraceReader(object):
@@ -10,7 +10,7 @@ class TraceReader(object):
     A high level, debugger-like interface for querying Tenet traces.
     """
 
-    def __init__(self, trace):
+    def __init__(self, trace, reg_sm, mem_sm):
         self.idx = 0
         self.dctx = DisassemblerContextAPI()
         self._addr_trace_cache = trace
@@ -28,6 +28,11 @@ class TraceReader(object):
         self.construct_trace_cache()
         self._taint_id_color_map = {}
         
+        self._idx_changed_callbacks = []
+        
+        self.reg_sm = reg_sm
+        self.mem_sm = mem_sm
+        
 
     def construct_trace_cache(self):
         self._idx_trace_cache = {
@@ -36,8 +41,7 @@ class TraceReader(object):
             for idx, trace in self._addr_trace_cache[insn_addr].items()
         }
 
-                
-        
+            
     #-------------------------------------------------------------------------
     # Trace Properties
     #-------------------------------------------------------------------------
@@ -55,6 +59,13 @@ class TraceReader(object):
         Return the length of the trace.
         """
         return len(self._idx_trace_cache)
+    
+    @property
+    def registers(self):
+        """
+        Return the current registers.
+        """
+        return self.get_registers()
 
     
     @property
@@ -86,6 +97,39 @@ class TraceReader(object):
             return False
         return self.get_trace(idx).Insn.op_result == self.get_trace(idx).Insn.evaled_op_result
     
+    def get_register(self, reg_name, idx=None):
+        """
+        Return a single register value.
+
+        If a timestamp (idx) is provided, that will be used instead of the current timestamp.
+        """
+        return self.get_registers([reg_name], idx)[reg_name]
+    
+    def get_registers(self, reg_names=None, idx=None):
+        """
+        Return a dict of the requested registers and their values.
+
+        If a list of registers (reg_names) is not provided, all registers will be returned.
+
+        If a timestamp (idx) is provided, that will be used instead of the current timestamp.
+        """
+        if idx is None:
+            idx = self.idx
+
+        # no registers were specified, so we'll return *all* registers
+        if reg_names is None:
+            reg_names = get_regs_name()
+            
+        output_registers = {}
+            
+        for reg_name in reg_names:
+            output_registers[reg_name] = self.reg_sm.get_state(reg_name, idx)
+
+
+        # return the register set for this trace index
+        return output_registers
+
+    
         
 
     def seek(self, idx):
@@ -101,9 +145,12 @@ class TraceReader(object):
             idx = 0
         # save the new position
         self.idx = idx
-        print("Current symbolic id: {}".format(self.current_taint_id))
+        self.get_registers()
         addr = self.get_ip(idx)
         idaapi.jumpto(addr)
+        self._notify_idx_changed()
+        
+        print("Current symbolic id: {}".format(self.current_taint_id))
         
     
     def get_current_function_bounds(self):
@@ -242,7 +289,6 @@ class TraceReader(object):
             self.seek(self.idx + 1)
             return
 
-
         next_idx = self.find_next_execution(next_address, self.idx)
 
         #
@@ -358,3 +404,15 @@ class TraceReader(object):
         return self.idx
             
             
+    def idx_changed(self, callback):
+        """
+        Subscribe a callback for a trace navigation event.
+        """
+        register_callback(self._idx_changed_callbacks, callback)
+
+    def _notify_idx_changed(self):
+        """
+        Notify listeners of an idx changed event.
+        """
+        notify_callback(self._idx_changed_callbacks, self.idx)
+
