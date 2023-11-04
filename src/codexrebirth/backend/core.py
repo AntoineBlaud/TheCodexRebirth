@@ -15,19 +15,18 @@ from qiling.const import QL_ARCH
 from keystone import *
 from superglobals import *
 
-from codexrebirth.tools import *
+from ..tools import *
 
 
-from codexrebirth.backend.operation import (
+from .operation import (
     Operation,
-    OperationSet
 )
-from codexrebirth.backend.trace import (
+from .trace import (
     Trace,
     TraceEntry
 )
 
-from codexrebirth.backend.value import (
+from .value import (
     SymValue,
     RealValue,
     IndirectSymValue,
@@ -35,24 +34,15 @@ from codexrebirth.backend.value import (
     SymMemory
 )
 
-from codexrebirth.backend.engines import (
-    QilingEngine
-)
-from codexrebirth.backend.datastore import DataStoreManager
+from .datastore import DataStoreManager
+
 from z3 import (
     set_option,
     BitVec
 )
-import sys
 import time
 import re
-import contextlib
-import itertools
-import textwrap
-import uuid
-import traceback
 import line_profiler
-import atexit
 profile = line_profiler.LineProfiler()
 
 __all__ = ["DebugLevel", "QilingRunner"]

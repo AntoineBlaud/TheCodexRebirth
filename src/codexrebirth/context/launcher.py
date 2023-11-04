@@ -6,19 +6,20 @@ import importlib
 import time
 import idaapi
 import ida_dbg
-import idautils
 import idc
 import ida_kernwin
+import idautils
 import ida_bytes
-from codexrebirth.backend import QilingEngine, QilingRunner
-from codexrebirth.trace.arch import ArchX86, ArchAMD64
-import codexrebirth.tools.common as utils
 import json
 from superglobals import setglobal
 from qiling import *
 from threading import Thread
 import shutil
 import time
+
+from ..backend import QilingEngine, QilingRunner
+from ..trace.arch import ArchX86, ArchAMD64
+from ..tools.common import *
 
 class SymbolicEngineLauncher:
     def __init__(self):
@@ -33,7 +34,7 @@ class SymbolicEngineLauncher:
 
     def initialize(self, config):
         self.is_initialized = False
-        utils.print_banner("Initializing CodexRebirth context (can take up to 180 seconds, please be patient)...")
+        print_banner("Initializing CodexRebirth context (can take up to 180 seconds, please be patient)...")
         # Initialize the backend for emulation.
         self.initialize_symbolic_engine(config)
         self.is_initialized = True
@@ -49,7 +50,7 @@ class SymbolicEngineLauncher:
     def run_emulation(self, callback):
         # Check if the debugger is active; otherwise, there's no need to map segments.
         if not ida_dbg.is_debugger_on():
-            utils.show_msgbox("Please start the debugger before running the emulation")
+            show_msgbox("Please start the debugger before running the emulation")
             return
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_engine()
@@ -119,7 +120,7 @@ class SymbolicEngineLauncher:
             rootfs_path = os.path.join(rootfs_path, "x8664_linux" if self.arch.POINTER_SIZE == 8 else "x86_linux")
             
         else:
-            utils.show_msgbox("Unsupported file type")
+            show_msgbox("Unsupported file type")
             return
 
         # Redirect standard output and standard error to the log file.
@@ -204,12 +205,12 @@ class SymbolicEngineLauncher:
         Set up the emulation environment based
         """
         # Get the current execution address as the emulation start.
-        emu_start = utils.get_ea()
+        emu_start = get_ea()
         self.sym_runner.set_emu_start(emu_start)
  
         # Set register values based on the current state.
-        for regname in utils.get_regs_name():
-            val = utils.get_reg_value(regname)
+        for regname in get_regs_name():
+            val = get_reg_value(regname)
             self.sym_runner.set_register(regname, val)
             print(regname, hex(val))
 

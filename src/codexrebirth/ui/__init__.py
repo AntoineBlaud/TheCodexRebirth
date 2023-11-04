@@ -1,9 +1,9 @@
-from codexrebirth.tools.qt import QT_AVAILABLE
+from ..tools.qt import QT_AVAILABLE
 
 # import Qt based plugin UI if available
 if QT_AVAILABLE:
-    from codexrebirth.ui.palette import PluginPalette
+    from .palette import PluginPalette
     
-from codexrebirth.ui.reg_view import RegisterView
-from codexrebirth.ui.trace_view import TraceView
-from codexrebirth.ui.hex_view import HexView
+from .reg_view import RegisterView
+from .trace_view import TraceView
+from .hex_view import HexView

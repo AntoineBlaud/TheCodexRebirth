@@ -1,12 +1,10 @@
 import logging
-
-from codexrebirth.tools.qt import *
-from codexrebirth.tools.common import register_callback, notify_callback, get_segment_name_bounds, to_ida_color, get_color
-from codexrebirth.integration.api import disassembler
 import idc 
-from codexrebirth.ui.palette import PluginPalette
-from codexrebirth.tools.common import get_rbga_color
 from math import log
+
+from ..tools.qt import *
+from ..tools.common import register_callback, notify_callback, get_segment_name_bounds, to_ida_color
+from ..tools.common import get_rbga_color
 logger = logging.getLogger("Tenet.UI.TraceView")
 
 #

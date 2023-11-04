@@ -1,3 +1,3 @@
-from codexrebirth.controller.register import RegisterController
-from codexrebirth.controller.memory import MemoryController
-from codexrebirth.controller.hex import HexController
+from .register import RegisterController
+from .memory import MemoryController
+from .hex import HexController

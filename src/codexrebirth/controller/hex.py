@@ -1,7 +1,7 @@
-from codexrebirth.ui import *
-from codexrebirth.tools.qt.util import copy_to_clipboard
-from codexrebirth.integration.api import DockableWindow
-from codexrebirth.tools.types import *
+from ..ui import *
+from ..tools.qt.util import copy_to_clipboard
+from ..integration.api import DockableWindow
+from ..tools.types import *
 
 #------------------------------------------------------------------------------
 # hex.py -- Hex Dump Controller
@@ -87,7 +87,6 @@ class HexController(object):
         """
         Attach a trace reader to this controller.
         """
-        print("attach_reader")
         self.reader = reader
         self.model.pointer_size = reader.arch.POINTER_SIZE
 
@@ -121,6 +120,8 @@ class HexController(object):
         if not proximity:          
             # we want to place the address in the middle of the view
             self.model.address = address - 0x20
+        
+        self.model.nav_address = address
         
         # generate delta
         previous_data = self.model.data
@@ -195,7 +196,7 @@ class HexController(object):
         if not self.reader:
             self.model.data = []
             return
-        print(self.model.delta)
+        
         self.model.data  = self.reader.get_memory(self.model.address, self.model.data_size)
 
         if self.view:
@@ -263,6 +264,7 @@ class HexModel(object):
 
 
         self.address = 0
+        self.nav_address = 0
         self.fade_address = 0
 
 

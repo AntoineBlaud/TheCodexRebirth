@@ -1,4 +1,4 @@
-from codexrebirth.controller.hex import HexController
+from ..controller.hex import HexController
 
 #------------------------------------------------------------------------------
 # memory.py -- Memory Dump Controller

@@ -1,6 +1,6 @@
-from codexrebirth.ui import *
-from codexrebirth.tools import register_callback, notify_callback
-from codexrebirth.integration.api import DockableWindow, disassembler
+from ..ui import *
+from ..tools import register_callback, notify_callback
+from ..integration.api import DockableWindow
 
 #------------------------------------------------------------------------------
 # registers.py -- Register Controller

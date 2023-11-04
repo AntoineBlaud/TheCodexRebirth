@@ -1,7 +1,7 @@
 import struct
 
-from codexrebirth.tools.qt import *
-from codexrebirth.tools.types import *
+from ..tools.qt import *
+from ..tools.types import *
 
 INVALID_ADDRESS = -1
 
@@ -519,7 +519,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
         if address < self.model.fade_address:
             address_color = self._palette.hex_text_faded_fg
             
-        if address == self.model.address:
+        if address == self.model.nav_address:
             address_color = self._palette.navigation_selection_fg
 
         painter.setPen(address_color)

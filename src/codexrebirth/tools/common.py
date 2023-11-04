@@ -255,6 +255,8 @@ def delete_all_comments():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
             cmt = idc.get_cmt(head, 0)
+            if cmt is None:
+                continue
             cmt = cmt.split("@@ ")[0]
             idc.set_cmt(head, cmt, 0)
             

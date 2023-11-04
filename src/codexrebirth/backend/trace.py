@@ -1,5 +1,5 @@
 
-from codexrebirth.backend.operation import Operation
+from .operation import Operation
 
 class TraceEntry:
     def __init__(self, operation: Operation) -> None:

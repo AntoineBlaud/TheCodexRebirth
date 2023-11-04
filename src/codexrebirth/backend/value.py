@@ -2,11 +2,11 @@
 from superglobals import *
 import uuid
 import re 
-from codexrebirth.tools import *
 from z3 import BitVec, BitVecVal, Extract, RotateLeft, RotateRight, Not, BitVecRef, BitVecNumRef
-import codexrebirth.tools.bitwise_math as bitwise_math
+from ..tools import ustring
+from ..tools import bitwise_math 
+from ..tools.color import Color
 import line_profiler
-import inspect
 
 BINARY_MAX_MASK = None
 BINARY_ARCH_SIZE = None
@@ -51,7 +51,7 @@ class _SymValue:
 
     def __repr__(self):
         value_str = str(self.value)
-        value_str = reformat_expression(value_str)
+        value_str = ustring.reformat_expression(value_str)
         return value_str
 
     def __raw_repr__(self):
@@ -80,7 +80,7 @@ class _RealValue:
 
     def __repr__(self):
         value_str = str(self.value)
-        value_str = reformat_expression(value_str)
+        value_str = ustring.reformat_expression(value_str)
         return value_str
 
     def __raw_repr__(self):
@@ -149,7 +149,7 @@ class RealValue:
 
     def __sub__(self, other):
         other = other.clone()
-        other.value = binary_subtraction(
+        other.value = bitwise_math.binary_subtraction(
             self.value, other.value 
         )
         return other
@@ -194,7 +194,7 @@ class RealValue:
 
     def ror(self, other):
         other = other.clone()
-        if instance(other.value, int):
+        if isinstance(other.value, int):
             other.value = bitwise_math.RotateRight(
                 other.value , self.value
             )
@@ -206,7 +206,7 @@ class RealValue:
 
     def rol(self, other):
         other = other.clone()
-        if instance(other.value, int):
+        if isinstance(other.value, int):
             other.value = bitwise_math.RotateLeft(
                 other.value , self.value
             )
@@ -290,7 +290,7 @@ class SymValue:
         return self
 
     def __sub__(self, other):
-        self.value = binary_subtraction(
+        self.value = bitwise_math.binary_subtraction(
             self.value, other.value 
         )
         self.value &= self.binary_mask
@@ -371,13 +371,12 @@ class IndirectSymValue(SymValue):
         
     def __repr__(self):
         value_str = str(self.value)
-        value_str = reformat_expression(value_str)
+        value_str = ustring.reformat_expression(value_str)
         return f"MEMORY[{value_str}]"
     
     
 class SymMemory(SymValue):
     def __init__(self, address, value):
-        name = create_name_from_address(address)
         super().__init__(hex(value))
         
 

@@ -1,9 +1,9 @@
 {
-    "rootfs_path": "C:/Users/*****/source/rootfs/",
+    "rootfs_path": "<YOUR_PATH>/rootfs/",
     "log_plain": true,
     "debug_level": 1,
-    "openai_key": "sk-1234567890abcdefg",
-    "timeout" : 120,
+    "openai_key": "Currently unnecessary,
+    "timeout" : 1000,
     "similarity_factor": 0.65,
     "symbolic_check": false
 }

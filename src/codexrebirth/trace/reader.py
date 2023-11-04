@@ -1,9 +1,11 @@
 
-from codexrebirth.integration.api import disassembler, DisassemblerContextAPI
-from codexrebirth.trace.arch import ArchAMD64, ArchX86
 import idaapi
-from codexrebirth.tools import *
 import idc 
+
+from ..integration.api import DisassemblerContextAPI
+from .arch import ArchAMD64, ArchX86
+from ..tools import *
+
 
 class TraceReader(object):
     """

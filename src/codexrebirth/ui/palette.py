@@ -5,10 +5,10 @@ import logging
 
 from json.decoder import JSONDecodeError
 
-from codexrebirth.tools.qt import *
-from codexrebirth.tools.common import *
+from ..tools.qt import *
+from ..tools.common import *
 
-from codexrebirth.integration.api import disassembler
+from ..integration.api import disassembler
 
 logger = logging.getLogger("Plugin.UI.Palette")
 

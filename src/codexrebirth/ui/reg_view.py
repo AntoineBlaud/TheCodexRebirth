@@ -1,7 +1,7 @@
 import collections
 
-from codexrebirth.tools.qt import *
-from codexrebirth.integration.api import disassembler
+from ..tools.qt import *
+from ..integration.api import disassembler
 
 class RegisterView(QtWidgets.QWidget):
     """
