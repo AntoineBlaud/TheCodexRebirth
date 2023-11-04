@@ -3,3 +3,9 @@ src/codexrebirth.egg-info
 src/dist
 diff.txt
 install.bat
+config.json
+TheCodexRebirth.code-workspace
+notes.txt
+codexrebirth_config.json
+test*
+test.py
