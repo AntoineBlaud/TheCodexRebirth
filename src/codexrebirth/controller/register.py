@@ -2,9 +2,9 @@ from ..ui import *
 from ..tools import register_callback, notify_callback
 from ..integration.api import DockableWindow
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # registers.py -- Register Controller
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 #
 #    The purpose of this file is to house the 'headless' components of the
 #    registers window and its underlying functionality. This is split into a
@@ -14,6 +14,7 @@ from ..integration.api import DockableWindow
 #    'IDX Shell' as it is kind of attached to the register view and not big
 #    enough to demand its own seperate structuring ... yet
 #
+
 
 class RegisterController(object):
     """
@@ -47,13 +48,13 @@ class RegisterController(object):
         #
         if self.dockable:
             new_dockable.copy_dock_position(self.dockable)
-        elif (target or position):
+        elif target or position:
             new_dockable.set_dock_position(target, position)
 
         # make the dockable/widget visible
         self.dockable = new_dockable
         self.dockable.show()
-        
+
         print("Register controller show")
 
     def hide(self):
@@ -62,20 +63,19 @@ class RegisterController(object):
         """
 
         # if there is no view/dockable, then there's nothing to try and hide
-        if not(self.view and self.dockable):
+        if not (self.view and self.dockable):
             return
 
         # hide the dockable, and drop references to the widgets
         self.dockable.hide()
         self.view = None
         self.dockable = None
-        
+
     def close(self):
         """
         Close the window attached to this controller.
         """
         self.hide()
-        
 
     def attach_reader(self, reader):
         """
@@ -91,14 +91,12 @@ class RegisterController(object):
         #
         self._idx_changed(reader.idx)
 
-
     def detach_reader(self):
         """
         Detach the active trace reader from this controller.
         """
         self.reader = None
         self.model.reset()
-
 
     # TODO: maybe we can remove all these 'focus' funcs now?
     def focus_register_value(self, reg_name):
@@ -140,7 +138,6 @@ class RegisterController(object):
         """
         self.model.set_registers(registers, delta)
 
-
     def _handle_command(self, expression):
         """
         Handle the evaluation of commands on the timestamp shell.
@@ -158,7 +155,7 @@ class RegisterController(object):
             eg: !0, or !100 to skip to the start/end of trace
         """
         try:
-            target_percent = float(expression) # float, so you could even do 42.1%
+            target_percent = float(expression)  # float, so you could even do 42.1%
         except:
             return False
 
@@ -170,7 +167,7 @@ class RegisterController(object):
         """
         Handle a seek to the last mapped address.
         """
-        if expression != 'last':
+        if expression != "last":
             return False
 
         last_idx = self.reader.trace.length - 1
@@ -187,7 +184,6 @@ class RegisterController(object):
         self.set_registers(self.reader.registers, self.reader.get_registers())
 
 
-
 class RegistersModel(object):
     """
     The Registers Model (Data)
@@ -197,15 +193,15 @@ class RegistersModel(object):
         self._pctx = pctx
         self.reset()
 
-        #----------------------------------------------------------------------
+        # ----------------------------------------------------------------------
         # Callbacks
-        #----------------------------------------------------------------------
+        # ----------------------------------------------------------------------
 
         self._registers_changed_callbacks = []
 
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Properties
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
 
     @property
     def arch(self):
@@ -214,13 +210,11 @@ class RegistersModel(object):
         """
         return self._pctx.arch
 
-
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Public
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
 
     def reset(self):
-
         # the current timestamp in the trace
         self.idx = -1
 
@@ -263,9 +257,9 @@ class RegistersModel(object):
         # notify the UI / listeners of the model that an update occurred
         self._notify_registers_changed()
 
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Callbacks
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
 
     def registers_changed(self, callback):
         """

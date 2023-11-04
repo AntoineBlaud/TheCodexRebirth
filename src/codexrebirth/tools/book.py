@@ -4,7 +4,7 @@ class Book(dict):
 
     def __repr__(self) -> str:
         return super().__repr__()
-    
+
     def clone(self):
         clone = Book()
         for key in self:

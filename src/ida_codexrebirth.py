@@ -1,7 +1,8 @@
-from  codexrebirth import CodexRebirth
-import os 
+from codexrebirth import CodexRebirth
+import os
 
 CONFIG_FILE_NAME = "codexrebirth_config.json"
+
 
 def PLUGIN_ENTRY():
     """

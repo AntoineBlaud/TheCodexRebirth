@@ -1,5 +1,5 @@
-
 import re
+
 
 def simplify_mask(expression):
     # Regular expression to match a mask expression within parentheses
@@ -12,15 +12,19 @@ def simplify_mask(expression):
         mask_expression = match[0]
         if mask_expression[1] == "&":
             mask_expression = mask_expression[2:]
-        expression = expression.replace(mask_expression, f" EVAL{eval(mask_expression)}", 1)
-        
+        expression = expression.replace(
+            mask_expression, f" EVAL{eval(mask_expression)}", 1
+        )
+
     mask_pattern = r"((EVAL[0-9]+)+)"
     while re.search(mask_pattern, expression):
         match = re.search(mask_pattern, expression)
         # Get the mask expression
         mask_expression = match[0]
-        expression =  expression.replace(mask_expression, hex(int(mask_expression[4:])), 1)
-        
+        expression = expression.replace(
+            mask_expression, hex(int(mask_expression[4:])), 1
+        )
+
     return expression
 
 
@@ -45,6 +49,7 @@ def reformat_expression(expression):
         expression = expression.replace(operator, f" {operator} ")
     expression = simplify_mask(expression)
     return expression
+
 
 def create_name_from_address(name):
     # Process the name, converting integers to 'mem_0xXXXX' format

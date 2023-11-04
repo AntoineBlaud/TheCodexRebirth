@@ -1,61 +1,60 @@
 from qiling.const import QL_ARCH
 from typing import Mapping
 from superglobals import *
-import abc 
+import abc
+
 
 class EngineWrapper(abc.ABC):
-    
     def get_ea(self):
         raise NotImplementedError()
-    
+
     def get_currrent_instruction_disass(self):
         raise NotImplementedError()
-    
+
     def get_instruction_from_address(self, addr):
         raise NotImplementedError()
-    
+
     def get_stack_pointer(self):
         raise NotImplementedError()
-    
+
     def read_memory_int(self, address):
         raise NotImplementedError()
-    
+
     def is_mapped(self, address):
         raise NotImplementedError()
-    
+
     def read_while_ptr(self, addr):
         raise NotImplementedError()
-    
+
     def map_regs(self):
         raise NotImplementedError()
-    
+
     def read_reg(self, regname):
         raise NotImplementedError()
-    
+
     def write_reg(self, regname, value):
         raise NotImplementedError()
-    
+
     def check_instruction_scope(self, text_base, text_end):
         raise NotImplementedError()
-    
+
     def clear(self):
         raise NotImplementedError()
-    
+
     def map(self, start, size):
         raise NotImplementedError()
-    
+
     def write(self, start, data):
         raise NotImplementedError()
-    
+
     def unmap_all(self):
         raise NotImplementedError()
-    
+
     def clone(self):
         raise NotImplementedError()
 
 
 class QilingEngine(EngineWrapper):
-    
     def __init__(self, ql):
         self.ql = ql
         # Configure the disassembler for detailed information
@@ -106,17 +105,17 @@ class QilingEngine(EngineWrapper):
     def read_while_ptr(self, addr):
         real_value = addr
         if self.is_mapped(addr):
-            real_value = self.read_memory_int( addr)
+            real_value = self.read_memory_int(addr)
             while self.is_mapped(real_value):
                 real_value = self.read_memory_int(real_value)
         return real_value
-    
+
     def read_reg(self, regname):
         return self.ql.arch.regs.read(regname)
-    
+
     def write_reg(self, regname, value):
         self.ql.arch.regs.write(regname, value)
-        
+
     def check_instruction_scope(self, text_base, text_end):
         if self.ql.arch.type == QL_ARCH.X8664:
             pc = self.ql.arch.regs.rip
@@ -126,21 +125,20 @@ class QilingEngine(EngineWrapper):
         if pc < text_base or pc >= text_end:
             return False
         return True
-    
+
     def clear(self):
         self.ql.clear_hooks()
         self.ql.clear_ql_hooks()
-        
+
     def map(self, start, size):
         self.ql.mem.map(start, size)
-        
+
     def write(self, start, data):
         self.ql.mem.write(start, data)
-        
+
     def unmap_all(self):
         self.ql.mem.unmap_all()
         self.ql.mem.map_info = []
-        
 
     def map_regs(self) -> Mapping[int, int]:
         """Map Capstone x86 regs definitions to Unicorn's."""

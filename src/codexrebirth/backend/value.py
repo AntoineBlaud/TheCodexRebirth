@@ -1,10 +1,18 @@
-
 from superglobals import *
 import uuid
-import re 
-from z3 import BitVec, BitVecVal, Extract, RotateLeft, RotateRight, Not, BitVecRef, BitVecNumRef
+import re
+from z3 import (
+    BitVec,
+    BitVecVal,
+    Extract,
+    RotateLeft,
+    RotateRight,
+    Not,
+    BitVecRef,
+    BitVecNumRef,
+)
 from ..tools import ustring
-from ..tools import bitwise_math 
+from ..tools import bitwise_math
 from ..tools.color import Color
 import line_profiler
 
@@ -16,26 +24,29 @@ INSN_EXECUTED_COUNT = None
 
 profile2 = line_profiler.LineProfiler()
 
+
 def initialize_global(func):
     def wrapper(*args, **kwargs):
         global BINARY_MAX_MASK, BINARY_ARCH_SIZE, SYM_REGISTER_FACTORY, INSN_EXECUTED_COUNT
-        
+
         # we have to create a wrapper to avoid calling getglobal multiple times, it slow down the execution
         def get_config(varname, func):
-            if getglobal('CONFIG') is None:
+            if getglobal("CONFIG") is None:
                 return func(*args, **kwargs)
-            return getglobal('CONFIG')[varname]
-        
+            return getglobal("CONFIG")[varname]
+
         if not BINARY_MAX_MASK:
-            BINARY_MAX_MASK = get_config('BINARY_MAX_MASK', func)
+            BINARY_MAX_MASK = get_config("BINARY_MAX_MASK", func)
         if not BINARY_ARCH_SIZE:
-            BINARY_ARCH_SIZE = get_config('BINARY_ARCH_SIZE', func)
+            BINARY_ARCH_SIZE = get_config("BINARY_ARCH_SIZE", func)
         if not SYM_REGISTER_FACTORY:
-            SYM_REGISTER_FACTORY = get_config('SYM_REGISTER_FACTORY', func)
+            SYM_REGISTER_FACTORY = get_config("SYM_REGISTER_FACTORY", func)
         if not INSN_EXECUTED_COUNT:
-            INSN_EXECUTED_COUNT = get_config('INSN_EXECUTED_COUNT', func)
+            INSN_EXECUTED_COUNT = get_config("INSN_EXECUTED_COUNT", func)
         return func(*args, **kwargs)
+
     return wrapper
+
 
 class _SymValue:
     def __init__(self, value):
@@ -44,7 +55,7 @@ class _SymValue:
     @property
     def value(self):
         return self._value
-    
+
     @value.setter
     def value(self, new_value):
         self._value = new_value
@@ -59,8 +70,6 @@ class _SymValue:
 
     def clone(self):
         return self.__class__(self.value)
-
-
 
 
 # This class is used to store real values
@@ -73,7 +82,7 @@ class _RealValue:
     @property
     def value(self):
         return self._value
-    
+
     @value.setter
     def value(self, new_value):
         self._value = new_value
@@ -90,8 +99,6 @@ class _RealValue:
         return self.__class__(self.value)
 
 
-    
-
 class RealValue:
     @initialize_global
     def __init__(self, value):
@@ -101,7 +108,7 @@ class RealValue:
     @property
     def value(self):
         return self.v_wrapper.value
-    
+
     @value.setter
     def value(self, target):
         assert isinstance(target, (int, _RealValue))
@@ -110,16 +117,16 @@ class RealValue:
     @property
     def size(self):
         return BINARY_ARCH_SIZE
-    
+
     @property
     def binary_mask(self):
-        return ((1 << self.size) - 1)
+        return (1 << self.size) - 1
 
     def clone(self):
-        clone =  RealValue(self.value)
+        clone = RealValue(self.value)
         clone.id = self.id
         return clone
-    
+
     def update(self, target):
         if isinstance(target, RealValue):
             self.v_wrapper = target.v_wrapper.clone()
@@ -137,7 +144,7 @@ class RealValue:
 
     def __repr__(self) -> str:
         return self.v_wrapper.__repr__()
-    
+
     def __raw_repr__(self) -> str:
         return self.v_wrapper.__repr__()
 
@@ -149,9 +156,7 @@ class RealValue:
 
     def __sub__(self, other):
         other = other.clone()
-        other.value = bitwise_math.binary_subtraction(
-            self.value, other.value 
-        )
+        other.value = bitwise_math.binary_subtraction(self.value, other.value)
         return other
 
     def __xor__(self, other):
@@ -195,36 +200,25 @@ class RealValue:
     def ror(self, other):
         other = other.clone()
         if isinstance(other.value, int):
-            other.value = bitwise_math.RotateRight(
-                other.value , self.value
-            )
-        else:    
-            other.value = RotateRight(
-                other.value , self.value
-            )
+            other.value = bitwise_math.RotateRight(other.value, self.value)
+        else:
+            other.value = RotateRight(other.value, self.value)
         return other
 
     def rol(self, other):
         other = other.clone()
         if isinstance(other.value, int):
-            other.value = bitwise_math.RotateLeft(
-                other.value , self.value
-            )
+            other.value = bitwise_math.RotateLeft(other.value, self.value)
         else:
-            other.value = RotateLeft(
-                other.value , self.value
-            )
+            other.value = RotateLeft(other.value, self.value)
         return other
 
     def _not(self):
         self.value = ~self.value & BINARY_MAX_MASK
         return self
-    
-    
-    
+
 
 class SymValue:
-
     def __init__(self, value, name=None, id=-1):
         super().__init__()
         self.color = Color()
@@ -246,18 +240,15 @@ class SymValue:
     def value(self):
         assert isinstance(self.v_wrapper, (_SymValue, _RealValue))
         return self.v_wrapper.value
-    
+
     @property
     def binary_mask(self):
-        return ((1 << self.size) - 1)
-    
+        return (1 << self.size) - 1
+
     @value.setter
     def value(self, target):
         self.v_wrapper.value = target
- 
 
-
-    
     def update(self, target):
         if isinstance(target, (SymValue, RealValue)):
             self.v_wrapper = target.v_wrapper.clone()
@@ -266,7 +257,7 @@ class SymValue:
             self.v_wrapper = _SymValue(target.clone())
         else:
             raise Exception("Target type unknown '{}'".format(type(target)))
-        
+
     def update_id(self, other):
         if isinstance(other, (SymValue)):
             if self.id == -1:
@@ -284,21 +275,19 @@ class SymValue:
         return f"{self.v_wrapper.__repr__()}"
 
     def __add__(self, other):
-        self.value += other.value 
+        self.value += other.value
         self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __sub__(self, other):
-        self.value = bitwise_math.binary_subtraction(
-            self.value, other.value 
-        )
+        self.value = bitwise_math.binary_subtraction(self.value, other.value)
         self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __xor__(self, other):
-        self.value ^= other.value 
+        self.value ^= other.value
         self.value &= self.binary_mask
         self.update_id(other)
         return self
@@ -310,7 +299,7 @@ class SymValue:
         return self
 
     def __mul__(self, other):
-        self.value *= other.value 
+        self.value *= other.value
         self.value &= self.binary_mask
         self.update_id(other)
         return self
@@ -321,19 +310,19 @@ class SymValue:
         return self
 
     def __div__(self, other):
-        self.value /= other.value 
+        self.value /= other.value
         self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __rshift__(self, other):
-        self.value >>= other.value 
+        self.value >>= other.value
         self.value &= self.binary_mask
         self.update_id(other)
         return self
 
     def __lshift__(self, other):
-        self.value <<= other.value 
+        self.value <<= other.value
         self.value &= self.binary_mask
         self.update_id(other)
         return self
@@ -342,9 +331,7 @@ class SymValue:
         if isinstance(self.value, int) and isinstance(other.value, int):
             self.value = bitwise_math.RotateRight(self.value, other.value)
         else:
-            self.value = RotateRight(
-                self.value, other.value 
-            )
+            self.value = RotateRight(self.value, other.value)
         self.value &= self.binary_mask
         self.update_id(other)
         return self
@@ -353,9 +340,7 @@ class SymValue:
         if isinstance(self.value, int) and isinstance(other.value, int):
             self.value = bitwise_math.RotateLeft(self.value, other.value)
         else:
-            self.value = RotateLeft(
-                self.value, other.value 
-            )
+            self.value = RotateLeft(self.value, other.value)
         self.value &= self.binary_mask
         self.update_id(other)
         return self
@@ -363,23 +348,21 @@ class SymValue:
     def _not(self):
         self.value = ~self.value & self.binary_mask
         return self
-    
-    
+
+
 class IndirectSymValue(SymValue):
     def __init__(self, value):
         super().__init__(value)
-        
+
     def __repr__(self):
         value_str = str(self.value)
         value_str = ustring.reformat_expression(value_str)
         return f"MEMORY[{value_str}]"
-    
-    
+
+
 class SymMemory(SymValue):
     def __init__(self, address, value):
         super().__init__(hex(value))
-        
-
 
 
 class SymRegister(SymValue):
@@ -388,12 +371,12 @@ class SymRegister(SymValue):
     # self.
 
     @initialize_global
-    def __init__(self, name, high, low, value = None, parent=None):
+    def __init__(self, name, high, low, value=None, parent=None):
         super().__init__(None, name=name)
         self.parent = parent
         self._low = low
         self._high = high
-        
+
         if parent:
             assert self.high <= parent.high
             self.v_wrapper = parent.v_wrapper.clone()
@@ -401,7 +384,7 @@ class SymRegister(SymValue):
             self.v_wrapper = _SymValue(BitVec(str(name), BINARY_ARCH_SIZE))
 
         assert high >= low
-        
+
     @property
     def high(self):
         return self._high
@@ -413,11 +396,10 @@ class SymRegister(SymValue):
     @property
     def size(self):
         return self.high - self.low + 1
-    
+
     @property
     def binary_mask(self):
         return ((1 << self.size) - 1) << self.low
-
 
     def _update(self, target):
         # Update current symbolic value, depending of the target value
@@ -428,10 +410,9 @@ class SymRegister(SymValue):
             self.update_id(target)
         else:
             raise Exception("Target type unknown '{}'".format(type(target)))
-        
+
         if self.size != BINARY_ARCH_SIZE:
             self.v_wrapper.value &= self.binary_mask
-
 
     @initialize_global
     def update(self, target):
@@ -439,7 +420,7 @@ class SymRegister(SymValue):
         # ex: 'ah': [rax, eax, ax, ah, al]
         if self.name in SYM_REGISTER_FACTORY:
             [reg._update(target) for reg in SYM_REGISTER_FACTORY[self.name]]
-            
+
         # special case for cloned registers
         else:
             self._update(target)
@@ -458,5 +439,3 @@ class SymRegister(SymValue):
         clone.id = self.id
         clone.v_wrapper = self.v_wrapper.clone()
         return clone
-
-    

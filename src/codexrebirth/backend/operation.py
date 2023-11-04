@@ -1,5 +1,4 @@
-
-import re 
+import re
 
 
 class OperationSet(list):
@@ -34,7 +33,7 @@ class Operation:
         self.cache_repr = None
         self.op_result = None
         self.eval_v_result = None
-        
+
     def _convert_operand(self, op):
         if isinstance(op, int):
             return hex(op)
@@ -44,22 +43,25 @@ class Operation:
             except ValueError:
                 return op
         return op
-    
-    def operand_str(self, name, value): 
+
+    def operand_str(self, name, value):
         if value:
             return f"{name}={self._convert_operand(str(value))}\n"
         return ""
-    
+
     def __ida__repr__(self):
-        
         if self.cache_repr:
             return self.cache_repr
-    
+
         result_op = self.operand_str("op1", self.r_op1)
         result_op += self.operand_str("op2", self.r_op2)
         result_op += self.operand_str("op3", self.r_op3)
         if not self.eval_v_result:
-            result_op += self.operand_str("v_res", self.v_result) if self.v_result else self.operand_str("v_res", self.v_op1)
+            result_op += (
+                self.operand_str("v_res", self.v_result)
+                if self.v_result
+                else self.operand_str("v_res", self.v_op1)
+            )
         else:
             result_op += self.operand_str("v_res", self.v_result)
             result_op += self.operand_str("real_res", self.op_result)
@@ -67,7 +69,6 @@ class Operation:
         result_str = result_op.replace("\n", ", ")
         self.cache_repr = result_str[:-2]
         return self.cache_repr
-
 
     def __repr__(self) -> str:
         result_str = f"{self.cinsn.mnemonic} {self.cinsn.op_str}\n"
@@ -81,7 +82,6 @@ class Operation:
         result_str += self.operand_str("v_op3", self.v_op3)
         return result_str[:-1]
 
-
     def clone(self):
         clone = Operation(self.cinsn)
         clone.op1 = self.op1
@@ -90,7 +90,7 @@ class Operation:
         clone.r_op1 = self.r_op1
         clone.r_op2 = self.r_op2
         clone.r_op3 = self.r_op3
-        clone.mem_access = self.mem_access 
+        clone.mem_access = self.mem_access
         clone.v_op1 = self.v_op1.clone() if self.v_op1 else None
         clone.v_op2 = self.v_op2.clone() if self.v_op2 else None
         clone.v_op3 = self.v_op3.clone() if self.v_op3 else None

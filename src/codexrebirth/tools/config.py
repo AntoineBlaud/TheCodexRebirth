@@ -1,6 +1,7 @@
 import jsonschema
-import json	
+import json
 import os
+
 
 def validate_config(config):
     schema = {
@@ -13,8 +14,6 @@ def validate_config(config):
             "timeout": {"type": "integer", "minimum": 1, "maximum": 10000},
             "similarity_factor": {"type": "number", "minimum": 0.3, "maximum": 1},
             "symbolic_check": {"type": "boolean"},
-            
-            
         },
         "required": [
             "rootfs_path",
@@ -23,17 +22,14 @@ def validate_config(config):
             "openai_key",
             "timeout",
             "similarity_factor",
-            "symbolic_check"
-        ]
+            "symbolic_check",
+        ],
     }
 
-   
     jsonschema.validate(config, schema)
-       
-       
-       
+
+
 def load_config(config_path):
-        config = json.load(open(config_path, "r"))
-        validate_config(config)
-        return config
-       
+    config = json.load(open(config_path, "r"))
+    validate_config(config)
+    return config

@@ -1,6 +1,7 @@
-import random 
+import random
 import sys
 from .common import rbg_ida_color
+
 
 class Color:
     ANSI_COLOR_FORMAT = "\033[38;5;{}m"
@@ -36,16 +37,13 @@ def generate_visually_distinct_colors(num_colors, min_color_diff=40):
     colors = []
     # set random seed
     random.seed(0)
-    
+
     def generate_color():
-        
-        
         # Generate random values for the red, green, and blue components
         red = random.randint(0, 150)
         green = random.randint(0, 150)
         blue = random.randint(0, 150)
-        
-        
+
         return red, green, blue
 
     def color_distance(color1, color2):
@@ -59,9 +57,9 @@ def generate_visually_distinct_colors(num_colors, min_color_diff=40):
             if color_distance(new_color, existing_color) < min_color_diff:
                 is_distinct = False
                 break
-        
+
         if is_distinct:
             colors.append(new_color)
-            
+
     colors = [rbg_ida_color(r, g, b) for r, g, b in colors]
     return colors

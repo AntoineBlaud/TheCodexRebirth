@@ -3,9 +3,9 @@ from ..tools.qt.util import copy_to_clipboard
 from ..integration.api import DockableWindow
 from ..tools.types import *
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # hex.py -- Hex Dump Controller
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 #
 #    The purpose of this file is to house the 'headless' components of a
 #    basic hex dump window and its underlying functionality. This is split
@@ -14,6 +14,7 @@ from ..tools.types import *
 #    This provides much of the core logic behind both the memory and stack
 #    views used by the plugin.
 #
+
 
 class HexController(object):
     """
@@ -43,7 +44,7 @@ class HexController(object):
             return
 
         # the UI has already been created, and is also visible. nothing to do
-        if (self.dockable and self.dockable.visible):
+        if self.dockable and self.dockable.visible:
             return
 
         #
@@ -62,7 +63,7 @@ class HexController(object):
 
         if self.dockable:
             new_dockable.copy_dock_position(self.dockable)
-        elif (target or position):
+        elif target or position:
             new_dockable.set_dock_position(target, position)
 
         # make the dockable/widget visible
@@ -75,7 +76,7 @@ class HexController(object):
         """
 
         # if there is no view/dockable, then there's nothing to try and hide
-        if not(self.view and self.dockable):
+        if not (self.view and self.dockable):
             return
 
         # hide the dockable, and drop references to the widgets
@@ -99,7 +100,7 @@ class HexController(object):
         # will accurately reflect the current state of the reader
         #
 
-        #self._idx_changed(reader.idx)
+        # self._idx_changed(reader.idx)
 
     def detach_reader(self):
         """
@@ -117,24 +118,23 @@ class HexController(object):
         offset = address - self.model.address
         proximity = offset > 0 and offset < self.model.data_size - 0x20
         # dont navigate if the address is within the current view
-        if not proximity:          
+        if not proximity:
             # we want to place the address in the middle of the view
             self.model.address = address - 0x20
-        
+
         self.model.nav_address = address
-        
+
         # generate delta
         previous_data = self.model.data
-        next_data  = self.reader.get_memory(self.model.address, self.model.data_size)
+        next_data = self.reader.get_memory(self.model.address, self.model.data_size)
         # compare to previous data to generate delta
         self.model.delta = self.memory_delta(previous_data, next_data)
-    
-        
+
         last_visible_address = address + self.model.data_size
         if last_visible_address > 0xFFFFFFFFFFFFFFFF:
             last_visible_address = 0xFFFFFFFFFFFFFFF
-            
-        #self.reset_selection(0)
+
+        # self.reset_selection(0)
         self.refresh_memory()
 
     def set_data_size(self, num_bytes):
@@ -150,7 +150,7 @@ class HexController(object):
         """
         assert end_address > start_address
         if not self.reader:
-            return ''
+            return ""
 
         # fetch memory for the selected region
         num_bytes = end_address - start_address
@@ -160,7 +160,7 @@ class HexController(object):
         output = []
         for i in range(num_bytes):
             output.append("%02X" % memory.data[i])
-        byte_string = ' '.join(output)
+        byte_string = " ".join(output)
         copy_to_clipboard(byte_string)
 
         return byte_string
@@ -171,15 +171,14 @@ class HexController(object):
         """
         self._ignore_signals = True
         self._ignore_signals = False
-        
-        
+
     def memory_delta(self, data_1, data_2):
         """
         Return the delta between two memory regions.
         """
         if not isinstance(data_1, bytearray) or not isinstance(data_2, bytearray):
             return {}
-        
+
         delta = {}
         size = min(len(data_1), len(data_2))
         for i in range(size):
@@ -196,8 +195,10 @@ class HexController(object):
         if not self.reader:
             self.model.data = []
             return
-        
-        self.model.data  = self.reader.get_memory(self.model.address, self.model.data_size)
+
+        self.model.data = self.reader.get_memory(
+            self.model.address, self.model.data_size
+        )
 
         if self.view:
             self.view.refresh()
@@ -210,16 +211,16 @@ class HexController(object):
         """
         self.model.fade_address = address
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Callbacks
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _idx_changed(self, idx):
         """
         The trace reader position has been changed.
         """
         # disabled because we used navigation instead of idx_changed
-        #self.refresh_memory()
+        # self.refresh_memory()
 
     def _breakpoints_changed(self):
         """
@@ -232,6 +233,7 @@ class HexController(object):
             return
 
         self.view.refresh()
+
 
 class HexModel(object):
     """
@@ -262,15 +264,13 @@ class HexModel(object):
         self.data_size = 0
         self.delta = {}
 
-
         self.address = 0
         self.nav_address = 0
         self.fade_address = 0
 
-
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Properties
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     @property
     def arch(self):
         """
@@ -298,7 +298,7 @@ class HexModel(object):
             raise ValueError("Bytes per line must be a multiple of display format type")
 
         self._num_bytes_per_line = width
-        #self._refresh_view_settings()
+        # self._refresh_view_settings()
 
     @property
     def hex_format(self):
@@ -309,7 +309,7 @@ class HexModel(object):
         if value == self._hex_format:
             return
         self._hex_format = value
-        #self.refresh()
+        # self.refresh()
 
     @property
     def aux_format(self):
@@ -320,4 +320,4 @@ class HexModel(object):
         if value == self._aux_format:
             return
         self._aux_format = value
-        #self.refresh()
+        # self.refresh()

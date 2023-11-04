@@ -13,18 +13,20 @@ import jsonschema
 import openai
 import functools
 import ida_graph
-import re 
+import re
 import pickle
 import tempfile
 import ida_bytes
 from capstone.x86_const import X86_OP_MEM, X86_OP_REG, X86_OP_IMM
 
 from collections import Counter
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # Plugin Util
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 PLUGIN_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 
 def is_plugin_dev():
     """
@@ -32,20 +34,18 @@ def is_plugin_dev():
     """
     return bool(os.getenv("TENET_DEV"))
 
+
 def plugin_resource(resource_name):
     """
     Return the full path for a given plugin resource file.
     """
-    return os.path.join(
-        PLUGIN_PATH,
-        "ui",
-        "resources",
-        resource_name
-    )
+    return os.path.join(PLUGIN_PATH, "ui", "resources", resource_name)
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # Thread Util
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def is_mainthread():
     """
@@ -53,41 +53,53 @@ def is_mainthread():
     """
     return isinstance(threading.current_thread(), threading._MainThread)
 
+
 def assert_mainthread(f):
     """
     A sanity decorator to ensure that a function is always called from the main thread.
     """
+
     def wrapper(*args, **kwargs):
         assert is_mainthread()
         return f(*args, **kwargs)
+
     return wrapper
+
 
 def assert_async(f):
     """
     A sanity decorator to ensure that a function is never called from the main thread.
     """
+
     def wrapper(*args, **kwargs):
         assert not is_mainthread()
         return f(*args, **kwargs)
+
     return wrapper
 
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # Python Utils
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def chunks(lst, n):
     """
     Yield successive n-sized chunks from lst.
     """
     for i in range(0, len(lst), n):
-        yield lst[i:i + n]
+        yield lst[i : i + n]
+
 
 def hexdump(data):
     """
     Return an ascii hexdump of the given data.
     """
-    return '\n'.join([' '.join([f"{x:02X}" for x in chunk]) for chunk in chunks(data, 16)])
-        
+    return "\n".join(
+        [" ".join([f"{x:02X}" for x in chunk]) for chunk in chunks(data, 16)]
+    )
+
+
 def makedirs(path, exists_ok=True):
     """
     Create directories along a fully qualified path.
@@ -99,16 +111,19 @@ def makedirs(path, exists_ok=True):
             raise e
         if not exists_ok:
             raise e
-            
+
+
 def swap_rgb(i):
     """
     Swap a 32bit RRGGBB (integer) to BBGGRR.
     """
     return struct.unpack("<I", struct.pack(">I", i))[0] >> 8
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # Python Callback / Signals
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def register_callback(callback_list, callback):
     """
@@ -127,6 +142,7 @@ def register_callback(callback_list, callback):
 
     # 'register' the callback
     callback_list.append(callback_ref)
+
 
 def notify_callback(callback_list, *args):
     """
@@ -176,7 +192,6 @@ def notify_callback(callback_list, *args):
 
         # if the callback is a static method...
         else:
-
             # if the static method is deleted, mark this callback for cleanup
             if callback is None:
                 cleanup.append(callback_ref)
@@ -188,15 +203,15 @@ def notify_callback(callback_list, *args):
     # remove the deleted callbacks
     for callback_ref in cleanup:
         callback_list.remove(callback_ref)
-        
-        
+
+
 def ask_file(title, filter):
     """
     Ask the user to select a file.
     """
     from PyQt5.QtWidgets import QFileDialog
-    return QFileDialog.getOpenFileName(None, title, "", filter)[0].replace("\\", "\\\\")
 
+    return QFileDialog.getOpenFileName(None, title, "", filter)[0].replace("\\", "\\\\")
 
 
 def msgbox(text, title="Codex Rebirth"):
@@ -204,23 +219,26 @@ def msgbox(text, title="Codex Rebirth"):
     Show a message box.
     """
     from PyQt5.QtWidgets import QMessageBox
+
     msg = QMessageBox()
     msg.setIcon(QMessageBox.Information)
     msg.setText(text)
     msg.setWindowTitle(title)
     msg.exec_()
-    
+
+
 def read_memory_int(address, size):
-    return int.from_bytes(ida_bytes.get_bytes(address, size), byteorder='little')
-    
-    
-def get_ea() :
+    return int.from_bytes(ida_bytes.get_bytes(address, size), byteorder="little")
+
+
+def get_ea():
     rv = idaapi.regval_t()
     if idaapi.get_inf_structure().is_64bit():
-        idaapi.get_reg_val('RIP', rv)
+        idaapi.get_reg_val("RIP", rv)
     else:
-        idaapi.get_reg_val('EIP', rv)
+        idaapi.get_reg_val("EIP", rv)
     return rv.ival
+
 
 def get_reg_value(reg_name) -> int:
     rv = idaapi.regval_t()
@@ -230,27 +248,48 @@ def get_reg_value(reg_name) -> int:
 
 def get_regs_name() -> list:
     if idaapi.get_inf_structure().is_64bit():
-        return ['RAX', 'RBX', 'RCX', 'RDX', 'RSP', 'RBP', 'RSI', 'RDI', 'R8', 'R9',
-        'R10', 'R11', 'R12', 'R13', 'R14', 'R15', 'RIP']
+        return [
+            "RAX",
+            "RBX",
+            "RCX",
+            "RDX",
+            "RSP",
+            "RBP",
+            "RSI",
+            "RDI",
+            "R8",
+            "R9",
+            "R10",
+            "R11",
+            "R12",
+            "R13",
+            "R14",
+            "R15",
+            "RIP",
+        ]
     else:
-        return [ 'EAX', 'EBX', 'ECX', 'EDX', 'ESP', 'EBP', 'ESI', 'EDI', 'EIP']
-        
+        return ["EAX", "EBX", "ECX", "EDX", "ESP", "EBP", "ESI", "EDI", "EIP"]
+
+
 def remove_line(string):
-    # remove the first line 
-    string = string[string.find('\n')+1:]
+    # remove the first line
+    string = string[string.find("\n") + 1 :]
     return string.replace("\n", " ; ")
+
 
 def show_msgbox(text, title="Codex Rebirth"):
     """
     Show a message box.
     """
     from PyQt5.QtWidgets import QMessageBox
+
     msg = QMessageBox()
     msg.setIcon(QMessageBox.Information)
     msg.setText(text)
     msg.setWindowTitle(title)
     msg.exec_()
-    
+
+
 def delete_all_comments():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
@@ -259,10 +298,12 @@ def delete_all_comments():
                 continue
             cmt = cmt.split("@@ ")[0]
             idc.set_cmt(head, cmt, 0)
-            
+
+
 def to_ida_color(color):
     r, g, b, _ = color.getRgb()
     return 0xFF << 24 | b << 16 | g << 8 | r
+
 
 def get_rbga_color(color):
     r = color & 0xFF
@@ -275,8 +316,6 @@ def rbg_ida_color(r, g, b):
     return 0xFF << 24 | b << 16 | g << 8 | r
 
 
-
-
 def address_to_segment_offset(address):
     # Get the segment name for the given address
     segment_name = idc.get_segm_name(address)
@@ -287,29 +326,28 @@ def address_to_segment_offset(address):
     # Calculate the offset within the segment
     offset = address - segment_start
 
-    return {
-        "segment": segment_name,
-        "offset": offset
-     }
-    
+    return {"segment": segment_name, "offset": offset}
+
+
 def segment_offset_to_address(segment, offset):
     """
     Convert a segment and offset to an address.
     """
     segment_start = ida_segment.get_segm_by_name(segment).start_ea
     return segment_start + offset
-    
-    
+
+
 def delete_all_bpts():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
             idc.del_bpt(head)
-            
+
+
 def delete_all_colors():
     for ea in idautils.Functions():
         for head in idautils.Heads(ea, idc.get_func_attr(ea, idc.FUNCATTR_END)):
             idc.set_color(head, idc.CIC_ITEM, 0x242424)
-            
+
         func = idaapi.get_func(ea)
         flow_chart = idaapi.FlowChart(func)
         for block in flow_chart:
@@ -317,30 +355,33 @@ def delete_all_colors():
             p.bg_color = 0x242424
             gid = get_current_gid()
             idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
-            
 
-        
 
 def open_console(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         flags = (
-                idaapi.PluginForm.WOPN_TAB
-                | idaapi.PluginForm.WOPN_MENU
-                | idaapi.PluginForm.WOPN_RESTORE
-                | idaapi.PluginForm.WOPN_PERSIST
+            idaapi.PluginForm.WOPN_TAB
+            | idaapi.PluginForm.WOPN_MENU
+            | idaapi.PluginForm.WOPN_RESTORE
+            | idaapi.PluginForm.WOPN_PERSIST
         )
         widget_output = ida_kernwin.find_widget("Output")
-        ida_kernwin.display_widget(widget_output,flags)
+        ida_kernwin.display_widget(widget_output, flags)
         func(*args, **kwargs)
+
     return wrapper
 
 
 def repr_hex_and_ascii(byte_pairs):
     hex_str_ida = " ".join(f"{ida:02X}" for ida, ctx in byte_pairs)
-    ascii_str_ida = "".join(chr(ida) if 32 <= ida <= 126 else '.' for ida, ctx in byte_pairs)
+    ascii_str_ida = "".join(
+        chr(ida) if 32 <= ida <= 126 else "." for ida, ctx in byte_pairs
+    )
     hex_str_ctx = " ".join(f"{ctx:02X}" for ida, ctx in byte_pairs)
-    ascii_str_ctx = "".join(chr(ctx) if 32 <= ctx <= 126 else '.' for ida, ctx in byte_pairs)
+    ascii_str_ctx = "".join(
+        chr(ctx) if 32 <= ctx <= 126 else "." for ida, ctx in byte_pairs
+    )
     return f"{hex_str_ida}  {ascii_str_ida}\n{hex_str_ctx}  {ascii_str_ctx}"
 
 
@@ -358,23 +399,25 @@ def query_model(query):
     :param cb: Tu function to which the response will be passed to.
     """
     try:
-        
-        response = openai.ChatCompletion.create( 
-        model = 'gpt-3.5-turbo',
-        messages = [ # Change the prompt parameter to the messages parameter
-            {'role': 'user', 'content': query}
-        ],
-        temperature = 0,
-        timeout=2,  
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[  # Change the prompt parameter to the messages parameter
+                {"role": "user", "content": query}
+            ],
+            temperature=0,
+            timeout=2,
         )
-        return response['choices'][0]['message']['content']
+        return response["choices"][0]["message"]["content"]
     except openai.InvalidRequestError as e:
-            print("Unfortunately, this function is too big to be analyzed with the model's current API limits.")
+        print(
+            "Unfortunately, this function is too big to be analyzed with the model's current API limits."
+        )
 
     except openai.OpenAIError as e:
         print(f"davinci-003 could not complete the request: {str(e)}")
     except Exception as e:
         print(f"General exception encountered while running the query: {str(e)}")
+
 
 # -----------------------------------------------------------------------------
 
@@ -384,24 +427,27 @@ def query_model_sync(query):
     return query_model(query)
 
 
-
 def print_banner(message, char="="):
     banner = char * 80
     print(banner)
     print(message)
     print(banner)
 
+
 def check_openai_api_key():
     if openai.api_key is None:
-        show_msgbox("Please set the OpenAI API key on the top of thecodexrebirth.py file")
+        show_msgbox(
+            "Please set the OpenAI API key on the top of thecodexrebirth.py file"
+        )
         return
-   
-    
+
+
 def get_op_values(ea):
     disassembly = idc.GetDisasm(ea)
     pattern = re.compile(r"0x[0-9a-fA-F]+")
     return set(pattern.findall(disassembly))
-    
+
+
 def get_vars(ea):
     disassembly = idc.GetDisasm(ea)
     pattern = re.compile(r"var_[0-9a-zA-Z_]+")
@@ -409,18 +455,21 @@ def get_vars(ea):
 
 
 def get_segment_name_bounds(name):
-    segments = [(idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg)) for seg in idautils.Segments()]
+    segments = [
+        (idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg))
+        for seg in idautils.Segments()
+    ]
     for start, end, seg_name in segments:
         if seg_name == name:
             return start, end
-    
-    
+
+
 def get_color(ea):
     return idc.get_color(ea, idc.CIC_ITEM)
 
 
 def check_memory_access(insn):
-        # lea instruction is not a memory access
+    # lea instruction is not a memory access
     if insn.mnemonic == "lea":
         return False
 
@@ -555,6 +604,3 @@ def get_parent_register(register_name, arch_size):
         }[register_name]
     else:
         raise ValueError("Unknown architecture type")
-
-
-        

@@ -1,5 +1,6 @@
-import time 
-import sys 
+import time
+import sys
+
 
 def log(dlevel, message, debug_level, color):
     """

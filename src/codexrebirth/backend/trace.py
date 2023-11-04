@@ -1,5 +1,5 @@
-
 from .operation import Operation
+
 
 class TraceEntry:
     def __init__(self, operation: Operation) -> None:
@@ -10,7 +10,7 @@ class TraceEntry:
 
     def __repr__(self) -> str:
         return f"{self.operation}"
-    
+
     def clone(self):
         clone = TraceEntry(self.operation.clone())
         return clone
@@ -24,16 +24,15 @@ class Trace(dict):
         self.access = []
 
     def register(self, operation_addr: int, operation: Operation) -> None:
-        
         if not isinstance(operation, Operation):
             return
-        
+
         if operation_addr not in self:
             self[operation_addr] = {}
         self[operation_addr][self.idx] = TraceEntry(operation.clone())
         self.idx += 1
         self.access.append(operation_addr)
-        
+
     def get_last_entry(self) -> TraceEntry:
         if self.idx == 0:
             return None
@@ -41,7 +40,7 @@ class Trace(dict):
 
     def __repr__(self) -> str:
         raise NotImplementedError()
-    
+
     def clone(self):
         clone = Trace()
         clone.idx = self.idx
