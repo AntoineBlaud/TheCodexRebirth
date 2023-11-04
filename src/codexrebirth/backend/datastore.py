@@ -1,4 +1,7 @@
 class State:
+    """
+    A simple class wrapper to store value and its index.
+    """
     def __init__(self, idx, value):
         self.idx = idx
         self.value = value
@@ -7,6 +10,10 @@ class State:
         return f"({self.idx}, {hex(self.value)})"
 
 class _StateChain:
+    """
+    Store multiple states for a given item, and allows to fetch the state
+    # using its idx value in a log2(size) time.
+    """
     def __init__(self, item_name):
         self.states = []
         self.item_name = item_name
@@ -44,35 +51,38 @@ class _StateChain:
         return f"{self.states}"
         
 class DataStoreManager:
+    """
+    Store StateChain for each item, and allows fetching the state
+    """
+
     def __init__(self):
         self.chains = {}
 
+    def _normalize_item_name(self, item_name):
+        return item_name.lower()
+
     def get_state(self, item_name, idx):
-        item_name = item_name.lower()
-        if item_name in self.chains:
-            print(item_name, idx, hex(self.chains[item_name].get(idx)))
-            return self.chains[item_name].get(idx)
-        else:
-           return None  
-       
+        item_name = self._normalize_item_name(item_name)
+        chain = self.chains.get(item_name)
+        return chain.get(idx) if chain else None
 
     def add_item(self, item_name):
-        item_name = item_name.lower()
+        item_name = self._normalize_item_name(item_name)
         self.chains[item_name] = _StateChain(item_name)
-        
+
     def register_item(self, item_name, idx, value):
-        item_name = item_name.lower()
         if value is None:
             return
-        if item_name not in  self.chains:
-            self.chains[item_name] = _StateChain(item_name)
-        self.chains[item_name].add(idx, value)
-            
+        item_name = self._normalize_item_name(item_name)
+        chain = self.chains.setdefault(item_name, _StateChain(item_name))
+        chain.add(idx, value)
+
     def clone(self):
         new_manager = DataStoreManager()
-        for item_name in self.chains:
-            new_manager.chains[item_name] = self.chains[item_name].clone()
+        for item_name, chain in self.chains.items():
+            new_manager.chains[item_name] = chain.clone()
         return new_manager
-    
+
     def __repr__(self):
         return str(self.chains)
+

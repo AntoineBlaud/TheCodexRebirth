@@ -73,7 +73,9 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         # Symbolic engine context, map IDA context to Qiling context
         self.ctx = SymbolicEngineLauncher()
         self.colors = generate_visually_distinct_colors(40)
-        self.last_current_address  = None
+        self.last_mem_update_idx  = None
+        # must reinitialize these tools
+        self.similar_code = SimilarCodeTool()
 
             
     def init(self):
@@ -215,9 +217,8 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
         """
         Clean up breakpoints, comments, and colors.
 
-        This function deletes all breakpoints, comments, and custom colors applied in the disassembly.
+        This function deletes e  ùv ccomments, and custom colors applied in the disassembly.
         """
-        delete_all_bpts()
         delete_all_comments()
         delete_all_colors()
 
@@ -551,26 +552,34 @@ class CodexRebirthIDA(ida_idaapi.plugin_t):
                 
                 item_color, item_trace = trail[address]
                 
-                if address == self.last_current_address:
-                    self.memory.navigate(item_trace.Insn.mem_access - 0x40)
 
-                # treat special cases
+                # We are at the current instruction.
                 if address == current_address:
                     item_color = current_color
-                    self.last_current_address = current_address
+                    
+                    # Trigger a navigation event in the memory view.
+                    if self.reader.idx != self.last_mem_update_idx:
+                        self.memory.navigate(item_trace.operation.mem_access)
+                        self.last_mem_update_idx = self.reader.idx
+                    
 
                 # apply color for end address
                 if address == self.user_defined_end_address:
                     item_color = end_address_color
-
-                entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, item_color)
-                lines_out.entries.push_back(entry)
+                    
+                # fetch the color currently applied to the line
+                current_line_color = idaapi.get_item_color(address)
+                # if the line is already colored, we keep the color
+ 
+                if address not in self.similar_code.colored_instructions:               
+                    entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, item_color)
+                    lines_out.entries.push_back(entry)
                 
                 # comment the instruction with the trace record
                 cmt = idaapi.get_cmt(address, False)
                 separator = "@@ "
                 cmt = cmt.split(separator)[0] if cmt else ""
-                cmt += separator + item_trace.Insn.__ida__repr__()
+                cmt += separator + item_trace.operation.__ida__repr__()
                 idaapi.set_cmt(address, cmt, False)
                 
                 

@@ -50,6 +50,7 @@ class SymbolicEngineLauncher:
         # Check if the debugger is active; otherwise, there's no need to map segments.
         if not ida_dbg.is_debugger_on():
             utils.show_msgbox("Please start the debugger before running the emulation")
+            return
         # Map IDA Pro segments to Qiling.
         self.map_segments_to_engine()
         # Set up the emulation environment.

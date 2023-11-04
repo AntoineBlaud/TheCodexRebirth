@@ -28,6 +28,30 @@ class EngineWrapper(abc.ABC):
     
     def map_regs(self):
         raise NotImplementedError()
+    
+    def read_reg(self, regname):
+        raise NotImplementedError()
+    
+    def write_reg(self, regname, value):
+        raise NotImplementedError()
+    
+    def check_instruction_scope(self, text_base, text_end):
+        raise NotImplementedError()
+    
+    def clear(self):
+        raise NotImplementedError()
+    
+    def map(self, start, size):
+        raise NotImplementedError()
+    
+    def write(self, start, data):
+        raise NotImplementedError()
+    
+    def unmap_all(self):
+        raise NotImplementedError()
+    
+    def clone(self):
+        raise NotImplementedError()
 
 
 class QilingEngine(EngineWrapper):
@@ -45,20 +69,17 @@ class QilingEngine(EngineWrapper):
 
         raise ValueError("Unknown architecture type")
 
-
     def get_currrent_instruction_disass(self):
         pc = self.get_ea()
         md = self.ql.arch.disassembler
         buf = self.ql.mem.read(pc, 0x10)
         return next(md.disasm(buf, pc))
 
-
     def get_instruction_from_address(self, addr):
         pc = addr
         md = self.ql.arch.disassembler
         buf = self.ql.mem.read(pc, 0x10)
         return next(md.disasm(buf, pc))
-
 
     def get_stack_pointer(self):
         if self.ql.arch.type == QL_ARCH.X8664:
@@ -77,7 +98,6 @@ class QilingEngine(EngineWrapper):
     def is_mapped(self, address):
         if not isinstance(address, int):
             return False
-
         for start, end, _, _, _ in self.ql.mem.map_info:
             if start <= address <= end:
                 return True
@@ -96,7 +116,6 @@ class QilingEngine(EngineWrapper):
     
     def write_reg(self, regname, value):
         self.ql.arch.regs.write(regname, value)
-        
         
     def check_instruction_scope(self, text_base, text_end):
         if self.ql.arch.type == QL_ARCH.X8664:

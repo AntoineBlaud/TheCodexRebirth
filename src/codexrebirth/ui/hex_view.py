@@ -450,10 +450,12 @@ class HexView(QtWidgets.QAbstractScrollArea):
         byte_address = self.point_to_address(event.pos())
 
         if event.angleDelta().y() > 0:
-            self.controller.navigate(self.model.address - self.model.num_bytes_per_line)
+            self.model.address = self.model.address - self.model.num_bytes_per_line
 
         elif event.angleDelta().y() < 0:
-            self.controller.navigate(self.model.address + self.model.num_bytes_per_line)
+            self.model.address = self.model.address + self.model.num_bytes_per_line
+            
+        self.controller.refresh_memory()
 
         event.accept()
 
@@ -516,6 +518,9 @@ class HexView(QtWidgets.QAbstractScrollArea):
         address_color = self._palette.hex_address_fg
         if address < self.model.fade_address:
             address_color = self._palette.hex_text_faded_fg
+            
+        if address == self.model.address:
+            address_color = self._palette.navigation_selection_fg
 
         painter.setPen(address_color)
 

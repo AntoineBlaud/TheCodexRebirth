@@ -115,22 +115,24 @@ class HexController(object):
         """
         if not address:
             return
+        offset = address - self.model.address
+        proximity = offset > 0 and offset < self.model.data_size - 0x20
+        # dont navigate if the address is within the current view
+        if not proximity:          
+            # we want to place the address in the middle of the view
+            self.model.address = address - 0x20
         
-        if address < 0:
-            address = 0
-        
-        if address - self.model.address > 0x60 or address - self.model.address < 0:
-                address = address - address % 0x10
-                address = address - 0x30
-        else:
-            return
+        # generate delta
+        previous_data = self.model.data
+        next_data  = self.reader.get_memory(self.model.address, self.model.data_size)
+        # compare to previous data to generate delta
+        self.model.delta = self.memory_delta(previous_data, next_data)
+    
         
         last_visible_address = address + self.model.data_size
         if last_visible_address > 0xFFFFFFFFFFFFFFFF:
             last_visible_address = 0xFFFFFFFFFFFFFFF
             
-        self.model.address = address
-        
         #self.reset_selection(0)
         self.refresh_memory()
 
@@ -168,27 +170,33 @@ class HexController(object):
         """
         self._ignore_signals = True
         self._ignore_signals = False
+        
+        
+    def memory_delta(self, data_1, data_2):
+        """
+        Return the delta between two memory regions.
+        """
+        if not isinstance(data_1, bytearray) or not isinstance(data_2, bytearray):
+            return {}
+        
+        delta = {}
+        size = min(len(data_1), len(data_2))
+        for i in range(size):
+            addr = self.model.address + i
+            diff = data_2[i] - data_1[i]
+            if diff != 0:
+                delta[addr] = diff
+        return delta
 
     def refresh_memory(self):
         """
         Refresh the visible memory.
         """
         if not self.reader:
-            self.model.data = None
+            self.model.data = []
             return
-        
-        self.model.delta = {}
-        memory = self.reader.get_memory(self.model.address, self.model.data_size)
-        
-        if self.model.data:
-            size = min(len(memory), len(self.model.data))
-            for i in range(size):
-                addr = self.model.address + i
-                diff = memory[i] - self.model.data[i]
-                if diff != 0:
-                    self.model.delta[addr] = diff
-
-        self.model.data = memory
+        print(self.model.delta)
+        self.model.data  = self.reader.get_memory(self.model.address, self.model.data_size)
 
         if self.view:
             self.view.refresh()
@@ -209,7 +217,8 @@ class HexController(object):
         """
         The trace reader position has been changed.
         """
-        self.refresh_memory()
+        # disabled because we used navigation instead of idx_changed
+        #self.refresh_memory()
 
     def _breakpoints_changed(self):
         """
@@ -247,7 +256,7 @@ class HexModel(object):
         """
 
         # the 'cached' data to be displayed by the hex view
-        self.data = None
+        self.data = []
         self.mask = None
         self.data_size = 0
         self.delta = {}

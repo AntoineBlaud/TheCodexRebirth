@@ -2,21 +2,21 @@
 import re 
 
 
-class InstructionSet(list):
-    def __init__(self, insn_list):
+class OperationSet(list):
+    def __init__(self, operation_list):
         super().__init__()
         # set items to the list
-        self.extend(insn_list)
+        self.extend(operation_list)
 
-    def __contains__(self, insn):
+    def __contains__(self, operation):
         for item in self:
-            if re.match(item, insn):
+            if re.match(item, operation):
                 return True
         return False
 
 
 # class used to store Unicorn operand and our own operand
-class Instruction:
+class Operation:
     def __init__(self, cinsn):
         # Une instruction peut avoir jusqu'à 3 opérandes
         self.cinsn = cinsn
@@ -29,11 +29,11 @@ class Instruction:
         self.r_op1 = None
         self.r_op2 = None
         self.r_op3 = None
-        self.v_op_result = None
+        self.v_result = None
         self.mem_access = None
         self.cache_repr = None
         self.op_result = None
-        self.evaled_op_result = None
+        self.eval_v_result = None
         
     def _convert_operand(self, op):
         if isinstance(op, int):
@@ -58,12 +58,12 @@ class Instruction:
         result_op = self.operand_str("op1", self.r_op1)
         result_op += self.operand_str("op2", self.r_op2)
         result_op += self.operand_str("op3", self.r_op3)
-        if not self.evaled_op_result:
-            result_op += self.operand_str("v_res", self.v_op_result) if self.v_op_result else self.operand_str("v_res", self.v_op1)
+        if not self.eval_v_result:
+            result_op += self.operand_str("v_res", self.v_result) if self.v_result else self.operand_str("v_res", self.v_op1)
         else:
-            result_op += self.operand_str("v_res", self.v_op_result)
+            result_op += self.operand_str("v_res", self.v_result)
             result_op += self.operand_str("real_res", self.op_result)
-            result_op += self.operand_str("eval_res", self.evaled_op_result)
+            result_op += self.operand_str("eval_res", self.eval_v_result)
         result_str = result_op.replace("\n", ", ")
         self.cache_repr = result_str[:-2]
         return self.cache_repr
@@ -83,7 +83,7 @@ class Instruction:
 
 
     def clone(self):
-        clone = Instruction(self.cinsn)
+        clone = Operation(self.cinsn)
         clone.op1 = self.op1
         clone.op2 = self.op2
         clone.op3 = self.op3
@@ -94,7 +94,7 @@ class Instruction:
         clone.v_op1 = self.v_op1.clone() if self.v_op1 else None
         clone.v_op2 = self.v_op2.clone() if self.v_op2 else None
         clone.v_op3 = self.v_op3.clone() if self.v_op3 else None
-        clone.v_op_result = self.v_op_result.clone() if self.v_op_result else None
+        clone.v_result = self.v_result.clone() if self.v_result else None
         clone.op_result = self.op_result
-        clone.evaled_op_result = self.evaled_op_result
+        clone.eval_v_result = self.eval_v_result
         return clone

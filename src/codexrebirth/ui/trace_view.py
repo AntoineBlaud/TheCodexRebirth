@@ -1270,3 +1270,6 @@ class TraceDock(QtWidgets.QToolBar):
         
     def update(self):
         self.view.update()
+        
+    def refresh(self):
+        self.view.update()

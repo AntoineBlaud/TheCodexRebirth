@@ -7,7 +7,7 @@ from collections import Counter
 
 class SimilarCodeTool:
     def __init__(self):
-        pass
+        self.colored_instructions = {}
     
     @staticmethod
     def get_selection():
@@ -68,8 +68,7 @@ class SimilarCodeTool:
         flow_chart = idaapi.FlowChart(func)
         return [(block.start_ea, block.end_ea) for block in flow_chart]
 
-    @staticmethod
-    def color_similar_instructions(current_disass, block_disass, similarity_factor, color, comment):
+    def color_similar_instructions(self, current_disass, block_disass, similarity_factor, color, comment):
         while len(block_disass) > 0:
             collected_instructions = []
             for (c_ea, current_instruction), (b_ea, block_instruction) in zip(current_disass, block_disass):
@@ -81,6 +80,7 @@ class SimilarCodeTool:
             if len(collected_instructions) == len(current_disass):
                 for ea, instruction in collected_instructions:
                     idc.set_color(ea, idc.CIC_ITEM, color)
+                    self.colored_instructions[ea] = True
                 idc.set_cmt(collected_instructions[0][0], comment, 0)
                 print("Found similar code at 0x{:X}".format(collected_instructions[0][0]))
                 block_disass.pop(len(collected_instructions) - 1)
@@ -91,8 +91,7 @@ class SimilarCodeTool:
         pattern = re.compile(r"[0-9a-fA-F]+h")
         return pattern.sub("", block_disassembly)
 
-    @staticmethod
-    def run(similarity_factor, color, comment):
+    def run(self, similarity_factor, color, comment):
         ea_start, ea_end = SimilarCodeTool.get_selection()
         current_disass = SimilarCodeTool.get_disass(ea_start, ea_end)
         
@@ -100,6 +99,6 @@ class SimilarCodeTool:
         function_address = idc.here()  # Change this to the address of your function
 
         for block_disass in SimilarCodeTool.get_all_basic_block_disassembly(function_address):
-            SimilarCodeTool.color_similar_instructions(current_disass, block_disass, similarity_factor, color, comment)
+            self.color_similar_instructions(current_disass, block_disass, similarity_factor, color, comment)
             ida_kernwin.refresh_idaview_anyway()
 

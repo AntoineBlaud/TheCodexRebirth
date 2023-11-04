@@ -36,9 +36,9 @@ class TraceReader(object):
 
     def construct_trace_cache(self):
         self._idx_trace_cache = {
-            idx: (insn_addr, trace) 
-            for insn_addr in self._addr_trace_cache 
-            for idx, trace in self._addr_trace_cache[insn_addr].items()
+            idx: (operation_addr, trace) 
+            for operation_addr in self._addr_trace_cache 
+            for idx, trace in self._addr_trace_cache[operation_addr].items()
         }
 
             
@@ -95,7 +95,7 @@ class TraceReader(object):
     def is_computation_correct(self, idx):
         if idx not in self._idx_trace_cache:
             return False
-        return self.get_trace(idx).Insn.op_result == self.get_trace(idx).Insn.evaled_op_result
+        return self.get_trace(idx).operation.op_result == self.get_trace(idx).operation.eval_v_result
     
     def get_register(self, reg_name, idx=None):
         """
@@ -205,10 +205,10 @@ class TraceReader(object):
         return self._idx_trace_cache[idx][1]
     
 
-    def get_insn(self, idx):
+    def get_operation(self, idx):
         if idx not in self._idx_trace_cache:
             return None
-        return self.get_trace(idx).Insn
+        return self.get_trace(idx).operation
          
     def get_ip(self, idx):
         """
@@ -307,7 +307,7 @@ class TraceReader(object):
         # current instruction
         #
 
-        next_address = self.dctx.get_next_insn(address)
+        next_address = self.dctx.get_next_operation(address)
         if next_address  == -1:
             self.seek(self.idx + 1)
             return
