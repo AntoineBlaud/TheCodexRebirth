@@ -56,6 +56,8 @@ class Operation:
         result_op = self.operand_str("op1", self.r_op1)
         result_op += self.operand_str("op2", self.r_op2)
         result_op += self.operand_str("op3", self.r_op3)
+        if self.mem_access:
+            result_op += self.operand_str("mem_access", self.mem_access)
         if not self.eval_v_result:
             result_op += (
                 self.operand_str("v_res", self.v_result)

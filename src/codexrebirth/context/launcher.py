@@ -88,7 +88,6 @@ class SymbolicEngineLauncher:
         2. Redirect standard input to /dev/null to suppress user input.
         3. Configure Qiling with the provided binary and rootfs paths.
         4. Set up the emulation environment.
-        5. Map IDA Pro segments to Qiling.
         """
 
         # Extract configuration parameters.
@@ -120,7 +119,8 @@ class SymbolicEngineLauncher:
             binary_path = new_binary_path
 
             print(
-                "[INFO] For Windows binaries, the Qiling initialization process can take up to 60 seconds ... Please be patient"
+                "[INFO] For Windows binaries, the Qiling initialization process \
+                    can take up to 60 seconds ... Please be patient"
             )
             ida_kernwin.refresh_idaview_anyway()
             time.sleep(0.2)
@@ -149,17 +149,12 @@ class SymbolicEngineLauncher:
                 self.sym_engine, debug_level, timeout, symbolic_check
             )
 
-        # Map IDA Pro segments to Qiling.
-        self.map_segments_to_engine()
-
-        # Set up the emulation environment.
-        self.map_registers()
-
     def map_segments_to_engine(self):
         """
         Map IDA Pro segments to Qiling's memory.
 
-        This function aligns the segments to the page size and joins adjacent segments with the same permissions.
+        This function aligns the segments to the page size and joins adjacent
+        segments with the same permissions.
         """
         # Clear existing memory mappings in Qiling.
         self.sym_engine.unmap_all()

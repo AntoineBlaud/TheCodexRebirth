@@ -72,10 +72,7 @@ class TraceBar(QtWidgets.QWidget):
         # the idxs that should be highlighted based on user queries
         self._idx_reads = []
         self._idx_writes = []
-        self._idx_symbolic = []
-        self._idx_library = []
-        self._idx_other_funcs = []
-        self._idx_highlighted_address = []
+        self._idx_tainted = []
 
         # the magnetism distance (in pixels) for cursor clicks on viz events
         self._magnetism_distance = 4
@@ -197,7 +194,7 @@ class TraceBar(QtWidgets.QWidget):
         Return (width, height) of the drawable trace visualization.
         """
         w = max(0, int(self.width() - (self._trace_border * 2)))
-        h = max(0, int(self.height() - (self._trace_border * 2))) * self.resolution_step
+        h = max(0, int(self.height() - (self._trace_border * 2)))
         return (w, h)
 
     # -------------------------------------------------------------------------
@@ -215,13 +212,6 @@ class TraceBar(QtWidgets.QWidget):
 
         # initialize state based on the reader
         self.set_bounds(0, reader.length)
-
-    @property
-    def resolution_step(self):
-        x = self.length
-        if x < 5000:
-            return 1
-        return int((log(x, 3) / 4) ** 3)
 
     def set_bounds(self, start_idx, end_idx):
         """
@@ -274,9 +264,7 @@ class TraceBar(QtWidgets.QWidget):
 
         self._idx_reads = []
         self._idx_writes = []
-        self._idx_symbolic = []
-        self._idx_library = []
-        self._idx_other_funcs = []
+        self._idx_tainted = []
 
         self._refresh_painting_metrics()
         self.refresh()
@@ -369,23 +357,13 @@ class TraceBar(QtWidgets.QWidget):
         mod_keys = QtGui.QGuiApplication.keyboardModifiers()
         step_over = bool(mod_keys & QtCore.Qt.ShiftModifier)
 
-        common_block_color = to_ida_color(self.pctx.palette.common_block_color)
-
         # scrolling up, so step 'backwards' through the trace
         if event.angleDelta().y() > 0:
             self.reader.step_backward(1, step_over)
-            ea = self.reader.get_ip(self.reader.idx)
-            while idc.GetDisasm(ea).startswith("j"):
-                self.reader.step_backward(1, step_over)
-                ea = self.reader.get_ip(self.reader.idx)
 
         # scrolling down, so step 'forwards' through the trace
         elif event.angleDelta().y() < 0:
             self.reader.step_forward(1, step_over)
-            ea = self.reader.get_ip(self.reader.idx)
-            while idc.GetDisasm(ea).startswith("j"):
-                self.reader.step_forward(1, step_over)
-                ea = self.reader.get_ip(self.reader.idx)
 
         self.refresh()
         event.accept()
@@ -753,33 +731,9 @@ class TraceBar(QtWidgets.QWidget):
         """
         Refresh trace event / highlight info from the underlying trace reader.
         """
-        self._idx_symbolic = []
-        self._idx_library = []
-        self._idx_other_funcs = []
-
-        reader = self.reader
-        if not (reader):
+        if not (self.reader):
             return
-
-        text_start, text_end = get_segment_name_bounds(".text")
-        func_start, func_end = self.reader.get_current_function_bounds()
-
-        for idx in reader.get_executions_between(
-            self.start_idx, self.end_idx, self.resolution_step
-        ):
-            if not reader.get_ip(idx):
-                continue
-            # get current text start/end
-            ea = reader.get_ip(idx)
-
-            if not (ea >= text_start and ea < text_end):
-                self._idx_library.append(idx)
-
-            elif not (ea >= func_start and ea < func_end):
-                self._idx_other_funcs.append(idx)
-
-            elif reader.is_symbolic_instruction(idx):
-                self._idx_symbolic.append(idx)
+        self._idx_tainted = self.reader.get_tainted_idxs(self.reader.current_taint_id)
 
     def _clamp_idx(self, idx):
         """
@@ -973,14 +927,12 @@ class TraceBar(QtWidgets.QWidget):
         false_color = self.pctx.palette.symbolic_compution_false
 
         # fetch the color set by the user
-        if len(self._idx_symbolic) > 0:
-            color = self.reader.get_idx_color(self._idx_symbolic[0])
+        if len(self._idx_tainted) > 0:
+            color = self.reader.get_idx_color(self._idx_tainted[0])
             taint_color = QtGui.QColor(*get_rbga_color(color)) if color else taint_color
 
         access_sets = [
-            (self._idx_library, self.pctx.palette.trace_library),
-            (self._idx_other_funcs, self.pctx.palette.trace_other_funcs),
-            (self._idx_symbolic, taint_color),
+            (self._idx_tainted, taint_color),
         ]
 
         if self.cells_visible:

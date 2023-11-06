@@ -357,6 +357,23 @@ def delete_all_colors():
             idaapi.set_node_info(gid, block.id, p, idaapi.NIF_BG_COLOR)
 
 
+def find_block_by_ea(ea):
+    func = idaapi.get_func(ea)
+    flow_chart = idaapi.FlowChart(func)
+    for block in flow_chart:
+        if block.start_ea <= ea and ea < block.end_ea:
+            return block
+    return None
+
+
+def color_block(block_ea, color):
+    block = find_block_by_ea(block_ea)
+    p = idaapi.node_info_t()
+    p.bg_color = color
+    gid = get_current_gid()
+    idaapi.set_node_info(gid, block.id, p, color)
+
+
 def open_console(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -601,6 +618,14 @@ def get_parent_register(register_name, arch_size):
             "r15d": "r15",
             "r15w": "r15",
             "r15b": "r15",
+            "r8": "r8",
+            "r9": "r9",
+            "r10": "r10",
+            "r11": "r11",
+            "r12": "r12",
+            "r13": "r13",
+            "r14": "r14",
+            "r15": "r15",
         }[register_name]
     else:
         raise ValueError("Unknown architecture type")

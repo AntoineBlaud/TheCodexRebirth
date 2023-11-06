@@ -240,7 +240,7 @@ class VariablesState(dict):
         if name not in self:
             return
 
-        if isinstance(self[name], SymRegister):
+        if name in SYM_REGISTER_FACTORY:
             for reg in SYM_REGISTER_FACTORY[name]:
                 if reg.name in self:
                     del self[reg.name]
@@ -438,6 +438,8 @@ class OperationX86_64:
         elif cinsn.mnemonic.startswith("cdq"):
             return self._cdq(self.operation, self.symbolic_taint_store)
         elif cinsn.mnemonic.startswith("test") or cinsn.mnemonic.startswith("cmp"):
+            return self.operation.v_op1
+        elif cinsn.mnemonic.startswith("call") or cinsn.mnemonic.startswith("j"):
             return self.operation.v_op1
         else:
             return None
@@ -706,6 +708,8 @@ class Runner:
         self.text_base = None
         self.text_end = None
 
+        self.emulation_time = 0
+
         self.CONFIG = {
             "BINARY_ARCH_SIZE": None,
             "BINARY_MAX_MASK": None,
@@ -715,6 +719,7 @@ class Runner:
             "TRACE_RECORDS": self.trace_records,
             "SYM_REGISTER_FACTORY": None,
             "INSN_EXECUTED_COUNT": INSN_EXECUTED_COUNT,
+            "IS_INITIALIZED": False,
         }
 
     def register_callback(self, address: int, fn: callable):
@@ -747,7 +752,6 @@ class Runner:
         self, ql: Qiling, access: int, address: int, size: int, value: int
     ):
         assert access == UC_MEM_WRITE
-        cinsn_addr = self.engine.get_ea()
         self.register_operations(
             self.operation_engine.evaluate_instruction(
                 address, self.symbolic_taint_store
@@ -758,7 +762,6 @@ class Runner:
         self, ql: Qiling, access: int, address: int, size: int, value: int
     ):
         assert access == UC_MEM_READ
-        cinsn_addr = self.engine.get_ea()
         self.register_operations(
             self.operation_engine.evaluate_instruction(
                 address, self.symbolic_taint_store
@@ -797,14 +800,14 @@ class Runner:
                 None, self.symbolic_taint_store
             )
             self.register_operations(operation)
-
         finally:
-            # Increment the instruction executed count
-            next(self.operation_executed_count)
+            pass
 
     def register_operations(self, operation: Operation):
+        idx = self.operation_executed_count.value
         if operation is None:
-            return
+            cinsn = self.engine.get_currrent_instruction_disass()
+            operation = Operation(cinsn)
 
         last_trace = self.trace_records.get_last_entry()
         last_operation = last_trace.operation if last_trace else None
@@ -818,8 +821,8 @@ class Runner:
             # make the last evaluation of the last symbolic result and store it in the Operation
             self.store_evaluation_result()
 
-        self.trace_records.register(self.engine.get_ea(), operation)
-        print("")
+        self.trace_records.register(self.engine.get_ea(), operation, idx)
+        next(self.operation_executed_count)
 
     def initialize_symbolic_evaluator(self):
         # We fetching the value of the registers before triggering the run
@@ -843,8 +846,9 @@ class Runner:
         if not last_trace_entry:
             return
 
-        last_v_result = last_trace_entry.operation.v_result
+        last_operation = last_trace_entry.operation
         cinsn_operands = last_operation.cinsn.operands
+        last_v_result = last_operation.v_result
 
         if last_v_result is not None and len(cinsn_operands) > 0:
             op1 = cinsn_operands[0]
@@ -902,7 +906,7 @@ class Runner:
     def register_execution_state(
         self, current_operation: Operation, last_operation: Operation
     ):
-        idx = self.operation_executed_count.value - 1
+        idx = self.operation_executed_count.value
 
         for operation in (current_operation, last_operation):
             if operation is None:
@@ -924,6 +928,8 @@ class Runner:
 
                 elif operand.type == X86_OP_MEM:
                     address = operation.mem_access
+                    if address is None:
+                        continue
                     name = create_name_from_address(address)
                     memory_value = self.engine.read_memory_int(address)
                     self.memory_state.register_item(name, idx, memory_value)
@@ -940,6 +946,10 @@ class Runner:
                 self.registers_state.register_item(reg_name, 0, register_value)
             except (KeyError, AttributeError):
                 pass
+
+    def initialize(self):
+        self.initialize_execution_state()
+        self.initialize_symbolic_evaluator()
 
     def clone(self):
         # delete current ql hooks
@@ -1006,19 +1016,19 @@ class QilingRunner(Runner):
 
         # make first update
         setglobal("CONFIG", self.CONFIG)
-
         # Must be called after CONFIG BINARY_MAX_MASK and BINARY_ARCH_SIZE are set
         self.CONFIG["SYM_REGISTER_FACTORY"] = create_sym_register_factory()
-
+        self.CONFIG["IS_INITIALIZED"] = True
         # make second update
         setglobal("CONFIG", self.CONFIG)
 
-    def prepare_run(self):
+    def initialize(self):
+        if self.CONFIG["IS_INITIALIZED"]:
+            return
         # Synchronize config with the global config
         self.initialize_configuration()
         self.operation_engine.set_config(self.CONFIG)
-        self.initialize_execution_state()
-        self.initialize_symbolic_evaluator()
+        super().initialize()
 
         # Set up memory read, memory write, and code hooks
         self.ql.hook_mem_read(self.memory_read_hook)
@@ -1026,8 +1036,8 @@ class QilingRunner(Runner):
         self.ql.hook_code(self.code_execution_hook)
 
     def run_emulation(self):
-        self.prepare_run()
-
+        # must be call at the start of the emulation and not before
+        self.initialize()
         # Start measuring emulation time
         self.start_time = time.time()
         try:
@@ -1043,15 +1053,15 @@ class QilingRunner(Runner):
         finally:
             # Calculate emulation time and instructions per second
             end_time = time.time()
-            emulation_time = end_time - self.start_time
+            self.emulation_time += end_time - self.start_time
             instructions_per_second = (
-                self.operation_executed_count.value / emulation_time
+                self.operation_executed_count.value / self.emulation_time
             )
             # Format the output message
             output = "\n".join(
                 [
                     "=" * 80,
-                    f"Emulation time: {emulation_time:.1f} seconds",
+                    f"Emulation time: {self.emulation_time:.1f} seconds",
                     f"{self.operation_executed_count.value} instructions executed",
                     f"Operations per second: {instructions_per_second:.1f}",
                     "=" * 80,
@@ -1063,3 +1073,6 @@ class QilingRunner(Runner):
             # print performance report
             global profile
             profile.print_stats()
+
+            # post process
+            self.trace_records.post_process()

@@ -92,7 +92,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
 
     @open_console
     def _run(self):
-        self.ctx.initialize(self.config)
+        if not self.ctx.is_initialized:
+            self.ctx.initialize(self.config)
         ida_kernwin.refresh_idaview_anyway()
         self.ctx.run_emulation(callback=self.on_emulation_complete)
 
@@ -159,7 +160,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         mw = get_qmainwindow()
         mw.addToolBar(QtCore.Qt.RightToolBarArea, self.trace_dock)
         self.trace_dock.show()
-        self.registers.show(position=ida_kernwin.DP_RIGHT)
+        self.registers.show("General registers", position=ida_kernwin.DP_RIGHT)
         self.memory.show("Hex View-1", ida_kernwin.DP_TAB | ida_kernwin.DP_BEFORE)
         # close Hex View-1
         widget = ida_kernwin.find_widget("Hex View-1")
@@ -271,6 +272,18 @@ class CodexRebirth(ida_idaapi.plugin_t):
         self.reader.seek_to_prev(idc.here())
         self.trace_dock.refresh()
 
+    def _interactive_go_prev_taint(self):
+        if not self.reader:
+            return
+        self.reader.seek_to_prev_taint()
+        self.trace_dock.refresh()
+
+    def _interactive_go_next_taint(self):
+        if not self.reader:
+            return
+        self.reader.seek_to_next_taint()
+        self.trace_dock.refresh()
+
     def _interactive_synchronize_variables(self):
         """
         Synchronize variables between IDA Pro and Qiling.
@@ -302,6 +315,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         mw.removeToolBar(self.trace_dock)
         self.trace_dock.close()
         self.registers.close()
+        self.memory.close()
         # clean IDA trace
         delete_all_colors()
         delete_all_comments()
@@ -325,6 +339,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
     ACTION_GO_PREV_EXECUTION = "codexrebirth:go_prev_execution"
     ACTION_SYNCHRONIZE_VARIABLES = "codexrebirth:synchronize_variables"
     ACTION_COLOR_TAINT_ID = "codexrebirth:color_taint_id"
+    ACTION_GO_NEXT_TAINT = "codexrebirth:go_next_taint"
+    ACTION_GO_PREV_TAINT = "codexrebirth:go_prev_taint"
 
     def _install_action(
         self,
@@ -451,6 +467,26 @@ class CodexRebirth(ida_idaapi.plugin_t):
             shortcut="Shift+p",
         )
 
+    def _install_go_next_taint(self, widget, popup):
+        self._install_action(
+            widget,
+            popup,
+            self.ACTION_GO_NEXT_TAINT,
+            "Go to next taint",
+            self._interactive_go_next_taint,
+            shortcut="Shift+t",
+        )
+
+    def _install_go_prev_taint(self, widget, popup):
+        self._install_action(
+            widget,
+            popup,
+            self.ACTION_GO_PREV_TAINT,
+            "Go to previous taint",
+            self._interactive_go_prev_taint,
+            shortcut="Shift+o",
+        )
+
     def _install_synchronize_variables(self, widget, popup):
         self._install_action(
             widget,
@@ -481,6 +517,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         self._ui_hooks.get_lines_rendering_info = self._render_lines
         self._ui_hooks.hook()
 
+        self._dbg_hooks.dbg_process_start = self.reset
         self._dbg_hooks.dbg_process_exit = self._exit
         self._dbg_hooks.dbg_process_detach = self._exit
         self._dbg_hooks.hook()
@@ -533,6 +570,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
             self._install_ida_restore_ida_execution_snapshot(widget, popup)
             self._install_go_next_execution(widget, popup)
             self._install_go_prev_execution(widget, popup)
+            self._install_go_next_taint(widget, popup)
+            self._install_go_prev_taint(widget, popup)
             self._install_synchronize_variables(widget, popup)
             self._install_color_taint_id(widget, popup)
 
@@ -569,7 +608,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         trail = {}
 
         forward_ips = self.reader.get_next_ips(0x10)
-        backward_ips = self.reader.get_prev_ips(0x100)
+        backward_ips = self.reader.get_prev_ips(0x20)
         current_address = self.reader.rebased_ip
 
         trails = [(forward_ips, forward_color), (backward_ips, backward_color)]
@@ -647,6 +686,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         if not self.reader:
             return
 
+        forward_color = to_ida_color(self.palette.trail_forward)
         trail_length = self.reader.length
         current_address = idc.here()
 
@@ -664,6 +704,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
             for i, address in enumerate(trail_addresses):
                 if address in self.blocks_execution_count:
                     self.blocks_execution_count[address] += 1
+                # color the address and the block
+                idc.set_color(address, idc.CIC_ITEM, forward_color)
 
         for block_start, execution_count in self.blocks_execution_count.items():
             idaapi.set_cmt(block_start, f"Executed {execution_count} times  ", False)

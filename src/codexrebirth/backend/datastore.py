@@ -8,7 +8,7 @@ class State:
         self.value = value
 
     def __repr__(self):
-        return f"({self.idx}, {hex(self.value)})"
+        return f"({self.idx}, {hex(self.value)})\n"
 
 
 class _StateChain:

@@ -4,6 +4,7 @@ import idc
 from ..integration.api import DisassemblerContextAPI
 from .arch import ArchAMD64, ArchX86
 from ..tools import *
+from collections import defaultdict
 
 
 class TraceReader(object):
@@ -25,10 +26,10 @@ class TraceReader(object):
         self._idx_cached_registers = -1
         self._cached_registers = {}
         self._idx_trace_cache = {}
+        self._taint_id_trace_cache = defaultdict(list)
 
         self.construct_trace_cache()
         self._taint_id_color_map = {}
-
         self._idx_changed_callbacks = []
 
         self.registers_state = registers_state
@@ -37,9 +38,20 @@ class TraceReader(object):
     def construct_trace_cache(self):
         self._idx_trace_cache = {
             idx: (operation_addr, trace)
-            for operation_addr in self._addr_trace_cache
-            for idx, trace in self._addr_trace_cache[operation_addr].items()
+            for operation_addr, trace_items in self._addr_trace_cache.items()
+            for idx, trace in trace_items.items()
         }
+
+        for idx in self._idx_trace_cache:
+            taint_id = self.get_trace(idx).taint_id
+            if taint_id != -1:
+                self._taint_id_trace_cache[taint_id].append(idx)
+
+        # Sort taint_id_trace_cache
+        for taint_id in self._taint_id_trace_cache:
+            self._taint_id_trace_cache[taint_id] = sorted(
+                self._taint_id_trace_cache[taint_id]
+            )
 
     # -------------------------------------------------------------------------
     # Trace Properties
@@ -180,15 +192,13 @@ class TraceReader(object):
         except:
             return 0, 0
 
-    def is_symbolic_instruction(self, idx):
+    def get_tainted_idxs(self, taint_id):
         """
         Return True if the given address is symbolic.
         """
-        if idx not in self._idx_trace_cache:
-            return False
-        if self.current_taint_id is None or self.current_taint_id == -1:
-            return False
-        return self.get_trace(idx).taint_id == self.current_taint_id
+        if taint_id not in self._taint_id_trace_cache:
+            return []
+        return self._taint_id_trace_cache[taint_id]
 
     def get_trace(self, idx):
         if idx not in self._idx_trace_cache:
@@ -260,6 +270,24 @@ class TraceReader(object):
         idx = self.find_prev_execution(address, start_idx)
         self.seek(idx)
         return True
+
+    def seek_to_next_taint(self):
+        idxs = self.get_tainted_idxs(self.current_taint_id)
+        if not idxs or len(idxs) < 2:
+            return
+        pos = idxs.index(self.idx)
+        pos = (pos + 1) % len(idxs)
+        self.seek(idxs[pos])
+
+    def seek_to_prev_taint(self):
+        idxs = self.get_tainted_idxs(self.current_taint_id)
+        if not idxs or len(idxs) < 2:
+            return
+        pos = idxs.index(self.idx)
+        if pos - 1 < 0:
+            pos = len(idxs)
+        pos = pos - 1
+        self.seek(idxs[pos])
 
     def step_forward(self, n=1, step_over=False):
         """

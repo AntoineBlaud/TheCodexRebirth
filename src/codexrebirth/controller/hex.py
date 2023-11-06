@@ -2,6 +2,7 @@ from ..ui import *
 from ..tools.qt.util import copy_to_clipboard
 from ..integration.api import DockableWindow
 from ..tools.types import *
+import idc
 
 # ------------------------------------------------------------------------------
 # hex.py -- Hex Dump Controller
@@ -124,12 +125,6 @@ class HexController(object):
 
         self.model.nav_address = address
 
-        # generate delta
-        previous_data = self.model.data
-        next_data = self.reader.get_memory(self.model.address, self.model.data_size)
-        # compare to previous data to generate delta
-        self.model.delta = self.memory_delta(previous_data, next_data)
-
         last_visible_address = address + self.model.data_size
         if last_visible_address > 0xFFFFFFFFFFFFFFFF:
             last_visible_address = 0xFFFFFFFFFFFFFFF
@@ -199,6 +194,9 @@ class HexController(object):
         self.model.data = self.reader.get_memory(
             self.model.address, self.model.data_size
         )
+        # generate delta
+        ida_data = bytearray(idc.get_bytes(self.model.address, self.model.data_size))
+        self.model.delta = self.memory_delta(self.model.data, ida_data)
 
         if self.view:
             self.view.refresh()
