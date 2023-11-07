@@ -56,3 +56,8 @@ def create_name_from_address(name):
     if isinstance(name, int):
         return "mem_" + hex(name)
     return name
+
+
+def get_str_operand_index(operand, index):
+    # Get the operand index from the operand name
+    return operand.split(",")[index]

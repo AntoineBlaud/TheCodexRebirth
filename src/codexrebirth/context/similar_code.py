@@ -14,8 +14,6 @@ class SimilarCodeTool:
     def get_selection():
         ea_start = idc.read_selection_start()
         ea_end = idc.read_selection_end()
-        if ea_start == ea_end:
-            raise Exception("Please select at least two instructions")
         return (ea_start, ea_end)
 
     @staticmethod

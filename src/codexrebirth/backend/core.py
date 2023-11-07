@@ -329,14 +329,30 @@ class OperationX86_64:
         )
 
     def _shl(self, operation, symbolic_taint_store):
-        return symbolic_taint_store[self.tainted_var_name].update(
-            operation.v_op1 << operation.v_op2
-        )
+        destination = operation.v_op1
+        bsize = self.config["BINARY_ARCH_SIZE"]
+        if operation.v_op3 is not None:
+            source = operation.v_op2
+            count = operation.v_op3.value % bsize
+            shifted_bits = (destination << RealValue(count)) 
+            shifted_bits |= (source >> RealValue(bsize - count))
+        else:
+            count = operation.v_op2
+            shifted_bits = (destination << count) 
+        return symbolic_taint_store[self.tainted_var_name].update(shifted_bits)
 
     def _shr(self, operation, symbolic_taint_store):
-        return symbolic_taint_store[self.tainted_var_name].update(
-            operation.v_op1 >> operation.v_op2
-        )
+        destination = operation.v_op1
+        bsize = self.config["BINARY_ARCH_SIZE"]
+        if operation.v_op3 is not None:
+            source = operation.v_op2
+            count = operation.v_op3.value % bsize
+            shifted_bits = (destination >> RealValue(count)) 
+            shifted_bits |= (source << RealValue(bsize - count))
+        else:
+            count = operation.v_op2
+            shifted_bits = (destination >> count) 
+        return symbolic_taint_store[self.tainted_var_name].update(shifted_bits)
 
     def _ror(self, operation, symbolic_taint_store):
         return symbolic_taint_store[self.tainted_var_name].update(
@@ -383,7 +399,6 @@ class OperationX86_64:
     def _mov(self, operation, symbolic_taint_store, mem_access):
         # instanciate a new symbolic register if needed
         # if condition is not met, then delete the symbolic register
-        print(f"MOV {operation.cinsn.op_str}, {operation.v_op2.id}")
         if operation.op1.type == X86_OP_REG:
             regname = self.cs.reg_name(operation.op1.reg)
             symbolic_taint_store[regname].update(operation.v_op2)
@@ -400,12 +415,12 @@ class OperationX86_64:
     def _lea(self, operation, symbolic_taint_store, mem_access):
         regname = self.cs.reg_name(operation.op1.reg)
         # round mem_access to next 4 bytes
-        size = self.config["BINARY_ARCH_SIZE"] // 8
-        mem_access = mem_access + (mem_access % size)
+        mem_access = mem_access + (mem_access % 4)
         symbolic_taint_store[regname].update(RealValue(mem_access))
         symbolic_taint_store[regname].id = -1
         return symbolic_taint_store[regname]
 
+    
     def process(self):
         if self.tainted_var_name not in self.symbolic_taint_store:
             return None
@@ -481,69 +496,50 @@ class OperationEngineX86_64:
     def set_config(self, config):
         self.config = config
 
-    def process_mem_access(self, op, symbolic_taint_store: VariableStates):
-        # Return the symbolic register that is used in the mem_access instruction (ex: lea rbx, [rax + 5]) with
-        # rax symbolic, if no symbolic register is used, Create a symbolic memory object
-        mem_value = RealValue(0)
+    
+    def discover_indirect_access(self, op, mem_access, symbolic_taint_store: VariableStates):
+        # Create an IndirectSymValue object from mem_access instruction
+
+        ind = IndirectSymValue(mem_access)
+
+        def fetch_symbolic_register(reg_name):
+            # Helper function to fetch a symbolic register from symbolic_taint_store
+            if reg_name in symbolic_taint_store and isinstance(symbolic_taint_store[reg_name], SymValue):
+                ind.id = symbolic_taint_store[reg_name].id
+                return ind
 
         if op.mem.base != 0:
-            reg_name = self.cs.reg_name(op.mem.base)
-            # if the register is symbolic, fetch it from the symbolic_taint_store
-            if reg_name in symbolic_taint_store and isinstance(
-                symbolic_taint_store[reg_name], SymValue
-            ):
-                mem_value = symbolic_taint_store[reg_name].clone()
-            else:
-                mem_value = RealValue(self.engine.read_reg(reg_name.upper()))
+            reg_name_base = self.cs.reg_name(op.mem.base)
+            return fetch_symbolic_register(reg_name_base)
 
         if op.mem.index != 0:
-            reg_name = self.cs.reg_name(op.mem.base)
-            index = self.engine.read_reg(reg_name)
-            if self.cs.reg_name(op.mem.index) in symbolic_taint_store:
-                if not mem_value:
-                    mem_value = symbolic_taint_store[
-                        self.cs.reg_name(op.mem.index)
-                    ].clone()
-                else:
-                    # process in this order to avoid adding a SymValue to a RealValue
-                    mem_value = (
-                        symbolic_taint_store[self.cs.reg_name(op.mem.index)].clone()
-                        + mem_value
-                    )
-            else:
-                if not mem_value:
-                    mem_value = RealValue(index)
-                else:
-                    mem_value += RealValue(index)
-
-        if op.mem.disp != 0:
-            mem_value += RealValue(op.mem.disp)
-
-        if op.mem.scale > 1:
-            mem_value *= RealValue(op.mem.scale)
-
-        # we change the type of the mem_value to a indirect sym memory
-        if isinstance(mem_value, SymRegister):
-            mem_value = IndirectSymValue(mem_value)
+            reg_name_index = self.cs.reg_name(op.mem.index)
+            return fetch_symbolic_register(reg_name_index)
 
         return None
 
+
+    
     def parse_operation_operands(
         self, cinsn, mem_access: int, symbolic_taint_store: VariableStates
     ) -> Operation:
         # Parse the operands of the instruction, create symbolic values if needed, and return the Operation object
         operation = Operation(cinsn)
+        operation.mem_access = mem_access
+        
         if len(operation.cinsn.operands) == 0:
             return operation
 
-        operation.mem_access = mem_access
-
-        # Check if the operand is a symbolic memory access and create a symbolic value [CURRENTLY DISABLED]
-        # for op in cinsn.operands:
-        #     if op.type == X86_OP_MEM:
-        #         sym_access = self.process_mem_access(op, symbolic_taint_store)
-        #         if isinstance(sym_access, SymValue):
-        #             symbolic_taint_store[mem_access] = sym_access
+        # Check if the operand is a symbolic memory access and create a symbolic value 
+        for i, op in enumerate(cinsn.operands):
+            if op.type == X86_OP_MEM and mem_access not in symbolic_taint_store:
+                sym_access = self.discover_indirect_access(op, mem_access, symbolic_taint_store)
+                if isinstance(sym_access, IndirectSymValue):
+                    print(f"Found a indirect sym memory")
+                    # set the mem_access to the indirect sym value. 
+                    # The indirect sym value is equal to the value of the register + the displacement
+                    symbolic_taint_store[mem_access] = sym_access
+        
         #
         # Process the tainted data of the operands
         #
@@ -568,8 +564,8 @@ class OperationEngineX86_64:
                     )
             # Process IMM operands
             elif operand.type == X86_OP_IMM:
-                print("IMM")
                 setattr(operation, f"v_op{i+1}", RealValue(operand.imm))
+                
             # Process MEM operands
             elif operand.type == X86_OP_MEM:
                 if mem_access not in symbolic_taint_store and self.engine.is_mapped(
@@ -579,10 +575,8 @@ class OperationEngineX86_64:
                         mem_access, self.engine.read_memory_int(mem_access)
                     )
                 if mem_access in symbolic_taint_store:
-                    print("fetching from symbolic_taint_store")
                     setattr(operation, f"v_op{i+1}", symbolic_taint_store[mem_access])
                 else:
-                    print("RealValue")
                     setattr(operation, f"v_op{i+1}", RealValue(0))
 
             assert getattr(operation, f"v_op{i+1}") is not None
@@ -643,6 +637,7 @@ class OperationEngineX86_64:
             raise e
         return mem_access
 
+    
     def evaluate_instruction(self, mem_access, symbolic_taint_store: VariableStates):
         if self.config is None:
             raise Exception("Config not set")
@@ -814,6 +809,7 @@ class Runner:
         finally:
             pass
 
+    
     def register_operations(self, operation: Operation):
         idx = self.operation_executed_count.value
         if operation is None:

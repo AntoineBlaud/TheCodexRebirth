@@ -231,6 +231,7 @@ class SymValue:
             self.v_wrapper = _SymValue(BitVec(str(value), BINARY_ARCH_SIZE))
         elif isinstance(value, (RealValue, SymValue)):
             self.v_wrapper = value.v_wrapper.clone()
+            self.id = value.id
 
     @property
     def size(self):
@@ -272,7 +273,7 @@ class SymValue:
         return clone
 
     def __repr__(self) -> str:
-        return f"{self.v_wrapper.__repr__()}"
+        return f"{self.v_wrapper.__repr__()} {self.id}"
 
     def __add__(self, other):
         self.value += other.value
@@ -354,10 +355,6 @@ class IndirectSymValue(SymValue):
     def __init__(self, value):
         super().__init__(value)
 
-    def __repr__(self):
-        value_str = str(self.value)
-        value_str = ustring.reformat_expression(value_str)
-        return f"MEMORY[{value_str}]"
 
 
 class SymMemory(SymValue):
