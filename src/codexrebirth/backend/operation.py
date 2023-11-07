@@ -82,7 +82,9 @@ class Operation:
         result_str += self.operand_str("v_op1", self.v_op1)
         result_str += self.operand_str("v_op2", self.v_op2)
         result_str += self.operand_str("v_op3", self.v_op3)
-        return result_str[:-1]
+        result_str = result_str[:-1]
+        result_str += "\n"
+        return result_str
 
     def clone(self):
         clone = Operation(self.cinsn)

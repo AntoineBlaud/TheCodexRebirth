@@ -189,7 +189,7 @@ def create_sym_register_factory():
     return SYM_REGISTER_FACTORY
 
 
-class VariablesState(dict):
+class VariableStates(dict):
     """
     This class is a wrapper around a dictionary that stores symbolic tainted variables.
     Symbolic variables are instance of SymValue or RealValue.
@@ -206,6 +206,7 @@ class VariablesState(dict):
     def __setitem__(self, key_object, value):
         # Set an item in the dictionary after processing the key
         key_object = create_name_from_address(key_object)
+        print(f"Set {key_object} to {value}")
         super().__setitem__(key_object, value)
 
     def __getitem__(self, key_object):
@@ -219,6 +220,7 @@ class VariablesState(dict):
         global INSN_EXECUTED_COUNT, SYM_REGISTER_FACTORY
         # Create a new symbolic register and propagate the value to its parts
         # (e.g., 'ah' to ['rax', 'eax', 'ax', 'ah', 'al'])
+        print(f"Create symbolic register {name}")
         for reg in SYM_REGISTER_FACTORY[name]:
             self[reg.name] = reg.reset()
             self[reg.name].id = INSN_EXECUTED_COUNT.value
@@ -230,12 +232,15 @@ class VariablesState(dict):
         name = create_name_from_address(address)
         self[name] = SymMemory(name, value)
         self[name].id = INSN_EXECUTED_COUNT.value
+        print(f"Create symbolic memory {name} with value {value}")
         return self[name]
 
     def del_sym_var(self, name):
         # Delete a symbolic variable, handling register parts and
         # individual variables
         name = create_name_from_address(name)
+        
+        print(f"Delete symbolic variable {name}")
 
         if name not in self:
             return
@@ -254,7 +259,7 @@ class VariablesState(dict):
         return res
 
     def clone(self):
-        clone = VariablesState()
+        clone = VariableStates()
         for key, value in self.items():
             clone[key] = value.clone()
         return clone
@@ -359,7 +364,8 @@ class OperationX86_64:
 
     def _push(self, operation, symbolic_taint_store):
         stack_pointer = self.engine.get_stack_pointer()
-        symbolic_taint_store[stack_pointer] = operation.v_op1.clone()
+        symbolic_taint_store.create_sym_mem(stack_pointer, 0)
+        symbolic_taint_store[stack_pointer].update(operation.v_op1)
         return symbolic_taint_store[stack_pointer]
 
     def _pop(self, operation, symbolic_taint_store):
@@ -377,6 +383,7 @@ class OperationX86_64:
     def _mov(self, operation, symbolic_taint_store, mem_access):
         # instanciate a new symbolic register if needed
         # if condition is not met, then delete the symbolic register
+        print(f"MOV {operation.cinsn.op_str}, {operation.v_op2.id}")
         if operation.op1.type == X86_OP_REG:
             regname = self.cs.reg_name(operation.op1.reg)
             symbolic_taint_store[regname].update(operation.v_op2)
@@ -474,7 +481,7 @@ class OperationEngineX86_64:
     def set_config(self, config):
         self.config = config
 
-    def process_mem_access(self, op, symbolic_taint_store: VariablesState):
+    def process_mem_access(self, op, symbolic_taint_store: VariableStates):
         # Return the symbolic register that is used in the mem_access instruction (ex: lea rbx, [rax + 5]) with
         # rax symbolic, if no symbolic register is used, Create a symbolic memory object
         mem_value = RealValue(0)
@@ -522,7 +529,7 @@ class OperationEngineX86_64:
         return None
 
     def parse_operation_operands(
-        self, cinsn, mem_access: int, symbolic_taint_store: VariablesState
+        self, cinsn, mem_access: int, symbolic_taint_store: VariableStates
     ) -> Operation:
         # Parse the operands of the instruction, create symbolic values if needed, and return the Operation object
         operation = Operation(cinsn)
@@ -532,11 +539,11 @@ class OperationEngineX86_64:
         operation.mem_access = mem_access
 
         # Check if the operand is a symbolic memory access and create a symbolic value [CURRENTLY DISABLED]
-        for op in cinsn.operands:
-            if op.type == X86_OP_MEM:
-                sym_access = self.process_mem_access(op, symbolic_taint_store)
-                if isinstance(sym_access, SymValue):
-                    symbolic_taint_store[mem_access] = sym_access
+        # for op in cinsn.operands:
+        #     if op.type == X86_OP_MEM:
+        #         sym_access = self.process_mem_access(op, symbolic_taint_store)
+        #         if isinstance(sym_access, SymValue):
+        #             symbolic_taint_store[mem_access] = sym_access
         #
         # Process the tainted data of the operands
         #
@@ -561,6 +568,7 @@ class OperationEngineX86_64:
                     )
             # Process IMM operands
             elif operand.type == X86_OP_IMM:
+                print("IMM")
                 setattr(operation, f"v_op{i+1}", RealValue(operand.imm))
             # Process MEM operands
             elif operand.type == X86_OP_MEM:
@@ -571,8 +579,10 @@ class OperationEngineX86_64:
                         mem_access, self.engine.read_memory_int(mem_access)
                     )
                 if mem_access in symbolic_taint_store:
+                    print("fetching from symbolic_taint_store")
                     setattr(operation, f"v_op{i+1}", symbolic_taint_store[mem_access])
                 else:
+                    print("RealValue")
                     setattr(operation, f"v_op{i+1}", RealValue(0))
 
             assert getattr(operation, f"v_op{i+1}") is not None
@@ -593,7 +603,7 @@ class OperationEngineX86_64:
         return operation
 
     def make_var_substitutions(
-        self, symbolic_taint_store: VariablesState, tainted_var_name: str
+        self, symbolic_taint_store: VariableStates, tainted_var_name: str
     ):
         # we do not fetch from global config because it is to slow
         global VAR_COUNTER
@@ -633,7 +643,7 @@ class OperationEngineX86_64:
             raise e
         return mem_access
 
-    def evaluate_instruction(self, mem_access, symbolic_taint_store: VariablesState):
+    def evaluate_instruction(self, mem_access, symbolic_taint_store: VariableStates):
         if self.config is None:
             raise Exception("Config not set")
 
@@ -642,12 +652,13 @@ class OperationEngineX86_64:
         cinsn_addr = self.engine.get_ea()
         # Check if the instruction is the same as the last one executed
         if cinsn_addr == self.last_instruction_executed:
+            print(f"Instruction {hex(cinsn_addr)} already executed\n")
             return None
 
         # check if the operands are not supported
         for bad_op_pattern in self.config["BAD_OPERANDS"]:
             if re.match(bad_op_pattern, cinsn.op_str):
-                return None
+                print(f"Bad operand: {hex(cinsn_addr)} {cinsn.op_str}, the result operation may be wrong")
 
         # mem_access can be calculated from cinsn of directly
         # read base, index, disp and scale from cinsn operands
@@ -684,11 +695,11 @@ class OperationEngineX86_64:
 
 class Runner:
     def __init__(self, engine, debug_level, timeout, symbolic_check, *args):
-        # Set the debug level and create a VariablesState instance
+        # Set the debug level and create a VariableStates instance
         self.debug_level = debug_level
         self.timeout = timeout
         self.symbolic_check = symbolic_check
-        self.symbolic_taint_store = VariablesState()
+        self.symbolic_taint_store = VariableStates()
         # Create an empty dictionary for callbacks
         self.callbacks = {}
         # Initialize start and end addresses for emulation
@@ -955,7 +966,7 @@ class Runner:
         # delete current ql hooks
         self.engine.clear()
         new_runner = self.__class__(self.engine, self.debug_level, self.timeout)
-        # Copy the state of VariablesState
+        # Copy the state of VariableStates
         new_runner.state = self.symbolic_taint_store.clone()
         # Copy architecture-specific attributes
         new_runner.cs = self.cs

@@ -111,7 +111,10 @@ class QilingEngine(EngineWrapper):
         return real_value
 
     def read_reg(self, regname):
-        return self.ql.arch.regs.read(regname)
+        try:
+            return self.ql.arch.regs.read(regname)
+        except KeyError:
+            return 0
 
     def write_reg(self, regname, value):
         self.ql.arch.regs.write(regname, value)

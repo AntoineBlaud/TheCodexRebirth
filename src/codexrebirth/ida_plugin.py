@@ -21,15 +21,7 @@ from .integration.api import DisassemblerContextAPI
 from .trace.arch import ArchAMD64, ArchX86
 from .tools import *
 
-import time
-from PyQt5.QtWidgets import QMessageBox
-import random
-import keyboard
 import openai
-import os
-import json
-import threading
-
 
 class CodexRebirth(ida_idaapi.plugin_t):
     """
@@ -584,12 +576,13 @@ class CodexRebirth(ida_idaapi.plugin_t):
             self._highlight_disassembly(lines_out, widget, lines_in)
         return
 
+
     def _highlight_disassembly(self, lines_out, widget, lines_in):
         """
         Highlights the disassembly in IDA Pro with different colors based on the current instruction and its context.
         """
 
-        def get_taint_color_and_trace(reader, idx, address, default_taint_color):
+        def get_taint_color_and_trace(reader, idx, default_taint_color):
             trace = reader.get_trace(idx)
             taint_id = trace.taint_id if trace else -1
             color = reader.get_taint_id_color(taint_id) or default_taint_color
@@ -598,64 +591,54 @@ class CodexRebirth(ida_idaapi.plugin_t):
         if not self.reader:
             return
 
+        if self.reader.idx == self.last_mem_update_idx:
+            return
+
+
         current_address = idc.here()
         backward_color = to_ida_color(self.palette.trail_backward)
         forward_color = to_ida_color(self.palette.trail_forward)
         default_taint_color = to_ida_color(self.palette.trail_tainted)
         end_address_color = to_ida_color(self.palette.end_address)
         current_color = to_ida_color(self.palette.trail_current)
-
-        trail = {}
-
+        
         forward_ips = self.reader.get_next_ips(0x10)
-        backward_ips = self.reader.get_prev_ips(0x20)
+        backward_ips = self.reader.get_prev_ips(0x10)
         current_address = self.reader.rebased_ip
 
-        trails = [(forward_ips, forward_color), (backward_ips, backward_color)]
+        trails = [(backward_ips, backward_color), (forward_ips, forward_color)]
 
         for j, (trail_addresses, trail_color) in enumerate(trails):
             for i, address in enumerate(trail_addresses):
+                
                 if trail_addresses == forward_ips:
                     idx = self.reader.idx + i
 
                 elif trail_addresses == backward_ips:
                     idx = self.reader.idx - i
 
-                # there is a priority order give by trails list
-                if address not in trail:
-                    item_color, item_trace = get_taint_color_and_trace(
-                        self.reader, idx, address, default_taint_color
-                    )
+                item_color, item_trace = get_taint_color_and_trace(
+                    self.reader, idx, default_taint_color
+                )
 
-                    if not item_trace:
-                        continue
-
-                    # if the instruction taint_id is different from the current taint_id,
-                    # and the color is the default taint color, we use the trail color
-                    if (
-                        not item_trace.taint_id == self.reader.current_taint_id
-                        and item_color == default_taint_color
-                    ):
-                        item_color = trail_color
-
-                    # if the instruction taint_id is -1, it means that the instruction is not tainted
-                    elif item_trace.taint_id == -1:
-                        item_color = trail_color
-
-                    trail[address] = (item_color, item_trace)
-
-        for section in lines_in.sections_lines:
-            for line in section:
-                address = line.at.toea()
-                if address not in trail:
+                if not item_trace:
                     continue
 
-                item_color, item_trace = trail[address]
+                # if the instruction taint_id is different from the current taint_id,
+                # and the color is the default taint color, we use the trail color
+                if (
+                    not item_trace.taint_id == self.reader.current_taint_id
+                    and item_color == default_taint_color
+                ):
+                    item_color = trail_color
+
+                # if the instruction taint_id is -1, it means that the instruction is not tainted
+                elif item_trace.taint_id == -1:
+                    item_color = trail_color
 
                 # We are at the current instruction.
                 if address == current_address:
                     item_color = current_color
-
                     # Trigger a navigation event in the memory view.
                     if self.reader.idx != self.last_mem_update_idx:
                         self.memory.navigate(item_trace.operation.mem_access)
@@ -666,10 +649,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
                     item_color = end_address_color
 
                 if address not in self.similar_code.colored_instructions:
-                    entry = ida_kernwin.line_rendering_output_entry_t(
-                        line, ida_kernwin.LROEF_FULL_LINE, item_color
-                    )
-                    lines_out.entries.push_back(entry)
+                   idc.set_color(address, idc.CIC_ITEM, item_color)
 
                 # comment the instruction with the trace record
                 cmt = idaapi.get_cmt(address, False)
@@ -677,6 +657,9 @@ class CodexRebirth(ida_idaapi.plugin_t):
                 cmt = cmt.split(separator)[0] if cmt else ""
                 cmt += separator + item_trace.operation.__ida__repr__()
                 idaapi.set_cmt(address, cmt, False)
+
+        self.trace_dock.refresh()
+                
 
     def _update_block_hits(self):
         """
