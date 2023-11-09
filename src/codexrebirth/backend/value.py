@@ -23,8 +23,6 @@ BINARY_ARCH_SIZE = None
 SYM_REGISTER_FACTORY = None
 ID_COUNTER = None
 
-COPY_CACHE = {}
-
 
 def initialize_global(func):
     def wrapper(*args, **kwargs):
@@ -66,11 +64,9 @@ class _SymValue:
         value_str = ustring.reformat_expression(value_str)
         return value_str
 
-
     def __raw_repr__(self):
         return str(self.value)
 
-    
     def clone(self):
         return self.__class__(self.value)
 
@@ -81,7 +77,6 @@ class _SymValue:
 class _RealValue:
     def __init__(self, value):
         self._value = value
-        
 
     @property
     def value(self):
@@ -99,7 +94,6 @@ class _RealValue:
     def __raw_repr__(self):
         return str(self.value)
 
-    
     def clone(self):
         return self.__class__(self.value)
 
@@ -127,7 +121,6 @@ class RealValue:
     def binary_mask(self):
         return (1 << self.size) - 1
 
-    
     def clone(self):
         clone = RealValue(self.value)
         clone.id = set(self.id)
@@ -242,17 +235,16 @@ class SymValue:
         elif isinstance(value, (RealValue, SymValue)):
             self.v_wrapper = value.v_wrapper.clone()
             self._id = set(value.id)
-            
-            
+
     @property
     def id(self):
         return self._id
-    
+
     @id.setter
     def id(self, id):
         if isinstance(id, set):
             self._id = id
-                                
+
     @property
     def size(self):
         return BINARY_ARCH_SIZE
@@ -271,26 +263,24 @@ class SymValue:
         self.v_wrapper.value = target
 
     def update(self, target):
+        global ID_COUNTER
         if isinstance(target, (SymValue)):
             self.v_wrapper = target.v_wrapper.clone()
-            self._id = set(target._id)
+            # add the current id to the new id, allow to trace all the instruction that use this value
+            self._id = set(target._id) | set([ID_COUNTER.value])
         elif isinstance(target, (RealValue)):
-            self.v_wrapper = target.v_wrapper.clone()
-            self._id = set([ID_COUNTER.value])
+            self = target.clone()
         elif isinstance(target, (BitVecRef, BitVecNumRef)):
             self.v_wrapper = _SymValue(target.clone())
         else:
             raise Exception("Target type unknown '{}'".format(type(target)))
-        
-    
+
     def update_id(self, target):
         global ID_COUNTER, COPY_CACHE
 
         if isinstance(target, (SymValue, RealValue)):
             self.id |= target.id
 
-            
-    
     def clone(self):
         clone = SymValue(self.name, self.v_wrapper)
         clone.id = set(self._id)
@@ -320,7 +310,6 @@ class SymValue:
 
     def __and__(self, other):
         self.value &= other.value
-        self.value &= self.binary_mask
         self.update_id(other)
         return self
 
@@ -379,7 +368,6 @@ class SymValue:
 class IndirectSymValue(SymValue):
     def __init__(self, value):
         super().__init__(value)
-
 
 
 class SymMemory(SymValue):
@@ -448,7 +436,6 @@ class SymRegister(SymValue):
         self._id = set([ID_COUNTER.value])
         return self
 
-    
     def clone(self):
         cloned_name = "{}_clone_{}".format(self.name, str(uuid.uuid4()))
         clone = SymRegister(cloned_name, self.high, self.low, self.parent)

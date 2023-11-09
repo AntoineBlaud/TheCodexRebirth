@@ -191,9 +191,7 @@ class HexController(object):
             self.model.data = []
             return
 
-        self.model.data = self.reader.get_memory(
-            self.model.address, self.model.data_size
-        )
+        self.model.data = self.reader.get_memory(self.model.address, self.model.data_size)
         # generate delta
         ida_data = bytearray(idc.get_bytes(self.model.address, self.model.data_size))
         self.model.delta = self.memory_delta(self.model.data, ida_data)

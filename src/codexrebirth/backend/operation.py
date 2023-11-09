@@ -66,7 +66,7 @@ class Operation:
             #     else self.operand_str("v_res", self.v_op1)
             # )
         else:
-           #result_op += self.operand_str("v_res", self.v_result)
+            # result_op += self.operand_str("v_res", self.v_result)
             result_op += self.operand_str("real_res", self.op_result)
             result_op += self.operand_str("eval_res", self.eval_v_result)
         result_str = result_op.replace("\n", ", ")
@@ -80,9 +80,9 @@ class Operation:
         result_op += self.operand_str("op2", self.r_op2)
         result_op += self.operand_str("op3", self.r_op3)
         result_str += result_op
-        #result_str += self.operand_str("v_op1", self.v_op1)
-        #result_str += self.operand_str("v_op2", self.v_op2)
-        #result_str += self.operand_str("v_op3", self.v_op3)
+        # result_str += self.operand_str("v_op1", self.v_op1)
+        # result_str += self.operand_str("v_op2", self.v_op2)
+        # result_str += self.operand_str("v_op3", self.v_op3)
         result_str = result_str[:-1]
         result_str += "\n"
         return result_str

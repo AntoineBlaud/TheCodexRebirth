@@ -301,9 +301,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         CENTER_AROUND_LINE_INDEX = 20
 
         if widget:
-            return ida_kernwin.ea_viewer_history_push_and_jump(
-                widget, address, 0, CENTER_AROUND_LINE_INDEX, 0
-            )
+            return ida_kernwin.ea_viewer_history_push_and_jump(widget, address, 0, CENTER_AROUND_LINE_INDEX, 0)
 
         # ehh, whatever.. just let IDA navigate to yolo
         else:

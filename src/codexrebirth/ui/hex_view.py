@@ -118,9 +118,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
         self._chars_in_line = self.model.num_bytes_per_line * 2
 
         # add 1 char for each space between elements (bytes, dwords, qwords...)
-        self._chars_in_line += (
-            self.model.num_bytes_per_line // HEX_TYPE_WIDTH[self.model.hex_format]
-        )
+        self._chars_in_line += self.model.num_bytes_per_line // HEX_TYPE_WIDTH[self.model.hex_format]
 
         # the x position to draw the text address (left side of view)
         self._pos_addr = self._char_width // 2
@@ -135,9 +133,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
 
         # the x position and width of the auxillary region (right section of view)
         self._pos_aux = self._pos_hex + self._width_hex
-        self._width_aux = (
-            self.model.num_bytes_per_line * self._char_width
-        ) + self._char_width * 2
+        self._width_aux = (self.model.num_bytes_per_line * self._char_width) + self._char_width * 2
 
         # enforce a minimum view width, to ensure all text stays visible
         self.setMinimumWidth(self._pos_aux + self._width_aux)
@@ -180,9 +176,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
         # print("- Hex x", hex_x)
 
         # the number of items (eg, bytes, qwords) per line
-        num_items = (
-            self.model.num_bytes_per_line // HEX_TYPE_WIDTH[self.model.hex_format]
-        )
+        num_items = self.model.num_bytes_per_line // HEX_TYPE_WIDTH[self.model.hex_format]
         # print("- Num items", num_items)
 
         # compute the pixel width each rendered item on the line takes up
@@ -210,12 +204,8 @@ class HexView(QtWidgets.QAbstractScrollArea):
             # print("- Item Byte X", item_byte_x)
             # print("- Item Byte Index", item_byte_index)
 
-            item_byte_index = (
-                HEX_TYPE_WIDTH[self.model.hex_format] - 1
-            ) - item_byte_index
-            byte_x = (
-                item_index * HEX_TYPE_WIDTH[self.model.hex_format] + item_byte_index
-            )
+            item_byte_index = (HEX_TYPE_WIDTH[self.model.hex_format] - 1) - item_byte_index
+            byte_x = item_index * HEX_TYPE_WIDTH[self.model.hex_format] + item_byte_index
 
         else:
             byte_x = item_index * HEX_TYPE_WIDTH[self.model.hex_format]
@@ -422,11 +412,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
 
             self._pending_selection_origin = byte_address
             self._pending_selection_start = byte_address
-            self._pending_selection_end = (
-                (byte_address + 1)
-                if byte_address != INVALID_ADDRESS
-                else INVALID_ADDRESS
-            )
+            self._pending_selection_end = (byte_address + 1) if byte_address != INVALID_ADDRESS else INVALID_ADDRESS
 
         self.viewport().update()
 
@@ -437,9 +423,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
         if e.key() == QtCore.Qt.Key_G:
             import ida_kernwin, ida_idaapi
 
-            address = ida_kernwin.ask_addr(
-                self.model.address, "Jump to address in memory"
-            )
+            address = ida_kernwin.ask_addr(self.model.address, "Jump to address in memory")
             if address != None and address != ida_idaapi.BADADDR:
                 self.controller.navigate(address)
             e.accept()
@@ -494,16 +478,12 @@ class HexView(QtWidgets.QAbstractScrollArea):
         painter.fillRect(event.rect(), self._palette.hex_data_bg)
 
         # paint address area background
-        address_area_rect = QtCore.QRect(
-            0, event.rect().top(), self._width_addr, self.height()
-        )
+        address_area_rect = QtCore.QRect(0, event.rect().top(), self._width_addr, self.height())
         painter.fillRect(address_area_rect, self._palette.hex_address_bg)
 
         # paint line between address area and hex area
         painter.setPen(self._palette.hex_separator)
-        painter.drawLine(
-            self._width_addr, event.rect().top(), self._width_addr, self.height()
-        )
+        painter.drawLine(self._width_addr, event.rect().top(), self._width_addr, self.height())
 
         # paint line between hex area and auxillary area
         line_pos = self._pos_aux
@@ -552,9 +532,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
 
         byte_base_idx = line_idx * self.model.num_bytes_per_line
         byte_idx = byte_base_idx
-        stop_idx = min(
-            len(self.model.data), byte_base_idx + self.model.num_bytes_per_line
-        )
+        stop_idx = min(len(self.model.data), byte_base_idx + self.model.num_bytes_per_line)
 
         # paint each element on the line, up until the end of the line, or buffer
         while byte_idx < stop_idx:
@@ -729,9 +707,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
         pack_fmt = "Q" if pack_len == 8 else "I"
 
         # read and analyze the value to determine if it is a pointer
-        value = struct.unpack(
-            pack_fmt, self.model.data[byte_idx : byte_idx + pack_len]
-        )[0]
+        value = struct.unpack(pack_fmt, self.model.data[byte_idx : byte_idx + pack_len])[0]
         if not self.controller.pctx.is_pointer(value):
             return self._paint_byte(painter, byte_idx, x, y)
 

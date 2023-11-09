@@ -93,7 +93,7 @@ Then copy config file **codexrebirth_config.json** and **src/ida_codexrebirth.py
 
 ## Performance Insights
 
-The execution speed of CodexRebirth typically ranges between 700 and 1000 instructions per second. However, it's important to note that enabling the **symbolic_check** parameter can significantly impact performance. It's recommended to disable this feature if achieving a precise equation result is not your primary concern.
+The execution speed of CodexRebirth typically ranges between 500 and 1500 instructions per second. However, it's important to note that enabling the **symbolic_check** parameter can significantly impact performance. It's recommended to disable this feature if achieving a precise equation result is not your primary concern.
 
 Furthermore, it's worth considering that the choice between running Windows or Linux binaries can influence the performance, and Qiling's loading time on Windows systems is notably slower, which will extend the analysis initiation process.
 
@@ -112,13 +112,17 @@ Furthermore, it's worth considering that the choice between running Windows or L
 
 ## What's Next ? 
 
-- Use Dynamic Binary Instrumentation to improve the performance of the tracing engine.
-- Rewrite the backend in C++ to improve the performance of the plugin.
-- Discover a way to easy implement new instructions, or find a project that already implement a lot of instructions and that is compatible with our operation model.
-- Create new views to display : 
-    - the taint tree
-    - the call graph as directory/subdirectory with sorted functions, and the ability to group call sequence
-    - the block graph like the call graph
-    - memory view with segment choice, and previsualisation of the memory read and write
+The current version of the tool operates through a single function, which requires manual initiation. Our next objective is to develop a tool that can seamlessly attach to the process and automatically initiate the analysis of all program functions.
+
+
+- Leveraging Dynamic Binary Instrumentation to optimize the performance of the tracing engine.
+- Refactoring the backend in C/C++ or Rust to boost the efficiency of the plugin.
+- Exploring methods for the straightforward implementation of new instructions, or identifying existing projects that align with our operational model.
+- Introducing new visual views to provide better insights, such as:
+    - taint tree view.
+    - call graph presented in a directory/subdirectory structure with well-organized functions and the ability to group call sequences.
+    - block graph that mirrors the structure of the call graph.
+    - memory view with segment selection, a preview of memory read and write operations, and a timeline for navigating memory data.
+    - string view capable of searching across the entire timeline for strings and presenting them in a user-friendly list
 
 

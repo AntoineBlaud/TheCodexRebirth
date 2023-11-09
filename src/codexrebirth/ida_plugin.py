@@ -23,6 +23,7 @@ from .tools import *
 
 import openai
 
+
 class CodexRebirth(ida_idaapi.plugin_t):
     """
     The plugin integration layer IDA Pro.
@@ -128,9 +129,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
             print("Trace records are not available.")
             return
 
-        self.reader = TraceReader(
-            sym_r.trace_records, sym_r.registers_state, sym_r.memory_state
-        )
+        self.reader = TraceReader(sym_r.trace_records, sym_r.registers_state, sym_r.memory_state)
         # Hook into the trace for further processing.
         self.hook()
         # Attach the trace engine to various plugin UI controllers, granting them
@@ -300,10 +299,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
         color = self.colors.pop()
         for taint_id in taint_ids:
             self.reader.set_taint_id_color(taint_id, color)
-            print(
-                f"Coloring taint id {taint_id} with color {self.reader.get_taint_id_color(taint_id)}"
-            )
-            
+            print(f"Coloring taint id {taint_id} with color {self.reader.get_taint_id_color(taint_id)}")
+
     def _interactive_select_idx(self):
         """
         Select an index in the trace.
@@ -313,7 +310,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         idx = self.reader.idx
         self.reader.set_selected_idx(idx)
         print(f"Selected index {idx}")
-        
+
     def _interactive_unselect_idx(self):
         """
         Unselect an index in the trace.
@@ -322,7 +319,6 @@ class CodexRebirth(ida_idaapi.plugin_t):
             return
         self.reader.set_selected_idx(None)
         print(f"Unselected index")
-            
 
     def _uninstall(self):
         """
@@ -350,9 +346,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
     ACTION_RESET = "codexrebirth:reset"
     ACTION_SIMILAR_BLOCKS = "codexrebirth:similar_blocks"
     ACTION_IDA_CREATE_EXECUTION_SNAPSHOT = "codexrebirth:ida_create_execution_snapshot"
-    ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT = (
-        "codexrebirth:ida_restore_ida_execution_snapshot"
-    )
+    ACTION_IDA_RESTORE_EXECUTION_SNAPSHOT = "codexrebirth:ida_restore_ida_execution_snapshot"
     ACTION_GO_NEXT_EXECUTION = "codexrebirth:go_next_execution"
     ACTION_GO_PREV_EXECUTION = "codexrebirth:go_prev_execution"
     ACTION_SYNCHRONIZE_VARIABLES = "codexrebirth:synchronize_variables"
@@ -397,9 +391,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
             IDACtxEntry(action_handler),  # The action handler
             shortcut,  # Optional: action shortcut
             action_text,  # Optional: tooltip
-            ida_kernwin.load_custom_icon(data=icon_data)
-            if icon_data != -1
-            else icon_data,
+            ida_kernwin.load_custom_icon(data=icon_data) if icon_data != -1 else icon_data,
         )  # Optional: the action icon
 
         ida_kernwin.register_action(action_desc)
@@ -436,9 +428,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         )
 
     def _install_reset(self, widget, popup):
-        self._install_action(
-            widget, popup, self.ACTION_RESET, "Reset Context", self.reset, "reset.png"
-        )
+        self._install_action(widget, popup, self.ACTION_RESET, "Reset Context", self.reset, "reset.png")
 
     def _install_find_similar_blocks(self, widget, popup):
         self._install_action(
@@ -525,7 +515,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
             "Color taint id",
             self._interactive_color_taint_id,
         )
-        
+
     def _install_select_idx(self, widget, popup):
         self._install_action(
             widget,
@@ -535,6 +525,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
             self._interactive_select_idx,
             shortcut="Shift+i",
         )
+
     def _install_unselect_idx(self, widget, popup):
         self._install_action(
             widget,
@@ -625,7 +616,6 @@ class CodexRebirth(ida_idaapi.plugin_t):
             self._highlight_disassembly(lines_out, widget, lines_in)
         return
 
-
     def _highlight_disassembly(self, lines_out, widget, lines_in):
         """
         Highlights the disassembly in IDA Pro with different colors based on the current instruction and its context.
@@ -645,14 +635,13 @@ class CodexRebirth(ida_idaapi.plugin_t):
         if self.reader.idx == self.last_mem_update_idx:
             return
 
-
         current_address = idc.here()
         backward_color = to_ida_color(self.palette.trail_backward)
         forward_color = to_ida_color(self.palette.trail_forward)
         default_taint_color = to_ida_color(self.palette.taint_backward)
         end_address_color = to_ida_color(self.palette.end_address)
         current_color = to_ida_color(self.palette.trail_current)
-        
+
         forward_ips = self.reader.get_next_ips(0x10)
         backward_ips = self.reader.get_prev_ips(0x10)
         current_address = self.reader.rebased_ip
@@ -661,19 +650,17 @@ class CodexRebirth(ida_idaapi.plugin_t):
 
         for j, (trail_addresses, trail_color) in enumerate(trails):
             for i, address in enumerate(trail_addresses):
-                
                 if trail_addresses == forward_ips:
                     idx = self.reader.idx + i
 
                 elif trail_addresses == backward_ips:
                     idx = self.reader.idx - i
-                    
 
-                item_color, item_trace = get_taint_color_and_trace(
-                    self.reader, idx, default_taint_color
-                )
-                if len(self.reader.get_taint_ids(idx).intersection(self.reader.current_taint_ids)) == 0  \
-                    and item_color == default_taint_color:
+                item_color, item_trace = get_taint_color_and_trace(self.reader, idx, default_taint_color)
+                if (
+                    len(self.reader.get_taint_ids(idx).intersection(self.reader.current_taint_ids)) == 0
+                    and item_color == default_taint_color
+                ):
                     item_color = trail_color
 
                 # We are at the current instruction.
@@ -689,18 +676,17 @@ class CodexRebirth(ida_idaapi.plugin_t):
                     item_color = end_address_color
 
                 if address not in self.similar_code.colored_instructions:
-                   idc.set_color(address, idc.CIC_ITEM, item_color)
+                    idc.set_color(address, idc.CIC_ITEM, item_color)
 
                 # comment the instruction with the trace record
                 cmt = idaapi.get_cmt(address, False)
                 separator = "@@ "
                 cmt = cmt.split(separator)[0] if cmt else ""
                 if item_trace:
-                    cmt += separator + item_trace.operation.__ida__repr__()
+                    cmt += separator + item_trace.operation.__ida__repr__() + f", idx = {idx}"
                 idaapi.set_cmt(address, cmt, False)
 
         self.trace_dock.refresh()
-                
 
     def _update_block_hits(self):
         """
@@ -714,9 +700,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         trail_length = self.reader.length
         current_address = idc.here()
 
-        blocks_info = self.similar_code.get_all_basic_block_bounds(current_address)[
-            1:
-        ]  # remove first block
+        blocks_info = self.similar_code.get_all_basic_block_bounds(current_address)[1:]  # remove first block
         self.blocks_execution_count = {start: 0 for start, end in blocks_info}
 
         forward_ips = self.reader.get_next_ips(trail_length)

@@ -105,11 +105,7 @@ class VarExplorerTool:
 
     def read_reg_family(self, reg_used):
         if reg_used in self.regs_family:
-            return [
-                reg_brother
-                for reg_brother in self.regs_family[reg_used]
-                if reg_brother in self.regs_family
-            ]
+            return [reg_brother for reg_brother in self.regs_family[reg_used] if reg_brother in self.regs_family]
         return []
 
     def get_stack_vars(self):
@@ -266,15 +262,10 @@ class VarExplorerTool:
                         regvar.end = addr + 1
                         if reg_brother == reg_used:
                             var_name = regvar.name.replace(regvar.reg, reg_used)
-                            self.set_reg_name(
-                                regvar.start, regvar.end, reg_brother, var_name
-                            )
+                            self.set_reg_name(regvar.start, regvar.end, reg_brother, var_name)
 
             # assign a new variable to the register if it is a mov instruction between registers
-            if (
-                not self.is_mov_into_mem(inst)
-                and len(self.find_regs_mov_inst(inst)) == 2
-            ):
+            if not self.is_mov_into_mem(inst) and len(self.find_regs_mov_inst(inst)) == 2:
                 regs = self.find_regs_mov_inst(inst)
                 inst = inst.split(",")
                 reg1, reg2 = regs

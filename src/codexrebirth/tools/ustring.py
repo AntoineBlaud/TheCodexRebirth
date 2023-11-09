@@ -12,18 +12,14 @@ def simplify_mask(expression):
         mask_expression = match[0]
         if mask_expression[1] == "&":
             mask_expression = mask_expression[2:]
-        expression = expression.replace(
-            mask_expression, f" EVAL{eval(mask_expression)}", 1
-        )
+        expression = expression.replace(mask_expression, f" EVAL{eval(mask_expression)}", 1)
 
     mask_pattern = r"((EVAL[0-9]+)+)"
     while re.search(mask_pattern, expression):
         match = re.search(mask_pattern, expression)
         # Get the mask expression
         mask_expression = match[0]
-        expression = expression.replace(
-            mask_expression, hex(int(mask_expression[4:])), 1
-        )
+        expression = expression.replace(mask_expression, hex(int(mask_expression[4:])), 1)
 
     return expression
 
@@ -33,9 +29,7 @@ def replace_integers_with_hex(input_string):
     integer_pattern = r"\b\d+\b"
 
     # Use a lambda function to convert matched integers to hexadecimal format
-    hex_string = re.sub(
-        integer_pattern, lambda match: hex(int(match.group())), input_string
-    )
+    hex_string = re.sub(integer_pattern, lambda match: hex(int(match.group())), input_string)
     return hex_string
 
 
@@ -64,7 +58,6 @@ def get_str_operand_index(operand, index):
 
 
 def extract_part_of_list(input_list, max_len, idx):
-        
     if idx not in input_list:
         # Find the closest number to idx in the list
         closest_number = min(input_list, key=lambda x: abs(x - idx))

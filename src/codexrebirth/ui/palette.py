@@ -62,9 +62,7 @@ class PluginPalette(object):
         """
         Return the user theme directory.
         """
-        theme_directory = os.path.join(
-            disassembler.get_disassembler_user_directory(), "tenet_themes"
-        )
+        theme_directory = os.path.join(disassembler.get_disassembler_user_directory(), "tenet_themes")
         return theme_directory
 
     # ----------------------------------------------------------------------
@@ -120,9 +118,7 @@ class PluginPalette(object):
         """
 
         # create & configure a Qt File Dialog for immediate use
-        file_dialog = QtWidgets.QFileDialog(
-            None, "Open plugin theme file", self._last_directory, "JSON Files (*.json)"
-        )
+        file_dialog = QtWidgets.QFileDialog(None, "Open plugin theme file", self._last_directory, "JSON Files (*.json)")
         file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
 
         # prompt the user with the file dialog, and await filename(s)
@@ -138,10 +134,7 @@ class PluginPalette(object):
         file_dir = os.path.abspath(os.path.dirname(filename))
         user_dir = os.path.abspath(self.get_user_theme_dir())
         if file_dir != user_dir:
-            text = (
-                "Please install your plugin theme into the user theme directory:\n\n"
-                + user_dir
-            )
+            text = "Please install your plugin theme into the user theme directory:\n\n" + user_dir
             disassembler.warning(text)
             return
 
@@ -167,8 +160,7 @@ class PluginPalette(object):
         # if the selected theme fails to load, throw a visible warning
         if not self._load_theme(filename):
             disassembler.warning(
-                "Failed to load plugin user theme!\n\n"
-                "Please check the console for more information..."
+                "Failed to load plugin user theme!\n\n" "Please check the console for more information..."
             )
             return
 
@@ -264,9 +256,7 @@ class PluginPalette(object):
         logger.debug("Loading required theme fields from disk...")
 
         # load a known-good theme from the plugin's in-box themes
-        filepath = os.path.join(
-            self.get_plugin_theme_dir(), self._default_themes["dark"]
-        )
+        filepath = os.path.join(self.get_plugin_theme_dir(), self._default_themes["dark"])
         theme = self._read_theme(filepath)
 
         #
@@ -349,10 +339,7 @@ class PluginPalette(object):
         except:
             pass
 
-        disassembler.warning(
-            "Failed to load plugin user theme!\n\n"
-            "Please check the console for more information..."
-        )
+        disassembler.warning("Failed to load plugin user theme!\n\n" "Please check the console for more information...")
 
         return False
 

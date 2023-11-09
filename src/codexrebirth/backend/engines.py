@@ -90,9 +90,7 @@ class QilingEngine(EngineWrapper):
     def read_memory_int(self, address):
         if not self.is_mapped(address):
             return 0
-        return int.from_bytes(
-            self.ql.mem.read(address, self.ql.arch.bits // 8), byteorder="little"
-        )
+        return int.from_bytes(self.ql.mem.read(address, self.ql.arch.bits // 8), byteorder="little")
 
     def is_mapped(self, address):
         if not isinstance(address, int):
@@ -150,15 +148,9 @@ class QilingEngine(EngineWrapper):
         from unicorn import x86_const as uc_x86_const
 
         def __canonicalized_mapping(module, prefix: str) -> Mapping[str, int]:
-            return dict(
-                (k[len(prefix) :], getattr(module, k))
-                for k in dir(module)
-                if k.startswith(prefix)
-            )
+            return dict((k[len(prefix) :], getattr(module, k)) for k in dir(module) if k.startswith(prefix))
 
         cs_x86_regs = __canonicalized_mapping(cs_x86_const, "X86_REG")
         uc_x86_regs = __canonicalized_mapping(uc_x86_const, "UC_X86_REG")
 
-        return dict(
-            (cs_x86_regs[k], uc_x86_regs[k]) for k in cs_x86_regs if k in uc_x86_regs
-        )
+        return dict((cs_x86_regs[k], uc_x86_regs[k]) for k in cs_x86_regs if k in uc_x86_regs)

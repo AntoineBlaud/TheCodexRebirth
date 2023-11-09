@@ -7,6 +7,7 @@ from ..tools import *
 from collections import defaultdict
 from copy import deepcopy
 
+
 class TraceReader(object):
     """
     A high level, debugger-like interface for querying Tenet traces.
@@ -49,15 +50,14 @@ class TraceReader(object):
         # Populate taint ID-based trace cache
         for idx in self._idx_trace_cache:
             self._backward_taint_id_trace_cache[idx] = sorted(list(self.get_taint_ids(idx)))
-            
+
         for idx in self._idx_trace_cache:
             for taint_id in self.get_taint_ids(idx):
                 self._forward_taint_id_trace_cache[taint_id].append(idx)
-                
-            
+
         for taint_id in self._forward_taint_id_trace_cache:
             self._forward_taint_id_trace_cache[taint_id] = sorted(self._forward_taint_id_trace_cache[taint_id])
-            
+
         print("Finished constructing trace cache")
 
     # -------------------------------------------------------------------------
@@ -113,10 +113,7 @@ class TraceReader(object):
     def is_computation_correct(self, idx):
         if idx not in self._idx_trace_cache:
             return False
-        return (
-            self.get_trace(idx).operation.op_result
-            == self.get_trace(idx).operation.eval_v_result
-        )
+        return self.get_trace(idx).operation.op_result == self.get_trace(idx).operation.eval_v_result
 
     def get_register(self, reg_name, idx=None):
         """
@@ -181,10 +178,8 @@ class TraceReader(object):
         # save the new position
         self.idx = idx
         self.get_registers()
-        print(self.get_taint_ids(idx))
         idaapi.jumpto(self.get_ip(idx))
         self._notify_idx_changed()
-        
 
     def get_current_function_bounds(self):
         """
@@ -202,16 +197,15 @@ class TraceReader(object):
         Return True if the given address is symbolic.
         """
         return self._backward_taint_id_trace_cache[idx]
-    
+
     def get_forward_tainted_idxs(self, taint_id):
         """
         Return True if the given address is symbolic.
         """
         return self._forward_taint_id_trace_cache[taint_id]
-    
+
     def set_selected_idx(self, idx):
         self.selected_idx = idx
-    
 
     def get_trace(self, idx):
         if idx not in self._idx_trace_cache:
@@ -230,7 +224,7 @@ class TraceReader(object):
         if idx not in self._idx_trace_cache:
             return 0
         return self._idx_trace_cache[idx][0]
-    
+
     def get_taint_ids(self, idx):
         if idx not in self._idx_trace_cache:
             return set()

@@ -34,9 +34,7 @@ class SymbolicEngineLauncher:
 
     def initialize(self, config):
         self.is_initialized = False
-        print_banner(
-            "Initializing CodexRebirth context (can take up to 180 seconds, please be patient)..."
-        )
+        print_banner("Initializing CodexRebirth context (can take up to 180 seconds, please be patient)...")
         # Initialize the backend for emulation.
         self.initialize_symbolic_engine(config)
         self.is_initialized = True
@@ -67,9 +65,7 @@ class SymbolicEngineLauncher:
         ).start()
 
     def setup_logger(self):
-        return tempfile.NamedTemporaryFile(
-            prefix="cr_trace", suffix=".txt", delete=False, mode="w"
-        )
+        return tempfile.NamedTemporaryFile(prefix="cr_trace", suffix=".txt", delete=False, mode="w")
 
     def get_binary_path(self):
         """
@@ -136,18 +132,14 @@ class SymbolicEngineLauncher:
             return
 
         # Redirect standard output and standard error to the log file.
-        with contextlib.redirect_stdout(self.log_file), contextlib.redirect_stderr(
-            self.log_file
-        ):
+        with contextlib.redirect_stdout(self.log_file), contextlib.redirect_stderr(self.log_file):
             # Redirect standard input to /dev/null to suppress user input.
             sys.stdin = open(os.devnull, "r")
 
             # Initialize the Qiling emulator.
             ql = Qiling([binary_path], rootfs_path, log_plain=log_plain)
             self.sym_engine = QilingEngine(ql)
-            self.sym_runner = QilingRunner(
-                self.sym_engine, debug_level, timeout, symbolic_check
-            )
+            self.sym_runner = QilingRunner(self.sym_engine, debug_level, timeout, symbolic_check)
 
     def map_segments_to_engine(self):
         """
@@ -161,8 +153,7 @@ class SymbolicEngineLauncher:
 
         # Get a list of segments in IDA Pro, including their start address, end address, and name.
         segments = [
-            (idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg))
-            for seg in idautils.Segments()
+            (idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg)) for seg in idautils.Segments()
         ]
 
         # Sort segments by their start address.

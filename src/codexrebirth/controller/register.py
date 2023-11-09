@@ -182,7 +182,7 @@ class RegisterController(object):
         """
         self.model.idx = idx
         self.set_registers(self.reader.registers, self.reader.get_registers())
-        
+
     def evaluate_expression(self, expression):
         """
         Evaluate the expression in the IDX Shell and navigate to it.
@@ -195,13 +195,12 @@ class RegisterController(object):
 
         # string handling
         elif isinstance(expression, str):
-
             # blank string was passed from the shell, nothing to do...
             if not expression:
                 return
 
             # a 'command' / alias idx was entered into the shell ('!...' prefix)
-            if expression[0] == '!':
+            if expression[0] == "!":
                 self._handle_command(expression[1:])
                 return
 
@@ -210,7 +209,7 @@ class RegisterController(object):
             # -- e.g '5,218,121'
             #
 
-            idx_str = expression.replace(',', '')
+            idx_str = expression.replace(",", "")
             try:
                 target_idx = int(idx_str)
             except:

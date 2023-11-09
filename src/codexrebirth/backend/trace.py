@@ -41,7 +41,6 @@ class Trace(dict):
     def __repr__(self) -> str:
         raise NotImplementedError()
 
-
     def clone(self):
         clone = Trace()
         clone.idx = self.idx

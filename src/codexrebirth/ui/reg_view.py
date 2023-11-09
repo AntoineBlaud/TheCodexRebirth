@@ -120,9 +120,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
 
     def sizeHint(self):
         width = self._default_width
-        height = (
-            len(self._reg_fields) + 2
-        ) * self._char_height  # +2 for line break before IP, and after IP
+        height = (len(self._reg_fields) + 2) * self._char_height  # +2 for line break before IP, and after IP
         return QtCore.QSize(width, height)
 
     def _init_ctx_menu(self):
@@ -133,9 +131,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         # create actions to show in the context menu
         self._action_copy_value = QtWidgets.QAction("Copy value", None)
         self._action_follow_in_dump = QtWidgets.QAction("Follow in dump", None)
-        self._action_follow_in_disassembly = QtWidgets.QAction(
-            "Follow in disassembler", None
-        )
+        self._action_follow_in_disassembly = QtWidgets.QAction("Follow in disassembler", None)
 
         # install the right click context menu
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -185,9 +181,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
             next_rect.moveLeft(next_x)
 
             # save the register shapes
-            self._reg_fields[reg_name] = RegisterField(
-                reg_name, name_rect, value_rect, arrow_rects
-            )
+            self._reg_fields[reg_name] = RegisterField(reg_name, name_rect, value_rect, arrow_rects)
 
             # increment y (to the next line)
             y += self._char_height
@@ -253,9 +247,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         Get the register field at the given cursor position.
         """
         for reg_name, field in self._reg_fields.items():
-            full_field = QtCore.QRect(
-                field.name_rect.topLeft(), field.next_rect.bottomRight()
-            )
+            full_field = QtCore.QRect(field.name_rect.topLeft(), field.next_rect.bottomRight())
             if full_field.contains(pos):
                 return field
         return None
@@ -345,9 +337,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
                 painter.setBackgroundMode(QtCore.Qt.OpaqueMode)
 
             # draw register value
-            painter.drawText(
-                reg_field.value_rect, QtCore.Qt.AlignCenter, rendered_value
-            )
+            painter.drawText(reg_field.value_rect, QtCore.Qt.AlignCenter, rendered_value)
 
             # draw register arrows
             for i, rect in enumerate([reg_field.prev_rect, reg_field.next_rect]):

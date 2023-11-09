@@ -95,9 +95,7 @@ def hexdump(data):
     """
     Return an ascii hexdump of the given data.
     """
-    return "\n".join(
-        [" ".join([f"{x:02X}" for x in chunk]) for chunk in chunks(data, 16)]
-    )
+    return "\n".join([" ".join([f"{x:02X}" for x in chunk]) for chunk in chunks(data, 16)])
 
 
 def makedirs(path, exists_ok=True):
@@ -392,13 +390,9 @@ def open_console(func):
 
 def repr_hex_and_ascii(byte_pairs):
     hex_str_ida = " ".join(f"{ida:02X}" for ida, ctx in byte_pairs)
-    ascii_str_ida = "".join(
-        chr(ida) if 32 <= ida <= 126 else "." for ida, ctx in byte_pairs
-    )
+    ascii_str_ida = "".join(chr(ida) if 32 <= ida <= 126 else "." for ida, ctx in byte_pairs)
     hex_str_ctx = " ".join(f"{ctx:02X}" for ida, ctx in byte_pairs)
-    ascii_str_ctx = "".join(
-        chr(ctx) if 32 <= ctx <= 126 else "." for ida, ctx in byte_pairs
-    )
+    ascii_str_ctx = "".join(chr(ctx) if 32 <= ctx <= 126 else "." for ida, ctx in byte_pairs)
     return f"{hex_str_ida}  {ascii_str_ida}\n{hex_str_ctx}  {ascii_str_ctx}"
 
 
@@ -418,17 +412,13 @@ def query_model(query):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[  # Change the prompt parameter to the messages parameter
-                {"role": "user", "content": query}
-            ],
+            messages=[{"role": "user", "content": query}],  # Change the prompt parameter to the messages parameter
             temperature=0,
             timeout=2,
         )
         return response["choices"][0]["message"]["content"]
     except openai.InvalidRequestError as e:
-        print(
-            "Unfortunately, this function is too big to be analyzed with the model's current API limits."
-        )
+        print("Unfortunately, this function is too big to be analyzed with the model's current API limits.")
 
     except openai.OpenAIError as e:
         print(f"davinci-003 could not complete the request: {str(e)}")
@@ -453,9 +443,7 @@ def print_banner(message, char="="):
 
 def check_openai_api_key():
     if openai.api_key is None:
-        show_msgbox(
-            "Please set the OpenAI API key on the top of thecodexrebirth.py file"
-        )
+        show_msgbox("Please set the OpenAI API key on the top of thecodexrebirth.py file")
         return
 
 
@@ -472,10 +460,7 @@ def get_vars(ea):
 
 
 def get_segment_name_bounds(name):
-    segments = [
-        (idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg))
-        for seg in idautils.Segments()
-    ]
+    segments = [(idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_name(seg)) for seg in idautils.Segments()]
     for start, end, seg_name in segments:
         if seg_name == name:
             return start, end
