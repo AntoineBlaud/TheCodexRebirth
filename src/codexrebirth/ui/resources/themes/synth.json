@@ -78,7 +78,8 @@
         "trace_selection":        "true_green",
         "trace_selection_border": "true_green",
 
-        "trail_tainted": "light_pink",
+        "taint_forward": "true_green",
+        "taint_backward": "light_pink",
         "mem_read_bg": "yellow",
         "mem_read_fg": "black",
         "mem_write_bg": "true_red",

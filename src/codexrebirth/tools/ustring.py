@@ -61,3 +61,35 @@ def create_name_from_address(name):
 def get_str_operand_index(operand, index):
     # Get the operand index from the operand name
     return operand.split(",")[index]
+
+
+def extract_part_of_list(input_list, max_len, idx):
+        
+    if idx not in input_list:
+        # Find the closest number to idx in the list
+        closest_number = min(input_list, key=lambda x: abs(x - idx))
+        idx = closest_number
+
+    # Find the index of idx in the list
+    idx_index = input_list.index(idx)
+
+    # Calculate the start and end indices for the sub-list
+    start = max(0, idx_index - max_len)
+    end = min(idx_index + max_len, len(input_list))
+
+    # Extract the desired sub-list
+    result = input_list[start:end]
+
+    return result
+
+
+def extract_part_of_str_list(input_list_str, max_len, idx):
+    try:
+        if len(input_list_str) < 20:
+            return input_list_str
+        input_list = [int(x) for x in input_list_str.split(",")]
+        result = extract_part_of_list(input_list, max_len, idx)
+        return ", ".join([str(x) for x in result]) + ", ..."
+    except Exception as e:
+        print(e)
+        return input_list_str

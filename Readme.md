@@ -12,7 +12,26 @@ With the assistance of the IDA plugin, program segments are seamlessly mapped in
 !["IDA plugin"](./doc/imgs/plugin.gif)
 
 
-## INSTALLATION
+## How the tainted analysis works
+
+The tainted analysis is based on the following principles:
+- Each instruction is executed and the result is stored in a variable.
+- Each variable is first tainted with a unique id.
+- When an operation occurs, the result id is the concatenation of the operands ids, and the variable is updated with the result of the instruction.
+
+By following these principles, we can easily track the forward propagation of the taints and the backward propagation of the equations.
+
+![Alt text](doc/imgs/image.png) 
+
+Forwards propagation of the taints is represented by the green cells, and the backward propagation of the equations is represented by the pink cells. **To resume, green cells are the operation that use the current operation result, and pink cells are the operation that are used by the current operation.**
+
+Then backward propagation can be represented as a tree. On same line are represended the operations that takes a RealValue as operand (ex: Imm operand). When a operation occurs on two SymValue, the result is a tree merge of the two operands trees.
+
+![Alt text](doc/imgs/backward.png)
+
+
+
+## Installation
 
 **Note: For IDA plugin, you need to have at least python 3.8 installed and IDA must be configured to use it.**
 
@@ -74,10 +93,32 @@ Then copy config file **codexrebirth_config.json** and **src/ida_codexrebirth.py
 
 ## Performance Insights
 
-The execution speed of CodexRebirth typically ranges between 200 and 1000 instructions per second. However, it's important to note that enabling the **symbolic_check** parameter can significantly impact performance. It's recommended to disable this feature if achieving a precise equation result is not your primary concern.
+The execution speed of CodexRebirth typically ranges between 700 and 1000 instructions per second. However, it's important to note that enabling the **symbolic_check** parameter can significantly impact performance. It's recommended to disable this feature if achieving a precise equation result is not your primary concern.
 
 Furthermore, it's worth considering that the choice between running Windows or Linux binaries can influence the performance, and Qiling's loading time on Windows systems is notably slower, which will extend the analysis initiation process.
 
-*(These performance metrics were obtained using Python 3.8 on a CPU Ryzen 5900HX with a clock speed ranging from 3.3GHz to 4.6GHz.)*
+*These performance metrics were obtained using Python 3.8 on a CPU Ryzen 5900HX with a clock speed ranging from 3.3GHz to 4.6GHz.*
+
+## Tree View
+**The tree representation has been removed from the plugin because generating it was too slow.** Previously it worked like this:
+- Operation between RealValue and anytype of value (SymValue or RealValue) are string merged into same node
+- Operation between SymValues are tree merged. 
+- Even by limiting the number of tree copy, the performance was too slow.
+
+## Maybe Future Work
+
+- Print the equation of the current instruction in the output window.
+
+
+## What's Next ? 
+
+- Use Dynamic Binary Instrumentation to improve the performance of the tracing engine.
+- Rewrite the backend in C++ to improve the performance of the plugin.
+- Discover a way to easy implement new instructions, or find a project that already implement a lot of instructions and that is compatible with our operation model.
+- Create new views to display : 
+    - the taint tree
+    - the call graph as directory/subdirectory with sorted functions, and the ability to group call sequence
+    - the block graph like the call graph
+    - memory view with segment choice, and previsualisation of the memory read and write
 
 

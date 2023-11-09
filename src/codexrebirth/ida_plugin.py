@@ -267,11 +267,17 @@ class CodexRebirth(ida_idaapi.plugin_t):
     def _interactive_go_prev_taint(self):
         if not self.reader:
             return
+        if not self.reader.selected_idx:
+            print("Please select an index first")
+            return
         self.reader.seek_to_prev_taint()
         self.trace_dock.refresh()
 
     def _interactive_go_next_taint(self):
         if not self.reader:
+            return
+        if not self.reader.selected_idx:
+            print("Please select an index first")
             return
         self.reader.seek_to_next_taint()
         self.trace_dock.refresh()
@@ -289,14 +295,34 @@ class CodexRebirth(ida_idaapi.plugin_t):
         if not self.reader:
             return
 
-        taint_id = self.reader.get_trace(self.reader.idx).taint_id
+        taint_ids = self.reader.get_backward_tainted_idxs(self.reader.idx)
         # if the taint id is -1, it means that the instruction is not tainted
-        if taint_id != -1:
-            color = self.colors.pop()
+        color = self.colors.pop()
+        for taint_id in taint_ids:
             self.reader.set_taint_id_color(taint_id, color)
             print(
                 f"Coloring taint id {taint_id} with color {self.reader.get_taint_id_color(taint_id)}"
             )
+            
+    def _interactive_select_idx(self):
+        """
+        Select an index in the trace.
+        """
+        if not self.reader:
+            return
+        idx = self.reader.idx
+        self.reader.set_selected_idx(idx)
+        print(f"Selected index {idx}")
+        
+    def _interactive_unselect_idx(self):
+        """
+        Unselect an index in the trace.
+        """
+        if not self.reader:
+            return
+        self.reader.set_selected_idx(None)
+        print(f"Unselected index")
+            
 
     def _uninstall(self):
         """
@@ -333,6 +359,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
     ACTION_COLOR_TAINT_ID = "codexrebirth:color_taint_id"
     ACTION_GO_NEXT_TAINT = "codexrebirth:go_next_taint"
     ACTION_GO_PREV_TAINT = "codexrebirth:go_prev_taint"
+    ACTION_SELECT_IDX = "codexrebirth:select_idx"
+    ACTION_UNSELECT_IDX = "codexrebirth:unselect_idx"
 
     def _install_action(
         self,
@@ -497,6 +525,25 @@ class CodexRebirth(ida_idaapi.plugin_t):
             "Color taint id",
             self._interactive_color_taint_id,
         )
+        
+    def _install_select_idx(self, widget, popup):
+        self._install_action(
+            widget,
+            popup,
+            self.ACTION_SELECT_IDX,
+            "Select idx",
+            self._interactive_select_idx,
+            shortcut="Shift+i",
+        )
+    def _install_unselect_idx(self, widget, popup):
+        self._install_action(
+            widget,
+            popup,
+            self.ACTION_UNSELECT_IDX,
+            "Unselect idx",
+            self._interactive_unselect_idx,
+            shortcut="Shift+u",
+        )
 
     def _install_hooks(self):
         """
@@ -566,6 +613,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
             self._install_go_prev_taint(widget, popup)
             self._install_synchronize_variables(widget, popup)
             self._install_color_taint_id(widget, popup)
+            self._install_select_idx(widget, popup)
+            self._install_unselect_idx(widget, popup)
 
     def _render_lines(self, lines_out, widget, lines_in):
         """
@@ -584,8 +633,10 @@ class CodexRebirth(ida_idaapi.plugin_t):
 
         def get_taint_color_and_trace(reader, idx, default_taint_color):
             trace = reader.get_trace(idx)
-            taint_id = trace.taint_id if trace else -1
-            color = reader.get_taint_id_color(taint_id) or default_taint_color
+            taint_ids = self.reader.get_taint_ids(idx)
+            color = default_taint_color
+            for taint_id in taint_ids:
+                color = reader.get_taint_id_color(taint_id) or color
             return color, trace
 
         if not self.reader:
@@ -598,7 +649,7 @@ class CodexRebirth(ida_idaapi.plugin_t):
         current_address = idc.here()
         backward_color = to_ida_color(self.palette.trail_backward)
         forward_color = to_ida_color(self.palette.trail_forward)
-        default_taint_color = to_ida_color(self.palette.trail_tainted)
+        default_taint_color = to_ida_color(self.palette.taint_backward)
         end_address_color = to_ida_color(self.palette.end_address)
         current_color = to_ida_color(self.palette.trail_current)
         
@@ -616,24 +667,13 @@ class CodexRebirth(ida_idaapi.plugin_t):
 
                 elif trail_addresses == backward_ips:
                     idx = self.reader.idx - i
+                    
 
                 item_color, item_trace = get_taint_color_and_trace(
                     self.reader, idx, default_taint_color
                 )
-
-                if not item_trace:
-                    continue
-
-                # if the instruction taint_id is different from the current taint_id,
-                # and the color is the default taint color, we use the trail color
-                if (
-                    not item_trace.taint_id == self.reader.current_taint_id
-                    and item_color == default_taint_color
-                ):
-                    item_color = trail_color
-
-                # if the instruction taint_id is -1, it means that the instruction is not tainted
-                elif item_trace.taint_id == -1:
+                if len(self.reader.get_taint_ids(idx).intersection(self.reader.current_taint_ids)) == 0  \
+                    and item_color == default_taint_color:
                     item_color = trail_color
 
                 # We are at the current instruction.
@@ -655,7 +695,8 @@ class CodexRebirth(ida_idaapi.plugin_t):
                 cmt = idaapi.get_cmt(address, False)
                 separator = "@@ "
                 cmt = cmt.split(separator)[0] if cmt else ""
-                cmt += separator + item_trace.operation.__ida__repr__()
+                if item_trace:
+                    cmt += separator + item_trace.operation.__ida__repr__()
                 idaapi.set_cmt(address, cmt, False)
 
         self.trace_dock.refresh()

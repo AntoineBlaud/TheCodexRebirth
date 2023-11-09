@@ -32,7 +32,6 @@ import time
 import re
 import line_profiler
 
-profile = line_profiler.LineProfiler()
 
 __all__ = ["DebugLevel", "QilingRunner"]
 
@@ -53,7 +52,7 @@ class DebugLevel:
 
 
 BAD_OPERANDS_X86_64 = [".*pl", ".*il", ".*z", ".*h"]
-INSN_EXECUTED_COUNT = alt_count()
+ID_COUNTER = alt_count()
 VAR_COUNTER = alt_count()
 
 
@@ -217,21 +216,20 @@ class VariableStates(dict):
     def create_sym_reg(self, name) -> SymRegister:
         # we reset the register to a new symbolic value
         # each register parts are reset to a new symbolic value
-        global INSN_EXECUTED_COUNT, SYM_REGISTER_FACTORY
+        global SYM_REGISTER_FACTORY
         # Create a new symbolic register and propagate the value to its parts
         # (e.g., 'ah' to ['rax', 'eax', 'ax', 'ah', 'al'])
         print(f"Create symbolic register {name}")
         for reg in SYM_REGISTER_FACTORY[name]:
             self[reg.name] = reg.reset()
-            self[reg.name].id = INSN_EXECUTED_COUNT.value
         return self[name]
 
     def create_sym_mem(self, address, value):
-        global INSN_EXECUTED_COUNT
+        global ID_COUNTER
+        id = ID_COUNTER.value
         # Create a new symbolic memory object
         name = create_name_from_address(address)
         self[name] = SymMemory(name, value)
-        self[name].id = INSN_EXECUTED_COUNT.value
         print(f"Create symbolic memory {name} with value {value}")
         return self[name]
 
@@ -388,13 +386,19 @@ class OperationX86_64:
         stack_pointer = self.engine.get_stack_pointer()
         reg = self.cs.reg_name(operation.op1.reg)
         # Delete the symbolic register
-        if reg in symbolic_taint_store:
-            symbolic_taint_store.del_sym_var(reg)
-        # Copy the value from the stack to the register
+        if not reg in symbolic_taint_store:
+            symbolic_taint_store.create_sym_reg(reg)
+            
         if stack_pointer in symbolic_taint_store:
-            symbolic_taint_store[reg] = symbolic_taint_store[stack_pointer]
+            symbolic_taint_store[reg].update(symbolic_taint_store[stack_pointer])
             symbolic_taint_store.del_sym_var(stack_pointer)
-            return symbolic_taint_store[reg]
+        else:
+            value = self.engine.read_memory_int(stack_pointer)
+            symbolic_taint_store[reg].update(symbolic_taint_store.create_sym_mem(stack_pointer, value))
+    
+        return symbolic_taint_store[reg]
+        
+
 
     def _mov(self, operation, symbolic_taint_store, mem_access):
         # instanciate a new symbolic register if needed
@@ -402,22 +406,22 @@ class OperationX86_64:
         if operation.op1.type == X86_OP_REG:
             regname = self.cs.reg_name(operation.op1.reg)
             symbolic_taint_store[regname].update(operation.v_op2)
-            symbolic_taint_store[regname].id = operation.v_op2.id
             return symbolic_taint_store[regname]
 
         elif operation.op1.type == X86_OP_MEM:
             symbolic_taint_store[mem_access].update(operation.v_op2)
-            symbolic_taint_store[mem_access].id = operation.v_op2.id
             return symbolic_taint_store[mem_access]
 
         raise Exception(f"Operation {operation.cinsn.mnemonic} not supported")
 
     def _lea(self, operation, symbolic_taint_store, mem_access):
+        global ID_COUNTER
         regname = self.cs.reg_name(operation.op1.reg)
         # round mem_access to next 4 bytes
         mem_access = mem_access + (mem_access % 4)
         symbolic_taint_store[regname].update(RealValue(mem_access))
-        symbolic_taint_store[regname].id = -1
+        id = ID_COUNTER.value
+        symbolic_taint_store[regname].id = set([id])
         return symbolic_taint_store[regname]
 
     
@@ -425,6 +429,9 @@ class OperationX86_64:
         if self.tainted_var_name not in self.symbolic_taint_store:
             return None
         cinsn = self.operation.cinsn
+        
+        if "rep" in cinsn.mnemonic:
+            return None
         if "mov" in cinsn.mnemonic:
             return self._mov(self.operation, self.symbolic_taint_store, self.mem_access)
         elif "lea" in cinsn.mnemonic:
@@ -500,13 +507,11 @@ class OperationEngineX86_64:
     def discover_indirect_access(self, op, mem_access, symbolic_taint_store: VariableStates):
         # Create an IndirectSymValue object from mem_access instruction
 
-        ind = IndirectSymValue(mem_access)
 
         def fetch_symbolic_register(reg_name):
             # Helper function to fetch a symbolic register from symbolic_taint_store
             if reg_name in symbolic_taint_store and isinstance(symbolic_taint_store[reg_name], SymValue):
-                ind.id = symbolic_taint_store[reg_name].id
-                return ind
+                return IndirectSymValue(symbolic_taint_store[reg_name])
 
         if op.mem.base != 0:
             reg_name_base = self.cs.reg_name(op.mem.base)
@@ -596,6 +601,7 @@ class OperationEngineX86_64:
 
         return operation
 
+    
     def make_var_substitutions(
         self, symbolic_taint_store: VariableStates, tainted_var_name: str
     ):
@@ -606,14 +612,14 @@ class OperationEngineX86_64:
         if not isinstance(tainted_var_value, SymValue):
             return
 
-        raw_repr = tainted_var_value.v_wrapper.__raw_repr__()
+        var_size = z3_ast_size(tainted_var_value.value)
         # if not, then we didn't updated yet, so we create a new varname and assign it to the tainted_var_value
-        if len(raw_repr) > self.config["MAX_RAW_REPR_LENGTH"]:
+        if var_size > self.config["MAX_VAR_OPERANDS"]:
             new_var = f"var_{next(VAR_COUNTER):06d}"
-            symbolic_taint_store[new_var] = tainted_var_value.v_wrapper.clone()
-            symbolic_taint_store[tainted_var_name].update(
-                SymValue(new_var, id=tainted_var_value.id)
-            )
+            new_value = SymValue(new_var)
+            new_value.id = set(tainted_var_value.id)
+            symbolic_taint_store[new_var] = tainted_var_value.clone()
+            symbolic_taint_store[tainted_var_name].update(new_value)
 
     def compute_mem_access(self, cinsn):
         mem_access = 0
@@ -681,6 +687,8 @@ class OperationEngineX86_64:
         )
         operation.v_result = op_engine.process()
         print(hex(cinsn_addr), operation)
+        if operation.v_result is not None:
+            print(f"Taint ids: {operation.v_result.id}")
 
         # Update variables in symbolic_taint_store
         self.make_var_substitutions(symbolic_taint_store, op_engine.tainted_var_name)
@@ -701,7 +709,7 @@ class Runner:
         self.addr_emu_start = None
         self.addr_emu_end = []
         self.trace_records = Trace()
-        self.operation_executed_count = INSN_EXECUTED_COUNT
+        self.operation_executed_count = ID_COUNTER
         self.registers_state = DataStoreManager()
         self.memory_state = DataStoreManager()
         # instantiate the engine
@@ -719,12 +727,12 @@ class Runner:
         self.CONFIG = {
             "BINARY_ARCH_SIZE": None,
             "BINARY_MAX_MASK": None,
-            "MAX_RAW_REPR_LENGTH": 44,
+            "MAX_VAR_OPERANDS": 8,
             "BAD_OPERANDS": None,
             "CS_UC_REGS": None,
             "TRACE_RECORDS": self.trace_records,
             "SYM_REGISTER_FACTORY": None,
-            "INSN_EXECUTED_COUNT": INSN_EXECUTED_COUNT,
+            "ID_COUNTER": ID_COUNTER,
             "IS_INITIALIZED": False,
         }
 
@@ -944,6 +952,9 @@ class Runner:
         # register pc
         pc_name = "RIP" if self.CONFIG["BINARY_ARCH_SIZE"] == 64 else "EIP"
         self.registers_state.register_item(pc_name, idx, self.engine.get_ea())
+        # register sp
+        sp_name = "RSP" if self.CONFIG["BINARY_ARCH_SIZE"] == 64 else "ESP"
+        self.registers_state.register_item(sp_name, idx, self.engine.get_stack_pointer())
 
     def initialize_execution_state(self):
         for reg_id in self.engine.map_regs():
@@ -1081,5 +1092,3 @@ class QilingRunner(Runner):
             global profile
             profile.print_stats()
 
-            # post process
-            self.trace_records.post_process()

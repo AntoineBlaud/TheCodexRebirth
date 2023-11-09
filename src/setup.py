@@ -22,5 +22,6 @@ setup(
         "jsonschema",
         "openai",
         "line_profiler",
+        "treelib",
     ],
 )

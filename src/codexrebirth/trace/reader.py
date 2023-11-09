@@ -5,7 +5,7 @@ from ..integration.api import DisassemblerContextAPI
 from .arch import ArchAMD64, ArchX86
 from ..tools import *
 from collections import defaultdict
-
+from copy import deepcopy
 
 class TraceReader(object):
     """
@@ -26,7 +26,8 @@ class TraceReader(object):
         self._idx_cached_registers = -1
         self._cached_registers = {}
         self._idx_trace_cache = {}
-        self._taint_id_trace_cache = defaultdict(list)
+        self._backward_taint_id_trace_cache = defaultdict(list)
+        self._forward_taint_id_trace_cache = defaultdict(list)
 
         self.construct_trace_cache()
         self._taint_id_color_map = {}
@@ -34,24 +35,30 @@ class TraceReader(object):
 
         self.registers_state = registers_state
         self.memory_state = memory_state
+        self.selected_idx = None
 
     def construct_trace_cache(self):
+        # Construct an index-based trace cache
+        print("Constructing trace cache")
         self._idx_trace_cache = {
             idx: (operation_addr, trace)
             for operation_addr, trace_items in self._addr_trace_cache.items()
             for idx, trace in trace_items.items()
         }
 
+        # Populate taint ID-based trace cache
         for idx in self._idx_trace_cache:
-            taint_id = self.get_trace(idx).taint_id
-            if taint_id != -1:
-                self._taint_id_trace_cache[taint_id].append(idx)
-
-        # Sort taint_id_trace_cache
-        for taint_id in self._taint_id_trace_cache:
-            self._taint_id_trace_cache[taint_id] = sorted(
-                self._taint_id_trace_cache[taint_id]
-            )
+            self._backward_taint_id_trace_cache[idx] = sorted(list(self.get_taint_ids(idx)))
+            
+        for idx in self._idx_trace_cache:
+            for taint_id in self.get_taint_ids(idx):
+                self._forward_taint_id_trace_cache[taint_id].append(idx)
+                
+            
+        for taint_id in self._forward_taint_id_trace_cache:
+            self._forward_taint_id_trace_cache[taint_id] = sorted(self._forward_taint_id_trace_cache[taint_id])
+            
+        print("Finished constructing trace cache")
 
     # -------------------------------------------------------------------------
     # Trace Properties
@@ -79,8 +86,8 @@ class TraceReader(object):
         return self.get_registers()
 
     @property
-    def current_taint_id(self):
-        return self.get_trace(self.idx).taint_id
+    def current_taint_ids(self):
+        return self.get_trace(self.idx).taint_ids
 
     # -------------------------------------------------------------------------
     # Trace Navigation
@@ -98,8 +105,10 @@ class TraceReader(object):
     def get_idx_color(self, idx):
         if idx not in self._idx_trace_cache:
             return None
-        taint_id = self.get_trace(idx).taint_id
-        return self.get_taint_id_color(taint_id)
+        for taint_id in self.get_trace(idx).taint_ids:
+            color = self.get_taint_id_color(taint_id)
+            if color:
+                return color
 
     def is_computation_correct(self, idx):
         if idx not in self._idx_trace_cache:
@@ -127,16 +136,12 @@ class TraceReader(object):
         """
         if idx is None:
             idx = self.idx
-
         # no registers were specified, so we'll return *all* registers
         if reg_names is None:
             reg_names = get_regs_name()
-
         output_registers = {}
-
         for reg_name in reg_names:
             output_registers[reg_name] = self.registers_state.get_state(reg_name, idx)
-
         # return the register set for this trace index
         return output_registers
 
@@ -166,6 +171,7 @@ class TraceReader(object):
         Seek the trace to the given timestamp.
         """
         print("Seeking to idx: {}".format(idx))
+        print("Selected idx: {}".format(self.selected_idx))
 
         # clamp the index if it goes past the end of the trace
         if idx >= self.length:
@@ -175,11 +181,10 @@ class TraceReader(object):
         # save the new position
         self.idx = idx
         self.get_registers()
-        addr = self.get_ip(idx)
-        idaapi.jumpto(addr)
+        print(self.get_taint_ids(idx))
+        idaapi.jumpto(self.get_ip(idx))
         self._notify_idx_changed()
-
-        print("Current symbolic id: {}".format(self.current_taint_id))
+        
 
     def get_current_function_bounds(self):
         """
@@ -192,13 +197,21 @@ class TraceReader(object):
         except:
             return 0, 0
 
-    def get_tainted_idxs(self, taint_id):
+    def get_backward_tainted_idxs(self, idx):
         """
         Return True if the given address is symbolic.
         """
-        if taint_id not in self._taint_id_trace_cache:
-            return []
-        return self._taint_id_trace_cache[taint_id]
+        return self._backward_taint_id_trace_cache[idx]
+    
+    def get_forward_tainted_idxs(self, taint_id):
+        """
+        Return True if the given address is symbolic.
+        """
+        return self._forward_taint_id_trace_cache[taint_id]
+    
+    def set_selected_idx(self, idx):
+        self.selected_idx = idx
+    
 
     def get_trace(self, idx):
         if idx not in self._idx_trace_cache:
@@ -215,8 +228,13 @@ class TraceReader(object):
         Return the instruction pointer for the given timestamp.
         """
         if idx not in self._idx_trace_cache:
-            return None
+            return 0
         return self._idx_trace_cache[idx][0]
+    
+    def get_taint_ids(self, idx):
+        if idx not in self._idx_trace_cache:
+            return set()
+        return self.get_trace(idx).taint_ids
 
     def seek_percent(self, percent):
         """
@@ -272,18 +290,24 @@ class TraceReader(object):
         return True
 
     def seek_to_next_taint(self):
-        idxs = self.get_tainted_idxs(self.current_taint_id)
+        idxs = self.get_backward_tainted_idxs(self.selected_idx)
         if not idxs or len(idxs) < 2:
             return
-        pos = idxs.index(self.idx)
+        try:
+            pos = idxs.index(self.idx)
+        except ValueError:
+            pos = len(idxs)
         pos = (pos + 1) % len(idxs)
         self.seek(idxs[pos])
 
     def seek_to_prev_taint(self):
-        idxs = self.get_tainted_idxs(self.current_taint_id)
+        idxs = self.get_backward_tainted_idxs(self.selected_idx)
         if not idxs or len(idxs) < 2:
             return
-        pos = idxs.index(self.idx)
+        try:
+            pos = idxs.index(self.idx)
+        except ValueError:
+            pos = len(idxs)
         if pos - 1 < 0:
             pos = len(idxs)
         pos = pos - 1
@@ -399,7 +423,6 @@ class TraceReader(object):
 
     def find_current_execution(self, address, idx=None):
         addr_timestamps = self._addr_trace_cache[address].keys()
-        print("addr_timestamps: {}".format(addr_timestamps))
         # sort the timestamps
         addr_timestamps = sorted(addr_timestamps)
         # find the index of the current timestamp

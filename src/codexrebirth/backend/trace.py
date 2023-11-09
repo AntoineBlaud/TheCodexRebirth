@@ -4,9 +4,9 @@ from .operation import Operation
 class TraceEntry:
     def __init__(self, operation: Operation) -> None:
         self.operation = operation
-        self.taint_id = -1
+        self.taint_ids = set()
         if self.operation.v_result:
-            self.taint_id = operation.v_result.id
+            self.taint_ids = operation.v_result.id
 
     def __repr__(self) -> str:
         return f"{self.operation}"
@@ -28,7 +28,7 @@ class Trace(dict):
             return
         if ea not in self:
             self[ea] = {}
-        self[ea][idx] = TraceEntry(operation.clone())
+        self[ea][idx] = TraceEntry(operation)
 
         self.last_addr = ea
         self.last_idx = idx
@@ -41,22 +41,6 @@ class Trace(dict):
     def __repr__(self) -> str:
         raise NotImplementedError()
 
-    def post_process(self):
-        self.post_process_taint()
-
-    def post_process_taint(self):
-        taint_id_count = {}
-        # Count taint_id occurrences
-        for addr in self:
-            for idx in self[addr]:
-                taint_id = self[addr][idx].taint_id
-                taint_id_count[taint_id] = taint_id_count.get(taint_id, 0) + 1
-        # Set tainted value to -1 if it's used only once
-        for addr in self:
-            for idx in self[addr]:
-                taint_id = self[addr][idx].taint_id
-                if taint_id_count[taint_id] == 1:
-                    self[addr][idx].taint_id = -1
 
     def clone(self):
         clone = Trace()

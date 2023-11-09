@@ -70,9 +70,8 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_selection_end = INVALID_IDX
 
         # the idxs that should be highlighted based on user queries
-        self._idx_reads = []
-        self._idx_writes = []
-        self._idx_tainted = []
+        self._idx_forward_tainted = []
+        self._idx_backward_tainted = []
 
         # the magnetism distance (in pixels) for cursor clicks on viz events
         self._magnetism_distance = 4
@@ -262,9 +261,9 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_selection_start = INVALID_IDX
         self._idx_selection_end = INVALID_IDX
 
-        self._idx_reads = []
-        self._idx_writes = []
-        self._idx_tainted = []
+        self._idx_forward_tainted = []
+        self._idx_backward_tainted = []
+        
 
         self._refresh_painting_metrics()
         self.refresh()
@@ -733,7 +732,8 @@ class TraceBar(QtWidgets.QWidget):
         """
         if not (self.reader):
             return
-        self._idx_tainted = self.reader.get_tainted_idxs(self.reader.current_taint_id)
+        self._idx_forward_tainted = self.reader.get_forward_tainted_idxs(self.reader.idx)
+        self._idx_backward_tainted = self.reader.get_backward_tainted_idxs(self.reader.idx)
 
     def _clamp_idx(self, idx):
         """
@@ -923,16 +923,18 @@ class TraceBar(QtWidgets.QWidget):
         viz_w, _ = self.viz_size
         viz_x, _ = self.viz_pos
 
-        taint_color = self.pctx.palette.trail_tainted
+        taint_color = self.pctx.palette.taint_forward
+        taint_backward_color = self.pctx.palette.taint_backward
         false_color = self.pctx.palette.symbolic_compution_false
 
         # fetch the color set by the user
-        if len(self._idx_tainted) > 0:
-            color = self.reader.get_idx_color(self._idx_tainted[0])
+        if len(self._idx_forward_tainted) > 0:
+            color = self.reader.get_idx_color(self._idx_forward_tainted[0])
             taint_color = QtGui.QColor(*get_rbga_color(color)) if color else taint_color
 
         access_sets = [
-            (self._idx_tainted, taint_color),
+            (self._idx_forward_tainted, taint_color),
+            (self._idx_backward_tainted, taint_backward_color)
         ]
 
         if self.cells_visible:

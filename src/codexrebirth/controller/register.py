@@ -182,6 +182,44 @@ class RegisterController(object):
         """
         self.model.idx = idx
         self.set_registers(self.reader.registers, self.reader.get_registers())
+        
+    def evaluate_expression(self, expression):
+        """
+        Evaluate the expression in the IDX Shell and navigate to it.
+        """
+
+        # a target idx was given as an integer
+        if isinstance(expression, int):
+            target_idx = expression
+            self.reader.seek(target_idx)
+
+        # string handling
+        elif isinstance(expression, str):
+
+            # blank string was passed from the shell, nothing to do...
+            if not expression:
+                return
+
+            # a 'command' / alias idx was entered into the shell ('!...' prefix)
+            if expression[0] == '!':
+                self._handle_command(expression[1:])
+                return
+
+            #
+            # not a command, how about a comma seperated timestamp?
+            # -- e.g '5,218,121'
+            #
+
+            idx_str = expression.replace(',', '')
+            try:
+                target_idx = int(idx_str)
+            except:
+                return
+
+            self.reader.seek(target_idx)
+
+        else:
+            raise ValueError(f"Unknown input expression type '{expression}'?!?")
 
 
 class RegistersModel(object):

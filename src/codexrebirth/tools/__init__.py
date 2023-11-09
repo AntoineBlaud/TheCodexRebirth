@@ -9,3 +9,7 @@ from .log import *
 from .ustring import *
 from .qt import *
 from .types import *
+import line_profiler
+
+profile = line_profiler.LineProfiler()
+
