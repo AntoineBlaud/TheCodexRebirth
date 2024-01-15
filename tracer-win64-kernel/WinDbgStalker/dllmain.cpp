@@ -13,14 +13,6 @@
 #include <codecvt>
 #include <filesystem>
 # include <vector>
-// make sur capstone.dll is in the same folder as the WinDbgStalker.dll
-// https://github.com/Rycooop/Bloom-Anticheat.git
-// .reload
-// .load C:\Users\antoi\source\repos\WinDbgStalker\x64\Release\WinDbgStalker.dll
-// !WinDbgStalker.AttachModule AnticheatDriver C:\Users\antoi\source\repos\WinDbgStalker\WinDbgStalker\AntiCheatDriverExport.txt
-// !WinDbgStalker.AttachModule  module_name  function_def_file_path
-// !WinDbgStalker.Run
-// .unload WinDbgStalker
 
 
 struct GString {
@@ -947,7 +939,7 @@ VOID Run(HANDLE hCurrentProcess, HANDLE hCurrentThread, ULONG dwCurrentPc, ULONG
 		// show insn string representation
 		dprintf("%s %s\n", ctx_insn->insn->mnemonic, ctx_insn->insn->op_str);
 		// check if call instruction
-		if (ctx_insn->insn->id == X86_INS_CALL)
+		if (ctx_insn->insn->id == X86_INS_CALL || ctx_insn->insn->id == X86_INS_JMP)
 		{
 			// get function address
 			ULONG64 function_address = 0;
@@ -997,4 +989,4 @@ VOID Run(HANDLE hCurrentProcess, HANDLE hCurrentThread, ULONG dwCurrentPc, ULONG
 	
 }
 
-// Faire le step over if call function address outside of module
+

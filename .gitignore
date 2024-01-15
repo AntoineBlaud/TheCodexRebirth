@@ -9,3 +9,5 @@ notes.txt
 codexrebirth_config.json
 test*
 test.py
+tracer-win64-kernel/WinDbgStalker/x64
+tracer-win64-kernel/.vs

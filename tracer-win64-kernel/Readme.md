@@ -1,13 +1,13 @@
  
-Extension for WinDbg - Trace Utility
+# Extension for WinDbg - Trace Utility
 
-Important:
+## Important:
 - Ensure capstone.dll is in the same folder as WinDbgStalker.dll.
 - Before loading the extension, execute the .reload command.
 - Speed execution is around 200 instructions per second. Better than human speed :)
 - X64/Release build is available (see Release folder).
 
-Usage:
+## Usage:
 1. Load the extension using the following command:
    .load C:\Path\To\WinDbgStalker.dll
 
@@ -28,7 +28,7 @@ Usage:
 5. Unload the extension when done:
    .unload WinDbgStalker
 
-Commands:
+## Commands:
 - !WinDbgStalker.Help
    Display this help message.
 
@@ -38,12 +38,12 @@ Commands:
 - !WinDbgStalker.Flush
    Flush the trace buffer.
 
-Note:
+## Note:
 - Ensure only one space between arguments.
 - Remove all breakpoints before running the extension.
 - Maximum 32 breakpoints can be set (win32 limitation).
 
-Coverage Tutorial:
+## Coverage Tutorial:
 
 As previously mentioned, it's important to note that only 32 breakpoints can be set simultaneously. If your objective is to reverse engineer a Kernel driver, employing the export function script is highly recommended. This script efficiently organizes functions based on their size and sub-coverage.
 
