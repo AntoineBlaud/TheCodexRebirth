@@ -28,6 +28,13 @@
 5. Unload the extension when done:
    .unload WinDbgStalker
 
+Example Workflow:
+1. .reload
+2. .load C:\Path\To\WinDbgStalker.dll
+3. !WinDbgStalker.Hook AnticheatDriver C:\Path\To\AntiCheatDriverExport.txt
+4. !WinDbgStalker.Run 60 10
+5. .unload WinDbgStalker
+
 ## Commands:
 - !WinDbgStalker.Help
    Display this help message.
@@ -57,12 +64,6 @@ Here's a step-by-step approach:
 
 **It's essential to keep in mind that the trace remains clean only when the flush function is called. This ensures accuracy and reliability throughout the reverse engineering process.**
 
-Example Workflow:
-1. .reload
-2. .load C:\Path\To\WinDbgStalker.dll
-3. !WinDbgStalker.Hook AnticheatDriver C:\Path\To\AntiCheatDriverExport.txt
-4. !WinDbgStalker.Run 60 10
-5. .unload WinDbgStalker
 
 You can try the extension with the following project:
 https://github.com/donnaskiez/ac
