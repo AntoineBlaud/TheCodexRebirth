@@ -8,6 +8,7 @@ from tenet.util.misc import register_callback, notify_callback
 from tenet.trace.file import TraceFile
 from tenet.trace.types import TraceMemory
 from tenet.trace.analysis import TraceAnalysis
+import capstone
 
 logger = logging.getLogger("Tenet.Trace.Reader")
 
@@ -54,9 +55,10 @@ class TraceReader(object):
     A high level, debugger-like interface for querying Tenet traces.
     """
 
-    def __init__(self, filepath, architecture, dctx=None):
+    def __init__(self, filepath, architecture, dctx=None, pctx=None):
         self.idx = 0
         self.dctx = dctx
+        self.pctx = pctx
         self.arch = architecture
 
         # load the given trace file from disk
@@ -147,7 +149,27 @@ class TraceReader(object):
         self.idx = idx
         self.get_registers()
         self._notify_idx_changed()
-
+        self._update_follow_memory()
+        
+    def _update_follow_memory(self):
+        """
+        Update the memory follow window, if it is enabled.
+        """
+        slide = self.analysis.slide
+        c_ip = self.get_ip(self.idx) + slide
+        prev_ip = self.get_ip(self.idx - 1) + slide
+        
+        for i, ip in enumerate([c_ip, prev_ip]):
+            insn = self.dctx.disassemble_instruction(ip, self.arch)
+            if insn and len(insn.operands) > 0:
+                op = insn.operands[0]
+                if op.type == capstone.x86_const.X86_OP_REG:
+                    reg_name = self.dctx.get_register_name(op.reg, self.arch)
+                    try:
+                        reg_value = self.get_register(reg_name)
+                        self.pctx.memories[i].navigate(reg_value)
+                    except ValueError:
+                        pass
     def seek_percent(self, percent):
         """
         Seek to an approximate percentage into the trace.

@@ -460,7 +460,7 @@ class TenetIDA(TenetCore):
         if not ctx.reader:
             return
         
-        trail_length = 6
+        trail_length = 0x20
 
         forward_color = self.palette.trail_forward
         current_color = self.palette.trail_current

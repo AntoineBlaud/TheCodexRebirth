@@ -17,7 +17,7 @@ class MemoryController(HexController):
     The Memory Dump Controller (Logic)
     """
 
-    def __init__(self, pctx, idx):
+    def __init__(self, pctx, name):
         super(MemoryController, self).__init__(pctx)
-        self._title = "Memory View "+str(idx)
+        self._title = name
         #self.model.hex_format = HexType.MAGIC

@@ -20,7 +20,7 @@ from tenet.trace.reader import TraceReader
 from tenet.integration.api import disassembler, DisassemblerContextAPI
 
 logger = logging.getLogger("Tenet.Context")
-NMEM = 4
+NMEM = 3
 #------------------------------------------------------------------------------
 # context.py -- Plugin Database Context
 #------------------------------------------------------------------------------
@@ -77,7 +77,11 @@ class TenetContext(object):
         self.trace = TraceDock(self)  # TODO: port this one to MVC pattern
         self.tree = TreeDock(self)  # TODO: port this one to MVC pattern
         self.stack = StackController(self)
-        self.memories = [MemoryController(self, i+1) for i in range(NMEM)]
+        self.memories = [
+            MemoryController(self, "Memory Viewer: Current Operation - Operand 1 Pointer"),
+            MemoryController(self, "Memory Viewer: Last Operation - Operand 1 Pointer"),
+            MemoryController(self, "Memory Viewer: User Defined"),
+        ]
         self.registers = RegisterController(self)
 
         # the directory to start the 'load trace file' dialog in
@@ -169,7 +173,7 @@ class TenetContext(object):
         # chosen states of execution
         #
 
-        self.reader = TraceReader(filepath, self.arch, disassembler[self])
+        self.reader = TraceReader(filepath, self.arch, disassembler[self], self)
         pmsg(f"Loaded trace {self.reader.trace.filepath}")
         pmsg(f"- {self.reader.trace.length:,} instructions...")
 
@@ -269,7 +273,12 @@ class TenetContext(object):
 
         #self.memory.dockable.set_dock_position("Output window", ida_kernwin.DP_TAB | ida_kernwin.DP_BEFORE)
         
-        self.memories[0].show("Output window", ida_kernwin.DP_TAB | ida_kernwin.DP_BEFORE)
+        
+        self.memories[1].show("Output window", ida_kernwin.DP_RIGHT)
+        # set next memory view 
+        self.memories[0].show("Output window", ida_kernwin.DP_RIGHT)
+        self.memories[2].show("Output window", ida_kernwin.DP_TAB | ida_kernwin.DP_INSIDE)
+       
         self.stack.show("Memory View 1", ida_kernwin.DP_RIGHT)
         for i in range(1,NMEM):
             self.memories[i].show("Memory View "+str(i), ida_kernwin.DP_TAB)

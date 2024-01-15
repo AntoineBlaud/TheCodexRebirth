@@ -948,9 +948,13 @@ VOID Run(HANDLE hCurrentProcess, HANDLE hCurrentThread, ULONG dwCurrentPc, ULONG
 			// check if function address is in module
 			if (function_address < moduleBase || function_address > moduleEnd)
 			{
+				// Run command to disable all breakpoints
+				m_ExtControl4->Execute(DEBUG_OUTCTL_IGNORE, "bd *", DEBUG_EXECUTE_NOT_LOGGED);
 				// step over call instruction
 				m_ExtControl4->SetExecutionStatus(DEBUG_STATUS_STEP_OVER);
 				m_ExtControl4->WaitForEvent(0, INFINITE);
+				// Run command to enable all breakpoints
+				m_ExtControl4->Execute(DEBUG_OUTCTL_IGNORE, "be *", DEBUG_EXECUTE_NOT_LOGGED);
 			}
 		}
 

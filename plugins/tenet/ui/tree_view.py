@@ -85,10 +85,12 @@ class CallTreeView(QWidget):
         header.setStretchLastSection(False)
         reader.idx_changed(self.scrolld)
 
-    def depth_color(self,depth):
-        r=255-14*abs(depth%12-6)
-        g=255-14*abs((depth+4)%12-6)
-        b=255-14*abs((depth+8)%12-6)
+    def size_color(self, size):
+        max_size = 800
+        size = min(size, max_size) * 0.5
+        r=((size/max_size) + 0.5) * 255
+        g=((size/max_size)) * 255
+        b=((size/max_size)+0.4) * 255
         return r,g,b
         
     def recurparse(self, item, p, depth=0):
@@ -96,7 +98,13 @@ class CallTreeView(QWidget):
         new_item = QStandardItem(p[0][0])
         new_item.idx = p[0][1]
         new_item.visible = True
-        r,g,b = self.depth_color(depth)
+        ea = self.parent.reader.get_ip(new_item.idx) + self.parent.reader.analysis.slide
+        func = idaapi.get_func(ea)
+        if func:
+            size = func.end_ea - func.start_ea
+        else:
+            size = 0
+        r,g,b = self.size_color(size)
         new_item.setBackground(QBrush(QColor(r,g,b)))
 
         if len(p[1]):
@@ -109,7 +117,7 @@ class CallTreeView(QWidget):
         item.appendRow([new_item])
         
         for e in p[1]:
-            self.recurparse(item.child(item.rowCount() - 1), e, depth+1)
+            self.recurparse(item, e, depth)
         
     def importData(self, callgraph, root=None):
         self.model.setRowCount(0)
