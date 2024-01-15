@@ -244,9 +244,9 @@ class TreeDock():
         external = True
         start_i=0
         while external:
-            start=reader.get_ip(start_i)-aslr
+            start=reader.get_ip(start_i)+aslr
             external = not (minaddr <= start <= maxaddr)
-            start = reader.get_ip(start_i)-aslr
+            start = reader.get_ip(start_i)+aslr
             start_i+=1
             if start_i==reader.trace.length-1:break
 
@@ -266,8 +266,8 @@ class TreeDock():
             return False
 
         for i in range(start_i, reader.trace.length-1):
-            pc = reader.get_ip(i)-aslr
-            npc = reader.get_ip(i+1)-aslr
+            pc = reader.get_ip(i)+aslr
+            npc = reader.get_ip(i+1)+aslr
 
             ival = funcs_ival[backtrace[-1]]
             inside = ival[0] <= pc < ival[1]

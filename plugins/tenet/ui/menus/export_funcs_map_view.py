@@ -117,6 +117,8 @@ class ExportFuncsMenuView(QMainWindow):
         with open(file_path, "w") as f:
             for function in selected_functions:
                 f.write(function + "\n")
+        # close the window
+        self.close()
         
         
 
