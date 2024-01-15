@@ -5,6 +5,7 @@ Important:
 - Ensure capstone.dll is in the same folder as WinDbgStalker.dll.
 - Before loading the extension, execute the .reload command.
 - Speed execution is around 200 instructions per second. Better than human speed :)
+- X64/Release build is available (see Release folder).
 
 Usage:
 1. Load the extension using the following command:
