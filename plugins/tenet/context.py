@@ -89,6 +89,9 @@ class TenetContext(object):
         
         # whether the plugin subsystems have been created / started
         self._started = False
+        
+        # the last function name where the cursor was
+        self.last_fn = None
 
         # NOTE/DEV: automatically open a test trace file when dev/testing
         if is_plugin_dev():
@@ -429,6 +432,7 @@ class TenetContext(object):
         # navigate the disassembler to a 'suitable' address based on the trace idx
         dctx.navigate(bin_address)
         disassembler.refresh_views()
+        self._update_block_hits()
 
     def _select_trace_file(self):
         """
@@ -467,3 +471,47 @@ class TenetContext(object):
 
         # return the captured filenames
         return filenames
+
+
+    def _update_block_hits(self):
+        """
+        Update the disassembly view.
+        """
+        
+        dctx = disassembler[self]
+        
+        # check if we are in the same function
+        curr = dctx.get_function_name_at(dctx.here())
+        if self.last_fn == curr:
+            return
+        
+        if not self.reader:
+            return
+
+        forward_color = dctx.to_ida_color(self.palette.trail_forward)
+        trail_length = self.reader.length
+        current_address = dctx.here()
+
+        blocks_info = dctx.get_fn_blocks(current_address)[1:]  # remove first block
+        slide = self.reader.analysis.slide
+        blocks_execution_count = {(start - slide): 0 for start, _ in blocks_info}
+
+        forward_ips = self.reader.get_next_ips(trail_length)
+        backward_ips = self.reader.get_prev_ips(trail_length)
+
+        trails = [(backward_ips), (forward_ips)]
+        print(blocks_execution_count)
+        print(trails)
+
+        for trail_addresses in trails:
+            for address in trail_addresses:
+                if address in blocks_execution_count:
+                    blocks_execution_count[address] += 1
+
+        for block_start, execution_count in blocks_execution_count.items():
+            dctx.set_cmt(block_start+slide, f"Executed {execution_count} times  ")
+            
+            
+                
+        # update the last function
+        self.last_fn = curr

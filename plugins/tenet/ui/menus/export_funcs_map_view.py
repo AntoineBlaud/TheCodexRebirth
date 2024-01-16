@@ -100,8 +100,9 @@ class ExportFuncsMenuView(QMainWindow):
 
             for function in functions:
                 # add a combobox for each function
-                func_name, func_address = function
-                function_node = QStandardItem(hex(func_address) + " "*5 + func_name)
+                f_name, f_addr , f_cover, f_size = function
+                function_node = QStandardItem(f"{hex(f_addr)}   {f_name} :   coverage: {f_cover}     size: {f_size}")
+
                 function_node.setCheckable(True)
                 function_node.setCheckState(False)
                 # set light blue background for functions
@@ -132,7 +133,7 @@ class ExportFuncsMenuView(QMainWindow):
                 for j in range(section_item.rowCount()):
                     function_item = section_item.child(j)
                     if function_item.checkState() == Qt.Checked:
-                        selected_items.append(function_item.text())
+                        selected_items.append(function_item.text().split(":")[0])
         return selected_items
 
 

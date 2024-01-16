@@ -32,7 +32,7 @@
         
         "light_blue":     [ 33, 159, 255],
         "blue":           [ 30, 136, 229],
-        "dark_blue":      [ 58,  58, 128]
+        "dark_blue":      [ 56,  62, 168]
 
     },
 
@@ -85,7 +85,7 @@
 
         "trail_backward": "lightest_red",
         "trail_current":  "light_green",
-        "trail_forward":  "light_blue",
+        "trail_forward":  "dark_blue",
 
         "arrow_prev": "lightest_red",
         "arrow_next": "light_blue",

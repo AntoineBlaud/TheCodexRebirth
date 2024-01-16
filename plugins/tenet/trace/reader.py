@@ -112,6 +112,13 @@ class TraceReader(object):
         Return the current trace segment.
         """
         return self.trace.get_segment(self.idx)
+    
+    @property
+    def length(self):
+        """
+        Return the length of the trace.
+        """
+        return self.trace.length
 
     @property
     def delta(self):
@@ -148,8 +155,8 @@ class TraceReader(object):
         # save the new position
         self.idx = idx
         self.get_registers()
-        self._notify_idx_changed()
         self._update_follow_memory()
+        self._notify_idx_changed()
         
     def _update_follow_memory(self):
         """
@@ -157,7 +164,7 @@ class TraceReader(object):
         """
         slide = self.analysis.slide
         c_ip = self.get_ip(self.idx) + slide
-        prev_ip = self.get_ip(self.idx - 1) + slide
+        prev_ip = self.get_ip(max(self.idx - 1, 0)) + slide
         
         for i, ip in enumerate([c_ip, prev_ip]):
             insn = self.dctx.disassemble_instruction(ip, self.arch)

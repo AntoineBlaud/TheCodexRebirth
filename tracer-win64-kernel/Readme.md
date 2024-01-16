@@ -11,15 +11,15 @@
 1. Load the extension using the following command:
    .load C:\Path\To\WinDbgStalker.dll
 
-2. Export the function definitions of the module to trace using IDA script
-    (see ExportFunctionDefinitions.py).
+2. Export the function definitions of the module to trace using Tenet plugin,
+   or use the ExportFunctionDefinitions.py script provided in the repository.
     The script will generate a file containing the function definitions of the module.
     Example: C:\Path\To\AntiCheatDriverExport.txt
     Only 32 first functions will be selected for tracing.
 
 3. Attach a module for tracing:
-   !WinDbgStalker.Hook module_name function_def_file_path
-   Example: !WinDbgStalker.Hook AnticheatDriver C:\Path\To\AntiCheatDriverExport.txt
+   !WinDbgStalker.AttachModule module_name function_def_file_path
+   Example: !WinDbgStalker.AttachModule AnticheatDriver C:\Path\To\AntiCheatDriverExport.txt
 
 4. Run the trace:
    !WinDbgStalker.Run max_running_time max_bp_hit_count
@@ -31,7 +31,7 @@
 Example Workflow:
 1. .reload
 2. .load C:\Path\To\WinDbgStalker.dll
-3. !WinDbgStalker.Hook AnticheatDriver C:\Path\To\AntiCheatDriverExport.txt
+3. !WinDbgStalker.AttachModule AnticheatDriver C:\Path\To\AntiCheatDriverExport.txt
 4. !WinDbgStalker.Run 60 10
 5. .unload WinDbgStalker
 

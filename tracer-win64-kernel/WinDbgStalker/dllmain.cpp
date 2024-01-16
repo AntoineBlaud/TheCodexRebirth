@@ -780,22 +780,28 @@ VOID save_state() {
 	struct ctx_insn* ctx_insn = parse_current_insn();
 	struct ctx_insn* last_ctx_insn = state->last_ctx_insn;
 	g_string_append_printf(state->trace, "rip=0x%zx", get_value_from_reg_name("rip"));
-	print_trace_line(X86_REG_RAX);
-	print_trace_line(X86_REG_RBX);
-	print_trace_line(X86_REG_RCX);
-	print_trace_line(X86_REG_RDX);
-	print_trace_line(X86_REG_RSP);
-	print_trace_line(X86_REG_RBP);
-	print_trace_line(X86_REG_RSI);
-	print_trace_line(X86_REG_RDI);
-	print_trace_line(X86_REG_R8);
-	print_trace_line(X86_REG_R9);
-	print_trace_line(X86_REG_R10);
-	print_trace_line(X86_REG_R11);
-	print_trace_line(X86_REG_R12);
-	print_trace_line(X86_REG_R13);
-	print_trace_line(X86_REG_R14);
-	print_trace_line(X86_REG_R15);
+	x86_reg regs[] = {
+		X86_REG_RAX,
+		X86_REG_RBX,
+		X86_REG_RCX,
+		X86_REG_RDX,
+		X86_REG_RSP,
+		X86_REG_RBP,
+		X86_REG_RSI,
+		X86_REG_RDI,
+		X86_REG_R8,
+		X86_REG_R9,
+		X86_REG_R10,
+		X86_REG_R11,
+		X86_REG_R12,
+		X86_REG_R13,
+		X86_REG_R14,
+		X86_REG_R15,
+	};
+
+	for (int i = 0; i < sizeof(regs) / sizeof(regs[0]); ++i) {
+		print_trace_line(regs[i]);
+	}
 
 
 
@@ -812,8 +818,8 @@ VOID save_state() {
 		g_string_append_printf(state->trace, ",m%s=0x%llx:",
 			(mem->ac & CS_AC_WRITE) ? "w" : "r",
 			mem->ptr);
-		wchar_t buffer[100];
-		int hres = m_ExtData4->ReadVirtual(mem->ptr, buffer, 50, NULL); 
+		wchar_t buffer[50];
+		int hres = m_ExtData4->ReadVirtual(mem->ptr, buffer, 40, NULL); 
 		if (FAILED(hres))
 			dprintf("Failed to read memory\n");
 		for (int j = 0; j < mem->size; ++j)
@@ -822,8 +828,24 @@ VOID save_state() {
 				buffer[j] & 0xff);
 		}
 	}
+	// create memory read for current register values
+	for (int i = 0; i < sizeof(regs) / sizeof(regs[0]); ++i) {
+		ULONG64 r_val = ctx_reg_read_2(regs[i]);
+		g_string_append_printf(state->trace, ",m%s=0x%llx:",
+			"r",
+			r_val);
+		wchar_t buffer[50];
+		int hres = m_ExtData4->ReadVirtual(r_val, buffer, 40, NULL);
+		if (FAILED(hres))
+			continue;
+		for (int j = 0; j < 8; ++j)
+		{
+			g_string_append_printf(state->trace, "%02x",
+				buffer[j] & 0xff);
+		}
+		
+	}
 	
-
 	for (int i = 0; i < ctx_insn->n_mems; ++i) {
 		struct ctx_insn_mem* mem = &ctx_insn->mems[i];
 		const x86_op_mem* mem_op = &mem->op;
@@ -934,7 +956,6 @@ VOID Run(HANDLE hCurrentProcess, HANDLE hCurrentThread, ULONG dwCurrentPc, ULONG
 			}
 			continue;
 		}
-		save_state();
 		struct ctx_insn *ctx_insn = parse_current_insn();
 		// show insn string representation
 		dprintf("%s %s\n", ctx_insn->insn->mnemonic, ctx_insn->insn->op_str);
@@ -957,7 +978,7 @@ VOID Run(HANDLE hCurrentProcess, HANDLE hCurrentThread, ULONG dwCurrentPc, ULONG
 				m_ExtControl4->Execute(DEBUG_OUTCTL_IGNORE, "be *", DEBUG_EXECUTE_NOT_LOGGED);
 			}
 		}
-
+		save_state();
 		//step to next instruction
 		m_ExtControl4->SetExecutionStatus(DEBUG_STATUS_STEP_INTO);
 		m_ExtControl4->WaitForEvent(0, INFINITE);

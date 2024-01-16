@@ -65,6 +65,7 @@ function trace(args) {
                                 });
                         }
                 } else {
+                        console.log(`Found module '${mod.name}' at ${mod.base}.`);
                         base = mod.base;
                         end = mod.base.add(mod.size);
                 }
@@ -132,7 +133,13 @@ function trace(args) {
 
         // for each address, hook it
         addresses.forEach(addr => {
-                hookAddr(args, base, addr, once, slow, cmod, js_transform, flush);
+                try{
+                        hookAddr(args, base, addr, once, slow, cmod, js_transform, flush);
+                        console.log(`Hooked address ${addr} in module ${base}.`);
+                }catch(e)
+                {
+                        console.log(e)
+                }
         });
 
 

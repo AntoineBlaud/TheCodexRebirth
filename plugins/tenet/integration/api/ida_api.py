@@ -22,7 +22,8 @@ import ida_idaapi
 import ida_diskio
 import ida_kernwin
 import ida_segment
-
+import idc 
+import idaapi
 from .api import DisassemblerCoreAPI, DisassemblerContextAPI
 from ...util.qt import *
 from ...util.misc import is_mainthread
@@ -336,14 +337,69 @@ class IDAContextAPI(DisassemblerContextAPI):
     
     def get_functions_in_section(self, section_name):
         functions = []
-        for function_address in idautils.Functions():
-            function_name = ida_name.get_short_name(function_address)
-            seg = ida_segment.getseg(function_address)
+        for f_addr in idautils.Functions():
+            f_name = ida_name.get_short_name(f_addr)
+            seg = ida_segment.getseg(f_addr)
             function_section_name = ida_segment.get_segm_name(seg)
-            if function_section_name == section_name:
-                functions.append((function_name, function_address))
+            if function_section_name == section_name and ":" not in f_name:
+                functions.append((f_name, f_addr))
         return functions
     
+    def compute_function_coverage(self, func, section=".text", f_cache_coverages={}, depth=0):
+            """Compute the coverage of a function in the binary."""
+            # get all sub calls
+            if depth > 20:
+                print("depth limit")
+                return set()
+            f_sub_calls = set()
+            for ea in idautils.FuncItems(func.start_ea):
+                mnem = idc.print_insn_mnem(ea)
+                if mnem == "call":
+                    addr = idc.get_operand_value(ea, 0)
+                    # get function name
+                    name = idc.get_func_name(addr)
+                    # check addr is in code section
+                    if idc.get_segm_name(addr) == section:
+                        f_sub_calls.add((name, addr))
+                        
+            for sub_call_name, sub_call_addr in f_sub_calls.copy():
+                
+                # if already explored get the result
+                if sub_call_addr in f_cache_coverages:
+                    # merge coverage
+                    f_sub_calls |= f_cache_coverages[sub_call_addr]
+                    continue
+                    
+                # else explore the function
+                elif sub_call_name != idc.get_func_name(func.start_ea):
+                    sub_func = idaapi.get_func(sub_call_addr)
+                    f_sub_sub_calls  = self.compute_function_coverage(sub_func, section, f_cache_coverages, depth + 1)
+                    # merge coverage
+                    f_sub_calls |= f_sub_sub_calls
+                    
+            f_cache_coverages[func.start_ea] = f_sub_calls
+            return f_sub_calls
+        
+    def to_ida_color(self, color):
+        r, g, b, _ = color.getRgb()
+        return 0xFF << 24 | b << 16 | g << 8 | r
+    
+    def here(self):
+        return idc.here()
+    
+    def set_color(self, address, color):
+        idc.set_color(address, idc.CIC_ITEM, color)
+        
+    def set_cmt(self, address, comment):
+        idc.set_cmt(address, comment, 0)
+        
+    def get_fn_blocks(self, ea):
+        func = idaapi.get_func(ea)
+        if not func:
+            return []
+        flow_chart = idaapi.FlowChart(func)
+        return [(block.start_ea, block.end_ea) for block in flow_chart]
+
     def get_capstone_md(self, arch):
         md = None
         if isinstance(arch, ArchAMD64):

@@ -63,9 +63,9 @@ print("=====================================")
 
 funcs_coverage = sorted(funcs_coverage, key=lambda f: f[3], reverse=True)
 for i in range(len(funcs_coverage)):
-    f_name, f_addr, f_size, f_coverage = funcs_coverage[i]
+    f_name, f_addr, f_size, f_cache_coverages = funcs_coverage[i]
     if i < 50:
-        print(f"Function {f_name} has size {hex(f_size)} and coverage {f_coverage}")
+        print(f"Function {f_name} has size {hex(f_size)} and coverage {f_cache_coverages}")
     elif i == 50:
         print('...')
         
@@ -75,7 +75,7 @@ bin_name = idc.get_root_filename().split('.')[0]
 # export function to file
 with tempfile.NamedTemporaryFile(mode="w", delete=False, prefix=f"{bin_name}_export_", suffix=".txt") as f:
     for i in range(len(funcs_coverage)):
-        f_name, f_addr, f_size, f_coverage = funcs_coverage[i]
+        f_name, f_addr, f_size, f_cache_coverages = funcs_coverage[i]
         f.write(f"{hex(f_addr)} {f_name}\n")
     # print file name
     print(f"Function coverage exported to {f.name}")

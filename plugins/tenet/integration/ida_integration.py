@@ -14,6 +14,7 @@ from tenet.core import TenetCore
 from tenet.types import BreakpointEvent
 from tenet.context import TenetContext
 from tenet.util.misc import register_callback, notify_callback, is_plugin_dev
+from tenet.integration.api import disassembler
 from tenet.util.qt import *
 
 logger = logging.getLogger("Tenet.IDA.Integration")
@@ -207,8 +208,8 @@ class TenetIDA(TenetCore):
             self.ACTION_NEXT_EXECUTION,                        # The action name
             "Go to next execution",                            # The action text
             IDACtxEntry(self._interactive_next_execution),     # The action handler
-            None,                                              # Optional: action shortcut
-            "Go to the next execution of the current address", # Optional: tooltip
+            "Shift+n",                                          # Optional: action shortcut
+            "Go to the next execution of the current address (Shift+n)", # Optional: tooltip
             self._icon_id_next_execution                       # Optional: the action icon
         )
 
@@ -227,8 +228,8 @@ class TenetIDA(TenetCore):
             self.ACTION_PREV_EXECUTION,                            # The action name
             "Go to previous execution",                            # The action text
             IDACtxEntry(self._interactive_prev_execution),         # The action handler
-            None,                                                  # Optional: action shortcut
-            "Go to the previous execution of the current address", # Optional: tooltip
+            "Shift+p",                                                  # Optional: action shortcut
+            "Go to the previous execution of the current address (Shift+p)", # Optional: tooltip
             self._icon_id_prev_execution                           # Optional: the action icon
         )
 
@@ -485,12 +486,11 @@ class TenetIDA(TenetCore):
 
         for addresses, trail, color in trails:
             for i, address in enumerate(addresses):
-                percent = 1.0 - ((trail_length - i) / trail_length)
 
                 # convert to bgr
                 r, g, b, _ = color.getRgb()
                 ida_color = b << 16 | g << 8 | r
-                ida_color |= (0xFF - int(0xFF * percent)) << 24
+                ida_color |= (0xFF ) << 24
 
                 # save the trail color
                 rebased_address = ctx.reader.analysis.rebase_pointer(address)
@@ -522,6 +522,8 @@ class TenetIDA(TenetCore):
 
                 entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, color)
                 lines_out.entries.push_back(entry)
+                
+   
 
     #----------------------------------------------------------------------
     # Callbacks
