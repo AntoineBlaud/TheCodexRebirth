@@ -2,11 +2,12 @@
 {
 class Slowmode
 {
-    FLUSH_THRESHOLD = 8000;
+    FLUSH_THRESHOLD = 0;
     allctx = []
     regs = []
     lastwrite = null
     nomem = []
+    count = 0
     realcontext
 
     constructor(arch) {
@@ -114,6 +115,7 @@ class Slowmode
     testcb(context, readval, writeval)
     {   
         let addr = context.pc.sub(binbase)
+        send(context.pc.toString() + "  " + Instruction.parse(context.pc).toString())
     
         let contx = {}
         for(let reg of this.regs)
@@ -151,6 +153,10 @@ class Slowmode
         }
     
         this.allctx.push(contx)
+        this.count += 1
+        // send current rip
+        //send(context.pc.toString())
+        // show disassembly of current instruction
     
         if(this.allctx.length>=this.FLUSH_THRESHOLD)flush()
         if(END_ADDR && addr.toInt32() == END_ADDR)

@@ -147,7 +147,7 @@ function trace(args) {
 }
 
 function end()
-{       
+{   
         for(let t of threadIds)
         {
                 Stalker.unfollow(t);

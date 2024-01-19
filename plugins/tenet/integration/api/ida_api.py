@@ -351,6 +351,8 @@ class IDAContextAPI(DisassemblerContextAPI):
             if depth > 20:
                 print("depth limit")
                 return set()
+            if func is None:
+                return set()
             f_sub_calls = set()
             for ea in idautils.FuncItems(func.start_ea):
                 mnem = idc.print_insn_mnem(ea)
@@ -432,6 +434,13 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def is_mapped(self, address):
         return ida_bytes.is_mapped(address)
+    
+    def rebase_0(self):
+        offset = idaapi.get_imagebase()
+        idaapi.rebase_program(-offset, idaapi.MSF_NOFIX)
+        # wait for rebase
+        while idaapi.get_imagebase() != 0:
+            time.sleep(0.1)
 
 #------------------------------------------------------------------------------
 # HexRays Util

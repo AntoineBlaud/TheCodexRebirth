@@ -1,0 +1,2 @@
+python trace.py  spawn "C:\Users\antoi\Downloads\crackme#1.exe"  crackme#1.exe  "C:\Users\antoi\Downloads\map_crrackme.txt"
+python trace.py  attach 41800  crackme#1.exe  "C:\Users\antoi\Downloads\map_crrackme.txt"

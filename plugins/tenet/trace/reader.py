@@ -174,6 +174,7 @@ class TraceReader(object):
                     reg_name = self.dctx.get_register_name(op.reg, self.arch)
                     try:
                         reg_value = self.get_register(reg_name)
+                        reg_value &= ~(self.arch.POINTER_SIZE - 1)
                         self.pctx.memories[i].navigate(reg_value)
                     except ValueError:
                         pass

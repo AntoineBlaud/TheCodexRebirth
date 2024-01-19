@@ -18,6 +18,7 @@ MODULE_C_ARM_PATH = os.path.join(wd,'trace_arm.c')
 MODULE_JS_SLOW_PATH = os.path.join(wd,'slow','trace_slow.js')
 TRACES_DIR = os.path.join(wd,"traces")
 
+DATA_CACHE = []
 pathlib.Path(TRACES_DIR).mkdir(exist_ok=True)
 
 def file_read(path: str) -> str:
@@ -153,8 +154,7 @@ def do_trace(args, attach):
                             data = f'slide=0x{slide:x}\n'+data
                         seen_tids.add(tid)
                     midline_break[tid] = data[-1]!="\n"
-                    logging.info(f'Writing trace data of {len(data)} bytes...')
-                    file_append(path, data)
+                    DATA_CACHE.append(data)
                     return
         script.on('message', on_message)
         script.load()
@@ -206,7 +206,6 @@ def do_trace(args, attach):
             'trace_addr' : int(args.flushaddr,16) if args.flushaddr else None
         })
         logging.debug(f'errcode: {errcode}')
-
         if errcode != 0:
             logging.error('Something went wrong.')
             return 1
@@ -220,8 +219,10 @@ def do_trace(args, attach):
         except KeyboardInterrupt:
             logging.info('Interrupting...')
 
-        print("")
-        script.exports_sync.end()
+        data = "".join(DATA_CACHE)
+        path = f'{TRACES_DIR}/'+re.sub("[^a-zA-Z_0-9.]","",f'{procname}_{epoch}.tenet')
+        logging.info(f'Writing trace data of {len(data)} bytes...')
+        file_append(path, data)
         script.unload()
         sess.detach()
     except frida.ServerNotRunningError as exc:

@@ -500,8 +500,6 @@ class TenetContext(object):
         backward_ips = self.reader.get_prev_ips(trail_length)
 
         trails = [(backward_ips), (forward_ips)]
-        print(blocks_execution_count)
-        print(trails)
 
         for trail_addresses in trails:
             for address in trail_addresses:

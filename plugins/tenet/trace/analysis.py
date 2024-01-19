@@ -130,7 +130,10 @@ class TraceAnalysis(object):
         instruction_addresses = set(instruction_addresses)
 
         if self._trace.slide is not None:
-            slide = self._trace.slide-idaapi.get_imagebase()
+            slide = self._trace.slide
+            # special case if its 0
+            if slide > 0:
+                slide -=idaapi.get_imagebase()
             print(f"ASLR Slide: {slide:#x} from trace")
         else:
             #

@@ -1721,8 +1721,7 @@ class TraceSegment(object):
                 self._process_mem_entry(address, data, name, relative_idx)
 
             else:
-                print(name)
-                raise ValueError(f"Invalid line in text trace! '{line}' error on '{name}', (value '{value}')")
+                pass
         
         self._pack_registers(registers, relative_idx)
 
