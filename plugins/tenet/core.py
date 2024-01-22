@@ -213,7 +213,7 @@ class TenetCore(object):
 
     def _interactive_load_trace(self, db):
         pctx = self.get_context(db)
-        pctx.pctx.interactive_load_trace()()
+        pctx.interactive_load_trace()
 
     def _interactive_first_execution(self, db):
         pctx = self.get_context(db)

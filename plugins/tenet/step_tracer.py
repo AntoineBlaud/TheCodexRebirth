@@ -40,6 +40,10 @@ class StepTracerModel:
         self.seenInstructionsCount = {}
         self.tempDataBuffer = {}
         self.tenetTrace = [["slide=0"]]
+        if not self.isDynamicShellcode:
+            self.resetSegmentInc = 0xFFFFFFFF
+        else:
+            self.resetSegmentInc = 20
         
         
         
@@ -212,11 +216,19 @@ class StepTracerController(object):
             self.model.seenInstructionsCount[ea] = 0
         self.model.seenInstructionsCount[ea] += 1
         
+        # add bp to next instruction, then we continue the process if 
+        # we are in a library the next instruction 
+        insn = self.dctx.print_insn_mnem(ea)
+        if insn is None:
+                if insn.startswith("call"):
+                    next_insn = ea + self.dctx.get_item_size(ea)
+                    self.dctx.set_breakpoint(next_insn)
+        
         # check we are not in a library
         seg = self.dctx.get_segm(ea)
         seg_name = self.dctx.get_segm_name(seg).lower()
         if ".dll" in seg_name or ".so" in seg_name:
-            self.dctx.step_until_ret()
+            self.dctx.continue_process()
             self.log(f"Skipping library call {seg_name}")
         
         if ea == prev_ea:

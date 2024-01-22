@@ -491,7 +491,7 @@ class TenetContext(object):
         
         # check if we are in the same function
         curr = dctx.get_function_name_at(dctx.here())
-        if self.last_fn == curr:
+        if self.last_fn == curr or curr == None:
             return
         
         if not self.reader:
@@ -514,8 +514,6 @@ class TenetContext(object):
             for address in trail_addresses:
                 if address in blocks_execution_count:
                     blocks_execution_count[address] += 1
-                elif idaapi.has_xref(address):
-                    blocks_execution_count[address] = 1
 
         for block_start, execution_count in blocks_execution_count.items():
             dctx.set_cmt(block_start+slide, f"Executed {execution_count} times  ")

@@ -206,9 +206,9 @@ class StepTracerView(QMainWindow):
         
     
         # add Check Box for enable/disable
-        self.dynamic_shellcode = QtWidgets.QCheckBox("Dynamic Shellcode", self)
+        self.dynamic_shellcode = QtWidgets.QCheckBox("Dynamic Code (slow)", self)
         self.dynamic_shellcode.setChecked(True)
-        self.dynamic_shellcode.setFont(QFont('Arial', 10))
+        self.dynamic_shellcode.setFont(QFont('Arial', 8))
         self.dynamic_shellcode.setStyleSheet(
             "background-color: #edebeb;"
             "color: black;"               # Set text color to white
