@@ -122,8 +122,6 @@ class ExportFuncsMenuView(QMainWindow):
         self.close()
         
         
-
-
     def get_selected_functions(self):
         selected_items = []
         root_item = self.tree_model.invisibleRootItem()

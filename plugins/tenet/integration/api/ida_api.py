@@ -323,6 +323,7 @@ class IDAContextAPI(DisassemblerContextAPI):
     
     def set_breakpoint(self, address):
         ida_dbg.add_bpt(address)
+        ida_dbg.enable_bpt(address, True)
 
     def delete_breakpoint(self, address):
         ida_dbg.del_bpt(address)
@@ -417,6 +418,20 @@ class IDAContextAPI(DisassemblerContextAPI):
             return None
         md.detail = True
         return md
+    
+    def get_pc(self, arch):
+        if isinstance(arch, ArchAMD64):
+            return idc.get_reg_value("RIP")
+        elif isinstance(arch, ArchX86):
+            return idc.get_reg_value("EIP")
+        elif isinstance(arch, ArchARM):
+            return idc.get_reg_value("PC")
+        elif isinstance(arch, ArchARM64):
+            return idc.get_reg_value("PC")
+        return None
+    
+    def get_reg_value(self, reg):
+        return idc.get_reg_value(reg)
         
     def disassemble_instruction(self, address, arch):
         md = self.get_capstone_md(arch)
@@ -430,6 +445,9 @@ class IDAContextAPI(DisassemblerContextAPI):
     
     def read_memory(self, address, size):
         return ida_bytes.get_bytes(address, size)
+    
+    def get_root_filename(self):
+        return idc.get_root_filename()
         
 
     def is_mapped(self, address):
@@ -441,6 +459,96 @@ class IDAContextAPI(DisassemblerContextAPI):
         # wait for rebase
         while idaapi.get_imagebase() != 0:
             time.sleep(0.1)
+            
+    def take_memory_snapshot(self):
+        idaapi.take_memory_snapshot(0)
+        
+    def get_segm(self, seg_ea):
+        for seg in idautils.Segments():
+            seg_start = idc.get_segm_start(seg)
+            seg_end = idc.get_segm_end(seg)
+            if seg_start <= seg_ea <= seg_end:
+                return seg
+        raise Exception("Segment not found")
+    
+    def get_segm_name(self, seg):
+        return idaapi.get_segm_name(idaapi.getseg(seg))
+        
+    def reset_code_segment(self, seg_ea, hard=True):
+        seg = self.get_segm(seg_ea)
+        seg_start = idc.get_segm_start(seg)
+        seg_end = idc.get_segm_end(seg)
+        seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
+        for addr in range(seg_start, seg_end):
+            # undefined data DELIT_EXPAND del_items
+            idc.del_items(addr, idc.DELIT_EXPAND)
+        #print(f"Reset segment {seg_name} {hex(seg_start)}, {hex(seg_end)}")        
+        # do not convert directly
+        if not hard:
+            return
+        curr_addr = seg_start
+        while curr_addr < seg_end:
+            idc.create_insn(curr_addr)  
+            curr_addr += idaapi.get_item_size(curr_addr)  
+            
+    def get_segm(self, ea):
+        for seg in idautils.Segments():
+            seg_start = idc.get_segm_start(seg)
+            seg_end = idc.get_segm_end(seg)
+            if seg_start <= ea <= seg_end:
+                return seg
+            
+    def get_segm_start(self, seg):
+        return idc.get_segm_start(seg)
+    
+    def get_segm_end(self, seg):
+        return idc.get_segm_end(seg)
+    
+            
+    def create_insn(self, ea):
+        idc.create_insn(ea)
+        
+    def print_insn_mnem(self, ea):
+        return idc.print_insn_mnem(ea)
+    
+    def get_operand_value(self, ea, op):
+        return idc.get_operand_value(ea, op)
+    
+    def continue_process(self):
+        idaapi.continue_process()
+        idaapi.wait_for_next_event(idaapi.WFNE_SUSP, -1)
+        
+    def get_func_name(self, ea):
+        return idc.get_func_name(ea)
+    
+    def list_functions(self):
+        return idautils.Functions()
+    
+    def user_cancelled(self):
+        return idaapi.user_cancelled()
+    
+    def get_item_size(self, ea):
+        return idaapi.get_item_size(ea)
+    
+    def step_into(self):
+        idaapi.step_into()
+        idaapi.wait_for_next_event(idc.WFNE_SUSP, -1)
+        
+    def step_until_ret(self):
+        idaapi.step_until_ret()
+        idaapi.wait_for_next_event(idc.WFNE_SUSP, -1)
+        
+    def generate_disasm_line(self, ea):
+        return idc.generate_disasm_line(ea, idc.GENDSM_FORCE_CODE)
+    
+    def get_root_filename(self):
+        return idc.get_root_filename()
+    
+    def is_process_running(self):
+        return ida_dbg.is_debugger_on()
+    
+    def update_ui(self):
+        idaapi.refresh_idaview_anyway()
 
 #------------------------------------------------------------------------------
 # HexRays Util

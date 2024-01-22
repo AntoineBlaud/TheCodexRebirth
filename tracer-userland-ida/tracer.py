@@ -10,6 +10,8 @@ import os
 import idautils
 import ida_bytes
 import time 
+import random
+import ida_segment
 
 # Dictionary to store loop 
 # counters
@@ -20,13 +22,14 @@ func_breakpoints = {}
 loop_already_skipped = {}
 seen_insn_count = {}
 # Number of instructions to allow before removing breakpoints
-MAX_INSTRUCTIONS = 0x4
+MAX_INSTRUCTIONS = 0x2
 WATCH_ADDR = {}
-tenet_trace = [["slice=0"]]
+tenet_trace = [["slide=0"]]
 last_data_buffer = {}
 arch = None
 MR_DUMP_SIZE = 10
-RUN_TIMEOUT = 10
+RESET_SEGMENT_INC = 20
+RUN_TIMEOUT = 250
 
 class ArchX86:
     """
@@ -104,7 +107,10 @@ class JHook():
         
 
 def get_pc():
-    return idaapi.get_reg_val(arch.IP)
+    try:
+        return idaapi.get_reg_val(arch.IP)
+    except:
+        return 0
 
 
 
@@ -163,7 +169,7 @@ def take_ida_execution_snapshot():
             seg_start = idc.get_segm_start(seg)
             seg_end = idc.get_segm_end(seg)
             if abs(seg_end - seg_start) < 0xFFFFFF:
-                seg_name = idaapi.get_segm_name(idaapi.getseg(seg_start))
+                seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
                 pc = get_pc()
                 segments[seg] = (
                     seg_start,
@@ -182,14 +188,17 @@ def take_ida_execution_snapshot():
                 pass
         # Create a temporary directory to store the snapshot
         temp_dir = get_temp_dir()
-        snapshot_file = os.path.join(temp_dir, f"ida_snapshot_{hex(get_pc())}.pkl")
-
+        if pc == 0:
+            pc = "unknown"
+        else:
+            pc = hex(pc)
+        snapshot_file = os.path.join(temp_dir, f"ida_snapshot_{pc}.pkl")
         # Serialize and save the data to a file
         with open(snapshot_file, "wb") as f:
             snapshot_data = (segments, registers)
             pickle.dump(snapshot_data, f)
 
-        print(f"Execution snapshot saved to {snapshot_file}, pc={get_pc()}")
+        print(f"Execution snapshot saved to {snapshot_file}, pc={pc}")
         return os.path.join(temp_dir, "ida_snapshot.pkl")
         
   
@@ -218,6 +227,11 @@ def restore_ida_execution_snapshot():
             idc.set_reg_value(value, reg)
 
         print("Execution snapshot restored")
+        
+        
+def take_memory_snapshot():
+    # ask ida to take memory snapshot
+    idaapi.take_memory_snapshot(ida_segment.SNAP_ALL_SEG)
 
 
 
@@ -239,11 +253,45 @@ def disable_breakpoint(ea):
     
 def enable_breakpoint(ea):
     idaapi.enable_bpt(ea, True)
+    
+def reset_segment_code(ea, hard=False):
+    seg = get_seg(ea)
+    seg_start = idc.get_segm_start(seg)
+    seg_end = idc.get_segm_end(seg)
+    seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
+    for addr in range(seg_start, seg_end):
+        # undefined data DELIT_EXPAND del_items
+        idc.del_items(addr, idc.DELIT_EXPAND)
+    #print(f"Reset segment {seg_name} {hex(seg_start)}, {hex(seg_end)}")        
+    # do not convert directly
+    if not hard:
+        return
+    curr_addr = seg_start
+    while curr_addr < seg_end:
+        idc.create_insn(curr_addr)  
+        curr_addr += idaapi.get_item_size(curr_addr)  
+        
+def get_seg(ea):
+    for seg in idautils.Segments():
+        seg_start = idc.get_segm_start(seg)
+        seg_end = idc.get_segm_end(seg)
+        if seg_start <= ea <= seg_end:
+            return seg
 
 def get_jump_target(ea):
     # Get the target address of the jump instruction
     # check insn start by j
     insn = idaapi.print_insn_mnem(ea)
+    if insn is None:
+        if random.randint(0, 10) == 0:
+            reset_segment_code(ea, hard=False)
+        idc.create_insn(ea) 
+        insn = idaapi.print_insn_mnem(ea)
+        # make second try after reseting segment
+        if insn is None:
+            print("Cannot get insn at %x" % ea)
+            return None
+        
     if (insn.startswith("j") and not insn.startswith("jmp")):
         target = idc.get_operand_value(ea, 0)
         return target if target != idaapi.BADADDR else None
@@ -352,7 +400,8 @@ def save_trace():
 def step_and_check_loop():
     # Get the current instruction address
     current_address = get_pc()
-    
+    if random.randint(0, RESET_SEGMENT_INC) == 0:
+        reset_segment_code(current_address, hard=True)
     # Already skipped loop are stored in skipped dict
     # If we are in a skipped loop, we just continue the process
     # until we are stopped by a breakpoint
@@ -421,20 +470,33 @@ def step_and_check_loop():
     # step into the next instruction
     idaapi.step_into()
     idaapi.wait_for_next_event(idaapi.WFNE_SUSP, -1)
-
+    
+def exit():
+    ea = get_pc()
+    reset_segment_code(ea, hard=True)
+    take_memory_snapshot()
+    take_ida_execution_snapshot()
+    save_trace()
+    
+    
 # Example of stepping through the code
 def run_script():
     # Run the script until the end of the function
     start = time.time()
     add_bp_on_all_functions()
-    for _ in range(2000):
+    while True:
         
         if ida_kernwin.user_cancelled():
+            print("User cancelled")
+            exit()
+            break
+            
+        if time.time() - start > RUN_TIMEOUT:
+            print("Timeout")
+            exit()
             break
         
         last_ea = get_pc()
-        idc.create_insn(last_ea)
-        # Step into the next instruction
         step_and_check_loop()
                 
         ea = get_pc()
@@ -443,8 +505,8 @@ def run_script():
                 idaapi.del_bpt(ea)
                 del func_breakpoints[ea]
          # get current segment
-        seg = idaapi.getseg(ea)
-        seg_name = idaapi.get_segm_name(seg)
+        seg = get_seg(ea)
+        seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
         inc_seen_insn_count(ea)
         
         # skip when we are at the same address or in a lib function
@@ -456,17 +518,18 @@ def run_script():
         
         add_trace_entry(ea)
         
+        if hex(ea).endswith("84ed"):
+            exit()
+            break
+
+                            
         if ea in WATCH_ADDR:
             print(f"Watched address {hex(ea)} : {WATCH_ADDR[ea]}")
-            #take_ida_execution_snapshot()
-            save_trace()
-            break
-        if time.time() - start > RUN_TIMEOUT:
-            print("Timeout")
-            save_trace()
+            exit()
             break
             
-        
 
-# Run the script
+            
+
 run_script()
+

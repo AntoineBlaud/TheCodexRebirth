@@ -213,7 +213,7 @@ class TenetCore(object):
 
     def _interactive_load_trace(self, db):
         pctx = self.get_context(db)
-        pctx.interactive_load_trace()
+        pctx.pctx.interactive_load_trace()()
 
     def _interactive_first_execution(self, db):
         pctx = self.get_context(db)
@@ -234,6 +234,10 @@ class TenetCore(object):
     def _interactive_export_function_map(self, db):
         pctx = self.get_context(db)
         pctx.interactive_export_function_map()
+        
+    def _interactive_step_tracer(self, db):
+        pctx = self.get_context(db)
+        pctx.interactive_step_tracer()
 
     #--------------------------------------------------------------------------
     # Core Actions

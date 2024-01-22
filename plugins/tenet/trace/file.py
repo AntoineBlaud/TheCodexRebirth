@@ -884,13 +884,13 @@ class Interval(object):
     def __init__(self, bounds):
         self.bounds = bounds
         self.bitmap = [[] for i in range(bounds[1]-bounds[0])]
-
 class SearchableMemory(object):
-
+    
     def __init__(self):
         self.data = []
         self.intervals = []
         self.finalized = False
+        self.strings = []
 
     def record_data_for_search(self, idx, addr, data):
         self.data.append((idx, addr, data))
@@ -962,16 +962,58 @@ class SearchableMemory(object):
         self.finalized = True
 
         temp_intervals = []
-        for d in self.data:
-            temp_intervals.append((d[1],d[1]+len(d[2])))
+        for idx, addr, dat in self.data:
+            temp_intervals.append((addr,addr+len(dat)))
 
         result = self.merge_intervals(temp_intervals)
         for inte in result:
             self.intervals.append(Interval(inte))
 
         self.process_data()
+        self.enum_all_strings()
         del self.data
+        
+    def is_good_string(self, s):
+        vowels = "aeiouAEIOU"
+        consonants = "bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ"
+        digits = "0123456789"
 
+        vowel_count = sum(1 for char in s if char in vowels)
+        consonant_count = sum(1 for char in s if char in consonants)
+        digit_count = sum(1 for char in s if char in digits)
+
+        # Ajoutez d'autres critères de filtrage si nécessaire
+        # Par exemple, la longueur de la chaîne, la présence de caractères spéciaux, etc.
+
+        # Dans cet exemple, on suppose que la chaîne est "bonne" si elle a au moins 3 voyelles,
+        # au moins 3 consonnes et au moins 2 chiffres.
+        if vowel_count >= 3 and consonant_count >= 3 and digit_count < 6:
+            return True
+        else:
+            return False
+
+
+
+    def enum_all_strings(self):
+        self.strings = set()
+        for inte in self.intervals:
+            possible_strings = [""]*1000 # max 1000 idx for one address
+            for data_ptr in range(len(inte.bitmap)):
+                for i, e in enumerate(inte.bitmap[data_ptr]):
+                    curr_str = possible_strings[i]
+                    c = e[1]
+                    # check c is printable
+                    if c>=32 and c<=126:
+                        possible_strings[i] += chr(c)
+                    else:
+                        if self.is_good_string(curr_str):
+                            self.strings.add(curr_str)
+                        possible_strings[i] = ""
+                        
+            if self.is_good_string(curr_str):
+                self.strings.add(curr_str)
+                
+                
           
     def search(self, pattern):
         results = []
@@ -1001,13 +1043,15 @@ class SearchableMemory(object):
                             return results
         return results
 
-    def get_strings(self, str):
-        pass
+    def get_strings(self):
+        return list(self.strings)
         
     def addr_to_interval(self, addr):
-        idx = bisect.bisect_left(self.intervals, addr, key = lambda x:x.bounds[1])
+        keys = [i.bounds[1] for i in self.intervals]
+        idx = bisect.bisect_left(keys, addr)
         return self.intervals[idx]
 
+    
 
     
 class TraceSegment(object):

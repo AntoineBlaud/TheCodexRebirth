@@ -11,6 +11,7 @@ from tenet.memory import MemoryController
 from tenet.registers import RegisterController
 from tenet.breakpoints import BreakpointController
 from tenet.menus import ExportFunctionsMenuController
+from tenet.step_tracer import StepTracerController
 from tenet.ui.trace_view import TraceDock
 from tenet.ui.tree_view import TreeDock
 
@@ -394,6 +395,14 @@ class TenetContext(object):
         # load the function map controller
         controller = ExportFunctionsMenuController(self)
         controller.show()
+        
+    def interactive_step_tracer(self):
+        """
+        Handle UI actions for exporting the function map.
+        """
+        # load the function map controller
+        controller = StepTracerController(self)
+        controller.show()
     
 
     def _idx_changed(self, idx):
@@ -505,6 +514,8 @@ class TenetContext(object):
             for address in trail_addresses:
                 if address in blocks_execution_count:
                     blocks_execution_count[address] += 1
+                elif idaapi.has_xref(address):
+                    blocks_execution_count[address] = 1
 
         for block_start, execution_count in blocks_execution_count.items():
             dctx.set_cmt(block_start+slide, f"Executed {execution_count} times  ")

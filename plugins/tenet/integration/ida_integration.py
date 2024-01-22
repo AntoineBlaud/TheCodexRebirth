@@ -125,6 +125,7 @@ class TenetIDA(TenetCore):
     ACTION_NEXT_EXECUTION  = "tenet:next_execution"
     ACTION_PREV_EXECUTION  = "tenet:prev_execution"
     ACTION_EXPORT_FUNCTION_MAP = "tenet:export_function_map"
+    ACTION_STEP_TRACER = "tenet:step_tracer"
     
     def _install_action_to_widget(
         self,
@@ -282,6 +283,14 @@ class TenetIDA(TenetCore):
             self._interactive_export_function_map
         )
 
+    def _install_step_tracer(self, widget, popup):
+        self._install_action_to_widget(
+            widget,
+            popup,
+            self.ACTION_STEP_TRACER,
+            "Use step tracer",
+            self._interactive_step_tracer
+        )
     def _uninstall_load_trace(self):
 
         logger.info("Removing the 'Tenet trace file...' menu entry...")
@@ -432,6 +441,7 @@ class TenetIDA(TenetCore):
             )
             
             self._install_export_function_map(widget, popup)
+            self._install_step_tracer(widget, popup)
 
             #
             # inject a seperator to help insulate our plugin action group

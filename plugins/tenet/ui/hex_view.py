@@ -37,6 +37,29 @@ class SearchView(QtWidgets.QWidget):
         self.hexview.controller.reader.seek(item.idx)
         self.hexview.controller.navigate(item.addr)
 
+class ListStringsView(QtWidgets.QWidget):
+    def __init__(self, strings, hexview):
+        super(ListStringsView, self).__init__()
+        self.list = QtWidgets.QListWidget(self)
+        self.hexview = hexview
+        
+        for string in strings:
+            qitem = QtWidgets.QListWidgetItem(string, self.list)
+            
+        self.list.setMinimumWidth(self.list.sizeHintForColumn(0)+ 50)
+        
+        self.list.itemClicked.connect(self.on_item_clicked)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(QtWidgets.QLabel(f"Strings found in memory"))
+        layout.addWidget(self.list)
+        
+        self.setLayout(layout)
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+        
+        #self.setFixedSize(self.sizeHint()*1)
+        self.adjustSize()
+    def on_item_clicked(self, item):
+        pass
 
 
 class HexView(QtWidgets.QAbstractScrollArea):
@@ -106,6 +129,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
         self._action_addr = QtWidgets.QAction("Go to Address", None)
         self._action_search = QtWidgets.QAction("Search bytes", None)
         self._action_search_selection = QtWidgets.QAction("Search selected bytes", None)
+        self.action_list_strings = QtWidgets.QAction("List strings", None)
         self._action_clear = QtWidgets.QAction("Clear mem breakpoints", None)
         self._actions_follow_in_dump = []
         for i in range(tenet.context.NMEM):
@@ -412,6 +436,8 @@ class HexView(QtWidgets.QAbstractScrollArea):
         address = ida_kernwin.ask_addr(self.model.address, "Jump to address in memory")
         if address != None and address != ida_idaapi.BADADDR:
             self.controller.navigate(address)
+        
+        
 
 
     def _search(self):
@@ -459,6 +485,19 @@ class HexView(QtWidgets.QAbstractScrollArea):
             ida_kernwin.warning("Search results capped to 1000")
         searchview = SearchView(sorted(search_results), self, searchstring)
         searchview.show()
+        
+    def _list_strings(self):
+        global liststringsview
+
+        if not self.controller.reader.trace.searchable_memory.finalized:
+            ida_kernwin.warning("Click ok to compute search cache (required once per trace file, may take a few seconds)")
+            self.controller.reader.trace.searchable_memory.finalize()
+            
+        results = self.controller.reader.trace.searchable_memory.get_strings()
+        liststringsview = ListStringsView(results, self)
+        liststringsview.show()
+        
+        
 
     #--------------------------------------------------------------------------
     # Signals
@@ -503,6 +542,7 @@ class HexView(QtWidgets.QAbstractScrollArea):
 
         # show the 'search bytes' action
         menu.addAction(self._action_search)
+        menu.addAction(self.action_list_strings)
 
         menu.addSeparator()
 
@@ -565,6 +605,11 @@ class HexView(QtWidgets.QAbstractScrollArea):
         elif action == self._action_search_selection:
             self._search_from_selection()
             return
+        
+        elif action == self.action_list_strings:
+            self._list_strings()
+            return
+            
 
         elif action == self._action_clear:
             self.controller.pctx.breakpoints.clear_memory_breakpoints()
