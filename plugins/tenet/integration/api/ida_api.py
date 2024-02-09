@@ -1,6 +1,7 @@
 import logging
 import functools
-import capstone
+from capstone import *
+from keystone import *
 #
 # TODO: should probably cleanup / document this file a bit better.
 #
@@ -406,18 +407,33 @@ class IDAContextAPI(DisassemblerContextAPI):
     def get_capstone_md(self, arch):
         md = None
         if isinstance(arch, ArchAMD64):
-            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+            md = Cs(CS_ARCH_X86, CS_MODE_64)
         elif isinstance(arch, ArchX86):
-            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+            md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif isinstance(arch, ArchARM):
-            md = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
+            md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
         elif isinstance(arch, ArchARM64):
-            md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
+            md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
             
         if md is None:
             return None
         md.detail = True
         return md
+    
+    def get_keystone_md(self, arch):
+        ks = None
+        if isinstance(arch, ArchAMD64):
+            ks = Ks(KS_ARCH_X86, KS_MODE_64)
+        elif isinstance(arch, ArchX86):
+            ks = Ks(KS_ARCH_X86, KS_MODE_32)
+        elif isinstance(arch, ArchARM):
+            ks = Ks(KS_ARCH_ARM, KS_MODE_ARM)
+        elif isinstance(arch, ArchARM64):
+            ks = Ks(KS_ARCH_ARM64, KS_MODE_ARM)
+        if ks is None:
+            return None
+        ks.detail = True
+        return ks
     
     def get_pc(self, arch):
         if isinstance(arch, ArchAMD64):
@@ -442,6 +458,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         # capstone register
         md = self.get_capstone_md(arch)
         return md.reg_name(register).upper()
+
     
     def read_memory(self, address, size):
         return ida_bytes.get_bytes(address, size)

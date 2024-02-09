@@ -19,6 +19,7 @@ from tenet.types import BreakpointType
 from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 from tenet.trace.reader import TraceReader
 from tenet.integration.api import disassembler, DisassemblerContextAPI
+from tenet.taint_engines.analysis_runner import TaintAnalysisRunner
 
 logger = logging.getLogger("Tenet.Context")
 NMEM = 3
@@ -192,6 +193,14 @@ class TenetContext(object):
             pmsg("   |  if you know it, and reload the trace. Otherwise, it is possible")
             pmsg("   |  your trace is just... very small and Tenet was not confident")
             pmsg("   |  predicting an ASLR slide.")
+            
+        self.taint_analysis_runner = TaintAnalysisRunner(self.arch, disassembler[self])
+        pmsg(" +------------------------------------------------------")
+        pmsg(" |- INFO: Taint analysis has been started.")
+        self.taint_analysis_runner.load_trace(filepath)
+        pmsg(" |- INFO: Taint analysis has been completed.")
+        pmsg(" +------------------------------------------------------")
+        
 
         #
         # we only hook directly into the disassembler / UI / subsytems once
@@ -318,6 +327,7 @@ class TenetContext(object):
         # attempt to load the user selected trace
         try:
             self.load_trace(filepath)
+            
         except:
             pmsg("Failed to load trace...")
             pmsg(traceback.format_exc())

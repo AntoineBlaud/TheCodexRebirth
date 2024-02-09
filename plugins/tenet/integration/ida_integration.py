@@ -178,7 +178,7 @@ class TenetIDA(TenetCore):
         # describe a custom IDA UI action
         action_desc = ida_kernwin.action_desc_t(
             self.ACTION_LOAD_TRACE,                    # The action name
-            "~T~enet trace file...",                   # The action text
+            "~Tenet trace file...",                   # The action text
             IDACtxEntry(self._interactive_load_trace), # The action handler
             None,                                      # Optional: action shortcut
             "Load a Tenet trace file",                 # Optional: tooltip
