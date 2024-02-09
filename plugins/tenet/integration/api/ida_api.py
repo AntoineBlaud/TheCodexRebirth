@@ -449,7 +449,7 @@ class IDAContextAPI(DisassemblerContextAPI):
     def get_reg_value(self, reg):
         return idc.get_reg_value(reg)
         
-    def disassemble_instruction(self, address, arch):
+    def disasm(self, address, arch):
         md = self.get_capstone_md(arch)
         insn = next(md.disasm(bytes(self.read_memory(address, 16)), address))
         return insn

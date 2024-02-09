@@ -11,7 +11,7 @@ logger = logging.getLogger("tenet")
 
 
 class TaintAnalysisRunner:
-    def __init__(self, arch, dctx):
+    def __init__(self, arch, dctx, reader):
         self.sym_runner = None
         # Create a temporary log file for debugging.
         self.log_file = self.setup_logger()
@@ -19,12 +19,11 @@ class TaintAnalysisRunner:
         sys.stdin = open(os.devnull, "r")
         self.dctx = dctx
         self.arch = arch
-
-    def load_trace(self, trace_path):
+        self.reader = reader
+        
         self.cs = self.dctx.get_capstone_md(self.arch)
         self.ks = self.dctx.get_keystone_md(self.arch)
-        print("Initializing CodexRebirth context (can take up to 180 seconds, please be patient)...")  
-        self._engine = TextEngine(self.arch, self.cs, self.ks)
+        self._engine = TextEngine(self.arch, self.dctx, self.cs, self.ks, self.reader)
         self._runner = Runner(self._engine, self.arch, self.cs, self.ks)
         self._runner.process_analysis()
         

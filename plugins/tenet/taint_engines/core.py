@@ -64,8 +64,10 @@ def create_sym_register_factory():
     Create a dictionary of symbolic registers and their parts.
     Used also to link a register part to its parent register.
     """
+    global SYM_REGISTER_FACTORY
     import tenet.taint_engines.arch.x86 as x86
-    return x86.create_sym_register_factory()
+    SYM_REGISTER_FACTORY = x86.create_sym_register_factory()
+    return SYM_REGISTER_FACTORY
 
 def get_parent_register(register_name, arch_size):
     import tenet.taint_engines.arch.x86 as x86
@@ -129,6 +131,7 @@ class VariableStates(dict):
     def del_sym_var(self, name):
         # Delete a symbolic variable, handling register parts and
         # individual variables
+        global SYM_REGISTER_FACTORY
         name = create_name_from_address(name)
 
         print(f"Delete symbolic variable {name}")
@@ -173,7 +176,7 @@ class OperationX86_64:
     def find_var_name_tainted(self, operation: Operation, mem_access: int):
         if not operation.op1:
             return None
-        return mem_access if operation.op1.type == X86_OP_MEM else self.cs.reg_name(operation.op1.reg)
+        return mem_access if operation.op1.type == X86_OP_MEM else  self.cs.reg_name(operation.op1.reg)
 
     def _add(self, operation, symbolic_taint_store):
         return symbolic_taint_store[self.tainted_var_name].update(operation.v_op1 + operation.v_op2)
@@ -348,6 +351,8 @@ class OperationEngine:
         # Store the Qiling instance and configure Capstone disassembler and Keystone assembler
         self.engine = engine
         self.arch = arch
+        self.cs = cs
+        self.ks = ks
         if isinstance(arch, ArchAMD64) or isinstance(arch, ArchX86):
             self.op_reg_type = X86_OP_REG
             self.op_imm_type = X86_OP_IMM
@@ -386,6 +391,7 @@ class OperationEngine:
         return None
 
     def parse_operation_operands(self, cinsn, mem_access: int, symbolic_taint_store: VariableStates):
+        global SYM_REGISTER_FACTORY
         # Parse the operands of the instruction, create symbolic values if needed, and return the Operation object
         operation = Operation(cinsn)
         operation.mem_access = mem_access
@@ -482,7 +488,7 @@ class OperationEngine:
             raise e
         return mem_access
 
-    def evaluate_instruction(self, mem_access, symbolic_taint_store: VariableStates):
+    def evaluate_instruction(self, symbolic_taint_store: VariableStates):
         if self.config is None:
             raise Exception("Config not set")
 
@@ -501,7 +507,7 @@ class OperationEngine:
 
         # mem_access can be calculated from cinsn of directly
         # read base, index, disp and scale from cinsn operands
-        mem_access = self.compute_mem_access(cinsn) if mem_access is None else mem_access
+        mem_access = self.compute_mem_access(cinsn)
 
         # store the last instruction executed
         self.last_instruction_executed = cinsn_addr
@@ -511,7 +517,7 @@ class OperationEngine:
         # All the results are stored in the Operation object (v_op1, v_op2, v_op3)
         operation = self.parse_operation_operands(cinsn, mem_access, symbolic_taint_store)
         # Compute the result of the operation
-        if self.arch == QL_ARCH.X8664:
+        if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
             op_engine = OperationX86_64(
                 self.config,
                 self.cs,
@@ -588,10 +594,7 @@ class Runner:
     def initialize_symbolic_evaluator(self):
         # We fetching the value of the registers before triggering the run
         # and store them in the global scope
-        for reg_id in self.engine.map_regs():
-            reg_name = self.cs.reg_name(reg_id)
-            if not reg_name:
-                continue
+        for reg_name in self.arch.REGISTERS:
             try:
                 value = self.engine.read_reg(reg_name.upper())
                 globals()[reg_name] = value
@@ -691,21 +694,51 @@ class Runner:
         self.registers_state.register_item(sp_name, idx, self.engine.get_stack_pointer())
 
     def initialize_execution_state(self):
-        for reg_id in self.engine.map_regs():
+        for reg_name in self.arch.REGISTERS:
             try:
-                reg_name = self.cs.reg_name(reg_id)
                 register_value = self.engine.read_reg(reg_name.upper())
                 self.registers_state.register_item(reg_name, 0, register_value)
             except (KeyError, AttributeError):
                 pass
+            
+    def initialize_configuration(self):
+        """
+        Initialize the global shared among all the modules via superglobal library
+        """
+
+        if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
+            self.CONFIG["BAD_OPERANDS"] = BAD_OPERANDS_X86_64
+
+        if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchARM64):
+            self.CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFFFFFFFFFF
+            self.CONFIG["BINARY_ARCH_SIZE"] = 64
+
+        elif isinstance(self.arch, ArchX86) or isinstance(self.arch, ArchARM):
+            self.CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFF
+            self.CONFIG["BINARY_ARCH_SIZE"] = 32
+            
+        
+        self.CONFIG["PC_REG_NAME"] = self.arch.IP
+        self.CONFIG["SP_REG_NAME"] = self.arch.SP
+    
+        # make first update
+        setglobal("CONFIG", self.CONFIG)
+        # Must be called after CONFIG BINARY_MAX_MASK and BINARY_ARCH_SIZE are set
+        self.CONFIG["SYM_REGISTER_FACTORY"] = create_sym_register_factory()
+        self.CONFIG["IS_INITIALIZED"] = True
+        # make second update
+        setglobal("CONFIG", self.CONFIG)
+        
+        self.operation_engine.set_config(self.CONFIG)
+        
 
     def process_analysis(self):
-        raise NotImplementedError()
+        self.initialize_configuration()
         self.initialize_execution_state()
         self.initialize_symbolic_evaluator()
+        print(self.engine.trace.length)
         while self.engine.next():
-            mem_access = self.engine.get_memory_access()
-            self.register_operations(self.operation_engine.evaluate_instruction(mem_access, self.symbolic_taint_store))
+            self.register_operations(self.operation_engine.evaluate_instruction(self.symbolic_taint_store))
 
     def clone(self):
         self.engine.clear()

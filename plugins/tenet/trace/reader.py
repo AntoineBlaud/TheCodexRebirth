@@ -1589,6 +1589,8 @@ class TraceReader(object):
 
         If a timestamp (idx) is provided, that will be used instead of the current timestamp.
         """
+        # transfrom to uppercase
+        reg_name = reg_name.upper()
         return self.get_registers([reg_name], idx)[reg_name]
 
     def get_registers(self, reg_names=None, idx=None):
@@ -1599,6 +1601,10 @@ class TraceReader(object):
 
         If a timestamp (idx) is provided, that will be used instead of the current timestamp.
         """
+        # transfrom to uppercase
+        if isinstance(reg_names, list):
+            reg_names = [reg.upper() for reg in reg_names]
+        
         if idx is None:
             idx = self.idx
 

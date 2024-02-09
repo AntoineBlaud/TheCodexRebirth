@@ -194,10 +194,9 @@ class TenetContext(object):
             pmsg("   |  your trace is just... very small and Tenet was not confident")
             pmsg("   |  predicting an ASLR slide.")
             
-        self.taint_analysis_runner = TaintAnalysisRunner(self.arch, disassembler[self])
         pmsg(" +------------------------------------------------------")
         pmsg(" |- INFO: Taint analysis has been started.")
-        self.taint_analysis_runner.load_trace(filepath)
+        self.taint_analysis_runner = TaintAnalysisRunner(self.arch, disassembler[self], self.reader)
         pmsg(" |- INFO: Taint analysis has been completed.")
         pmsg(" +------------------------------------------------------")
         

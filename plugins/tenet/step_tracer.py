@@ -4,6 +4,9 @@ from tenet.integration.api import disassembler
 from tenet.util.misc import get_temp_dir
 import random
 import os 
+from capstone.x86_const import *
+from capstone.arm_const import *
+
 
 class JHook():
     def __init__(self):
@@ -73,6 +76,8 @@ class StepTracerController(object):
         self.view.show()
         self.arch = self.pctx.arch
         self.prev_ea  = None
+        self.cs = self.dctx.get_capstone_md(self.arch)
+        self.ks = self.dctx.get_keystone_md(self.arch)
         
     @property
     def ea(self):
@@ -148,6 +153,22 @@ class StepTracerController(object):
             self.dctx.delete_breakpoint(bp)
             
         self.prev_ea  = None
+        
+    def compute_mem_access(self, cinsn):
+        mem_access = 0
+        try:
+            for op in cinsn.operands:
+                if op.type in (X86_OP_MEM, ARM_OP_MEM):
+                    base = self.cs.reg_name(op.mem.base)
+                    index = self.cs.reg_name(op.mem.index)
+                    mem_access += self.dctx.get_reg_value(base) if base != 0 else 0
+                    mem_access += self.dctx.get_reg_value(index) if op.mem.index != 0 else 0
+                    mem_access += op.mem.disp
+                    mem_access *= op.mem.scale if op.mem.scale > 1 else 1
+
+        except Exception as e:
+            return 0
+        return mem_access
             
             
     def add_trace_entry(self):
@@ -196,11 +217,14 @@ class StepTracerController(object):
             for _ in range(dumpSize):
                 read_memory_and_append_entry(reg_value)
                 reg_value += PTR_SIZE
-
+                
+        # add memory read for the current instruction
+        disasm = self.dctx.disasm(self.ea, self.arch)
+        mem_access = self.compute_mem_access(disasm)
+        read_memory_and_append_entry(mem_access)
         self.model.tenetTrace.append(new_entry)
         
-
-    
+        
     def save_trace(self):
         trace = [",".join(entry) for entry in self.model.tenetTrace]
         temp_dir = get_temp_dir(self.dctx.get_root_filename())

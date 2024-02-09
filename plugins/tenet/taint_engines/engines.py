@@ -2,15 +2,13 @@ from typing import Mapping
 from superglobals import *
 import abc
 from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
+import binascii
 
 class EngineWrapper(abc.ABC):
     def get_ea(self):
         raise NotImplementedError()
 
     def get_currrent_instruction_disass(self):
-        raise NotImplementedError()
-
-    def get_instruction_from_address(self, addr):
         raise NotImplementedError()
 
     def get_stack_pointer(self):
@@ -22,31 +20,13 @@ class EngineWrapper(abc.ABC):
     def is_mapped(self, address):
         raise NotImplementedError()
 
-    def read_while_ptr(self, addr):
-        raise NotImplementedError()
-
     def map_regs(self):
         raise NotImplementedError()
 
     def read_reg(self, regname):
         raise NotImplementedError()
 
-    def write_reg(self, regname, value):
-        raise NotImplementedError()
-
-    def check_instruction_scope(self, text_base, text_end):
-        raise NotImplementedError()
-
     def clear(self):
-        raise NotImplementedError()
-
-    def map(self, start, size):
-        raise NotImplementedError()
-
-    def write(self, start, data):
-        raise NotImplementedError()
-
-    def unmap_all(self):
         raise NotImplementedError()
 
     def clone(self):
@@ -54,10 +34,14 @@ class EngineWrapper(abc.ABC):
 
 
 class TextEngine(EngineWrapper):
-    def __init__(self, arch, cs, ks):
+    def __init__(self, arch, dctx, cs, ks, reader):
+        self.dctx = dctx
         self.cs = cs
         self.ks = ks
         self.arch = arch
+        self.trace = reader.trace
+        self.reader = reader
+        self.idx = 0
         
     def map_regs(self) -> Mapping[int, int]:
         """Map Capstone x86 regs definitions to Unicorn's."""
@@ -82,4 +66,45 @@ class TextEngine(EngineWrapper):
         elif isinstance(self.arch, ArchARM) or isinstance(self.arch, ArchARM64):
             return dict((cs_arm_regs[k], uc_arm_regs[k]) for k in cs_arm_regs if k in uc_arm_regs)
         raise ValueError("Unknown architecture type")
+    
+    def next(self):
+        self.idx += 1
+        return self.idx < self.trace.length
+        
+    def get_ea(self):
+        return self.trace.get_ip(self.idx)
+    
+    def get_currrent_instruction_disass(self):
+        ea = self.get_ea()
+        return self.dctx.disasm(ea, self.arch)
+    
+    def get_currrent_instruction_disass(self):
+        ea = self.get_ea()
+        return self.dctx.disasm(ea, self.arch)
+    
+    def is_mapped(self, address):
+        return self.dctx.is_mapped(address)
+
+    def read_memory_int(self, address):
+        if not self.is_mapped(address):
+            return 0
+        memory = self.reader.get_memory(address, 8, self.idx)
+        if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
+            return int.from_bytes(memory.data, byteorder="little")
+        elif isinstance(self.arch, ArchARM) or isinstance(self.arch, ArchARM64):
+            return int.from_bytes(memory.data, byteorder="big")
+    
+    def read_reg(self, regname):
+        return self.reader.get_register(regname, self.idx)
+    
+    def get_stack_pointer(self):
+        return self.read_reg(self.arch.SP)
+
+    def clear(self):
+        pass
+    
+    def clone():
+        pass
+
+        
         
