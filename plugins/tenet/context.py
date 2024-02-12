@@ -19,7 +19,7 @@ from tenet.types import BreakpointType
 from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 from tenet.trace.reader import TraceReader
 from tenet.integration.api import disassembler, DisassemblerContextAPI
-from tenet.taint_engines.analysis_runner import TaintAnalysisRunner
+from tenet.taint_engine.analysis_runner import TaintAnalysisRunner
 
 logger = logging.getLogger("Tenet.Context")
 NMEM = 3

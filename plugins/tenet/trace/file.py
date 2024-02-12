@@ -113,13 +113,15 @@ def hash_file(filepath):
             crc = zlib.crc32(ins.read(65536), crc)
     return (crc & 0xFFFFFFFF)
 
-def number_of_bits_set(i):
+def number_of_bits_set(n):
     """
-    Count the number of bits set in the given 32bit integer.
+    Count the number of bits set
     """
-    i = i - ((i >> 1) & 0x55555555)
-    i = (i & 0x33333333) + ((i >> 2) & 0x33333333)
-    return (((i + (i >> 4) & 0xF0F0F0F) * 0x1010101) & 0xffffffff) >> 24
+    count = 0
+    while (n):
+        count += n & 1
+        n >>= 1
+    return count
 
 def width_from_type(t):
     """
@@ -443,7 +445,7 @@ class TraceFile(object):
         header.mem_idx_width = width_from_type(self.mem_idx_type)
         header.mem_addr_width = width_from_type(self.mem_addr_type)
         header.original_hash = self.original_hash
-        mask_data = (ctypes.c_uint32 * len(self.masks))(*self.masks)
+        mask_data = (ctypes.c_uint64 * len(self.masks))(*self.masks)
 
         # save the global trace data / header to the zip
         with zip_archive.open('header', 'w') as f:
@@ -571,7 +573,7 @@ class TraceFile(object):
             self.mem_masks.fromfile(f, header.mem_addrs_num)
 
             # ('mask_num',   ctypes.c_uint32),
-            self.masks = array.array('I')
+            self.masks = array.array('Q')
             self.masks.fromfile(f, header.mask_num)
             self.mask_sizes = [number_of_bits_set(mask) * self.arch.POINTER_SIZE for mask in self.masks]
 
@@ -1951,3 +1953,4 @@ class TraceSegment(object):
             mask >>= 1
             bit_index += 1
         return regs
+

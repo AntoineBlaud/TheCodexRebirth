@@ -19,6 +19,8 @@ BINARY_ARCH_SIZE = None
 SYM_REGISTER_FACTORY = None
 ID_COUNTER = None
 
+from .debug_profiler import profile
+
 
 def initialize_global(func):
     def wrapper(*args, **kwargs):
@@ -55,7 +57,10 @@ class _SymValue:
     def value(self, new_value):
         self._value = new_value
 
+
+    
     def __repr__(self):
+        # VERY VERY SLOW 
         value_str = str(self.value)
         value_str = ustring.reformat_expression(value_str)
         return value_str
@@ -129,7 +134,7 @@ class RealValue:
         elif isinstance(target, int):
             self.v_wrapper = _RealValue(target.clone())
         else:
-            raise Exception("Target type unknown '{}'".format(type(target)))
+            return target.clone()
 
     # For the following methods, we have to clone the 'other' object
     # because we apply the operation on the 'other' object itself,
@@ -219,7 +224,9 @@ class SymValue:
         super().__init__()
         global ID_COUNTER
         self.color = Color()
-        self.name = name
+        self.name = None
+        if isinstance(name, str):
+            self.name = name.upper()
         self.v_wrapper = None
         if id is None:
             id = [ID_COUNTER.value]
@@ -265,7 +272,7 @@ class SymValue:
             # add the current id to the new id, allow to trace all the instruction that use this value
             self._id = set(target._id) | set([ID_COUNTER.value])
         elif isinstance(target, (RealValue)):
-            self = target.clone()
+            return target.clone()
         elif isinstance(target, (BitVecRef, BitVecNumRef)):
             self.v_wrapper = _SymValue(target.clone())
         else:
@@ -378,6 +385,7 @@ class SymRegister(SymValue):
 
     @initialize_global
     def __init__(self, name, high, low, value=None, parent=None):
+        name = name.upper()
         super().__init__(None, name=name)
         self.parent = parent
         self._low = low
@@ -410,20 +418,16 @@ class SymRegister(SymValue):
         # Update current symbolic value, depending of the target value
         # and the current register size
         # Ex: If target is rax and self is eax, then self = rax & 0xffffffff
-        super().update(target)
+        res = super().update(target)
         if self.size != BINARY_ARCH_SIZE:
             self.v_wrapper.value &= self.binary_mask
+        return res
 
     @initialize_global
     def update(self, target):
         # Propagate value to all symbolic registers that are part of this register
         # ex: 'ah': [rax, eax, ax, ah, al]
-        if self.name in SYM_REGISTER_FACTORY:
-            [reg._update(target) for reg in SYM_REGISTER_FACTORY[self.name]]
-        # special case for cloned registers
-        else:
-            self._update(target)
-        return self
+        return self._update(target)
 
     @initialize_global
     def reset(self):

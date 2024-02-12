@@ -2,16 +2,17 @@ import os
 import sys
 import tempfile
 import logging
-import idaapi
+import traceback
 from tenet.util.common import *
-from tenet.taint_engines import TextEngine
-from tenet.taint_engines.core import *
+from tenet.taint_engine import TextEngine
+from tenet.taint_engine.core import *
 
-logger = logging.getLogger("tenet")
+logger = logging.getLogger("Tenet.Taint_Engines.AnalysisRunner")
 
 
 class TaintAnalysisRunner:
     def __init__(self, arch, dctx, reader):
+        global logger
         self.sym_runner = None
         # Create a temporary log file for debugging.
         self.log_file = self.setup_logger()
@@ -25,23 +26,15 @@ class TaintAnalysisRunner:
         self.ks = self.dctx.get_keystone_md(self.arch)
         self._engine = TextEngine(self.arch, self.dctx, self.cs, self.ks, self.reader)
         self._runner = Runner(self._engine, self.arch, self.cs, self.ks)
-        self._runner.process_analysis()
+        try:
+            self._runner.process_analysis()
+        except Exception as e:
+            print(traceback.format_exc())
+            
         
 
     def setup_logger(self):
         return tempfile.NamedTemporaryFile(prefix="cr_trace", suffix=".txt", delete=False, mode="w")
     
 
-    def get_binary_path(self):
-        """
-        Get the path to the binary file from IDA Pro.
-
-        Returns:
-            str: Path to the binary file.
-        """
-        return os.path.join(os.getcwd(), idaapi.get_input_file_path())
         
-            
-        
-        
-

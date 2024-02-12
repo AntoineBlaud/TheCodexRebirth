@@ -63,7 +63,7 @@ class DataStoreManager:
         self.chains = {}
 
     def _normalize_item_name(self, item_name):
-        return item_name.lower()
+        return item_name.upper()
 
     def get_state(self, item_name, idx):
         item_name = self._normalize_item_name(item_name)

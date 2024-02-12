@@ -144,7 +144,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         """
         Initialize register positions in the window.
         """
-        regs = self.model.arch.REGISTERS
+        regs = self.model.arch.REGISTERS_MAIN
         name_x, y = self._reg_pos
 
         # find the most common length of a register name
@@ -432,7 +432,7 @@ class RegisterArea(QtWidgets.QAbstractScrollArea):
         brush_defualt = painter.brush()
         brush_selected = QtGui.QBrush(self.pctx.palette.standard_selection_bg)
 
-        for reg_name in self.model.arch.REGISTERS:
+        for reg_name in self.model.arch.REGISTERS_MAIN:
             reg_value = self.model.registers[reg_name]
             reg_field = self._reg_fields[reg_name]
 

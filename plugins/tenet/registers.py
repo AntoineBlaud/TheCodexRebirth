@@ -347,6 +347,9 @@ class RegistersModel(object):
         self.focused_reg_value = None
 
     def set_registers(self, registers, delta=None):
+        
+        # keep only registers that are relevant to the current architecture
+        registers = {k: v for k, v in registers.items() if k in self.arch.REGISTERS_MAIN}
 
         # compute which registers changed as a result of navigation
         unchanged = dict(set(self.registers.items()) & set(registers.items()))

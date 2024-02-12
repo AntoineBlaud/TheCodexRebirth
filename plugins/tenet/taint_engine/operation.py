@@ -62,7 +62,9 @@ class Operation:
         else:
             result_op += self.operand_str("real_res", self.op_result)
             result_op += self.operand_str("eval_res", self.eval_v_result)
-        result_str = result_op.replace("\n", ", ")
+        result_str = f"{self.cinsn.mnemonic} {self.cinsn.op_str}\n"
+        result_str += self.operand_str("mem_access", self.mem_access)
+        result_str += result_op
         self.cache_repr = result_str[:-2]
         return self.cache_repr
 

@@ -167,7 +167,7 @@ class TraceReader(object):
         prev_ip = self.get_ip(max(self.idx - 1, 0)) + slide
         
         for i, ip in enumerate([c_ip, prev_ip]):
-            insn = self.dctx.disassemble_instruction(ip, self.arch)
+            insn = self.dctx.disasm(ip, self.arch)
             if insn and len(insn.operands) > 0:
                 op = insn.operands[0]
                 if op.type == capstone.x86_const.X86_OP_REG:
@@ -1622,6 +1622,7 @@ class TraceReader(object):
         for reg_name in target_registers:
             if not reg_name in self.arch.REGISTERS:
                 raise ValueError(f"Invalid register name: '{reg_name}'")
+            
 
         #
         # fast path / LRU cache of 1, pickup any registers that we've already

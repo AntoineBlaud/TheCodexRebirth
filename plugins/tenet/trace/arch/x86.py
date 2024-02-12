@@ -60,3 +60,16 @@ class ArchX86:
         "CH",
         "DH"
     ]
+    
+    REGISTERS_MAIN = \
+    [
+        "EAX",
+        "EBX",
+        "ECX",
+        "EDX",
+        "EBP",
+        "ESP",
+        "ESI",
+        "EDI",
+        "EIP"
+    ]

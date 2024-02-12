@@ -1,8 +1,7 @@
 from tenet.util.log import logging_started, start_logging
 from tenet.integration.api import disassembler
 
-if not logging_started():
-    logger = start_logging()
+logger = start_logging()
 
 #------------------------------------------------------------------------------
 # Disassembler Agnonstic Plugin Loader
