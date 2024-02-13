@@ -135,8 +135,8 @@ class StepTracerController(object):
         if w is not None:
             w.saved = True
             w.path = self.trace_file
-        self.dctx.take_memory_snapshot()
-        self.log("Memory snapshot taken")
+        # self.dctx.take_memory_snapshot()
+        # self.log("Memory snapshot taken")
         # add a watcher on the current address
         self.model.add_watcher(self.prev_ea)
         self.model.watchers[-1].is_saved = True

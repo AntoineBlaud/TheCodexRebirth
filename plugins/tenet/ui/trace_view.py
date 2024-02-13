@@ -568,7 +568,7 @@ class TraceBar(QtWidgets.QWidget):
 
         # see if there's an interesting trace event close to the hover
         hovered_idx = self._pos2idx(current_y)
-        closest_idx = self._get_closest_highlighted_idx(hovered_idx)
+        closest_idx = hovered_idx
 
         #
         # if the closest highlighted event (mem access, breakpoint)
@@ -711,20 +711,6 @@ class TraceBar(QtWidgets.QWidget):
 
         # notify listeners of our selection change
         self._notify_selection_changed(new_start, new_end)
-
-    def _get_closest_highlighted_idx(self, idx):
-        """
-        Return the closest idx (timestamp) to the given idx.
-        """
-        closest_idx = INVALID_IDX
-        smallest_distace = 999999999999999999999999
-        for entries in [self._idx_reads, self._idx_writes, self._idx_executions]:
-            for current_idx in entries:
-                distance = abs(idx - current_idx)
-                if distance < smallest_distace:
-                    closest_idx = current_idx
-                    smallest_distace = distance
-        return closest_idx
 
     def _breakpoints_changed(self):
         """
@@ -1013,10 +999,15 @@ class TraceBar(QtWidgets.QWidget):
 
                 # slight tweak of y because we are only drawing a highlighted
                 # cell body without borders
-                y = self._idx2pos(idx) + self._cell_border
+                if self.cells_visible:
+                        # slight tweak of y because we are only drawing a highlighted
+                    # draw cell body
+                    y = self._idx2pos(idx) + self._cell_border
+                    painter.drawRect(viz_x, y, viz_w, self._cell_height - self._cell_border)
 
-                # draw cell body
-                painter.drawRect(int(viz_x), int(y), int(viz_w), int(h))
+                else:
+                    y = self._idx2pos(idx)
+                    painter.drawLine(viz_x, y, viz_w, y)
 
     def _draw_highlights_trace(self, painter):
         """

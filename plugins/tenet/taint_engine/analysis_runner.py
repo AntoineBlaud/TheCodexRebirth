@@ -29,14 +29,10 @@ class TaintAnalysisRunner:
         taint_trace_records = None
         try:
             taint_trace_records = self._runner.process_analysis()
+            self.reader.construct_taint_trace(taint_trace_records)
         except Exception as e:
             print(traceback.format_exc())
             
-        if taint_trace_records:
-            self.reader.construct_taint_trace(taint_trace_records)
-            
-        
-
     def setup_logger(self):
         return tempfile.NamedTemporaryFile(prefix="cr_trace", suffix=".txt", delete=False, mode="w")
     
