@@ -39,7 +39,7 @@ class TraceBar(QtWidgets.QWidget):
         # misc qt/widget settings
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setMouseTracking(True)
-        self.setMinimumSize(32, 32)
+        self.setMinimumSize(50, 50)
         self._resize_timer = QtCore.QTimer(self)
         self._resize_timer.setSingleShot(True)
         self._resize_timer.timeout.connect(self._resize_stopped)
@@ -63,6 +63,9 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_reads = []
         self._idx_writes = []
         self._idx_executions = []
+        # the idxs that should be highlighted based on user queries
+        self._idx_forward_tainted = []
+        self._idx_backward_tainted = []
 
         # the magnetism distance (in pixels) for cursor clicks on viz events
         self._magnetism_distance = 4
@@ -256,6 +259,8 @@ class TraceBar(QtWidgets.QWidget):
         self._idx_reads = []
         self._idx_writes = []
         self._idx_executions = []
+        self._idx_forward_tainted = []
+        self._idx_backward_tainted = []
 
         self._refresh_painting_metrics()
         self.refresh()
@@ -265,6 +270,7 @@ class TraceBar(QtWidgets.QWidget):
         Refresh the trace visualization.
         """
         self.update()
+        self._refresh_trace_highlights()
 
     #----------------------------------------------------------------------
     # Qt Overloads
@@ -731,9 +737,13 @@ class TraceBar(QtWidgets.QWidget):
         """
         Refresh trace event / highlight info from the underlying trace reader.
         """
+        if not self.reader:
+            return
         self._idx_reads = []
         self._idx_writes = []
         self._idx_executions = []
+        self._idx_forward_tainted = self.reader.get_forward_tainted_idxs(self.reader.idx)
+        self._idx_backward_tainted = self.reader.get_backward_tainted_idxs(self.reader.idx)
 
         reader, density = self.reader, self.density
         if not (reader and density != INVALID_DENSITY):
@@ -970,11 +980,8 @@ class TraceBar(QtWidgets.QWidget):
         self._image_highlights = QtGui.QImage(self.width(), self.height(), QtGui.QImage.Format_ARGB32)
         self._image_highlights.fill(QtCore.Qt.transparent)
         self._painter_highlights = QtGui.QPainter(self._image_highlights)
+        self._draw_highlights_cells(self._painter_highlights)
 
-        if self.cells_visible:
-            self._draw_highlights_cells(self._painter_highlights)
-        else:
-            self._draw_highlights_trace(self._painter_highlights)
 
     def _draw_highlights_cells(self, painter):
         """
@@ -988,15 +995,16 @@ class TraceBar(QtWidgets.QWidget):
             (self._idx_reads, self.pctx.palette.mem_read_bg),
             (self._idx_writes, self.pctx.palette.mem_write_bg),
             (self._idx_executions, self.pctx.palette.breakpoint),
+            (self._idx_forward_tainted, self.pctx.palette.taint_forward),
+            (self._idx_backward_tainted, self.pctx.palette.taint_backward),
         ]
-
-        painter.setPen(QtCore.Qt.NoPen)
-
+        
+        if self.cells_visible:
+            painter.setPen(QtCore.Qt.NoPen)
         h = self._cell_height - self._cell_border
-
+        p = painter.setBrush if self.cells_visible else painter.setPen
         for entries, cell_color in access_sets:
-            painter.setBrush(cell_color)
-
+            p(cell_color)
             for idx in entries:
 
                 # skip entries that fall outside the visible zoom

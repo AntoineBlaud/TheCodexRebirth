@@ -1,4 +1,5 @@
 import bisect
+from collections import defaultdict
 import struct
 import logging
 
@@ -73,6 +74,11 @@ class TraceReader(object):
         #----------------------------------------------------------------------
 
         self._idx_changed_callbacks = []
+        
+        self._backward_taint_id_trace_cache = defaultdict(list)
+        self._forward_taint_id_trace_cache = defaultdict(list)
+        self._idx_trace_cache = {}
+        self.taint_trace_records = None
 
     #-------------------------------------------------------------------------
     # Trace Properties
@@ -158,6 +164,27 @@ class TraceReader(object):
         self._update_follow_memory()
         self._notify_idx_changed()
         
+    def construct_taint_trace(self, taint_trace_records):
+        self.taint_trace_records = taint_trace_records
+        self._idx_trace_cache = {
+            idx: (operation_addr, trace)
+            for operation_addr, trace_items in taint_trace_records.items()
+            for idx, trace in trace_items.items()
+        }
+
+        # Populate taint ID-based trace cache
+        for idx in self._idx_trace_cache:
+            self._backward_taint_id_trace_cache[idx] = sorted(list(self.get_taint_ids(idx)))
+
+        for idx in self._idx_trace_cache:
+            for taint_id in self.get_taint_ids(idx):
+                self._forward_taint_id_trace_cache[taint_id].append(idx)
+
+        for taint_id in self._forward_taint_id_trace_cache:
+            self._forward_taint_id_trace_cache[taint_id] = sorted(self._forward_taint_id_trace_cache[taint_id])
+            
+        logger.info(f"Constructed taint trace cache with {len(self._idx_trace_cache)} records")
+        
     def _update_follow_memory(self):
         """
         Update the memory follow window, if it is enabled.
@@ -178,6 +205,31 @@ class TraceReader(object):
                         self.pctx.memories[i].navigate(reg_value)
                     except ValueError:
                         pass
+                    
+    def seek_to_next_taint(self):
+        idxs = self.get_backward_tainted_idxs(self.selected_idx)
+        if not idxs or len(idxs) < 2:
+            return
+        try:
+            pos = idxs.index(self.idx)
+        except ValueError:
+            pos = len(idxs)
+        pos = (pos + 1) % len(idxs)
+        self.seek(idxs[pos])
+
+    def seek_to_prev_taint(self):
+        idxs = self.get_backward_tainted_idxs(self.selected_idx)
+        if not idxs or len(idxs) < 2:
+            return
+        try:
+            pos = idxs.index(self.idx)
+        except ValueError:
+            pos = len(idxs)
+        if pos - 1 < 0:
+            pos = len(idxs)
+        pos = pos - 1
+        self.seek(idxs[pos])
+        
     def seek_percent(self, percent):
         """
         Seek to an approximate percentage into the trace.
@@ -416,6 +468,25 @@ class TraceReader(object):
             return
 
         self.seek(prev_idx)
+        
+    def get_backward_tainted_idxs(self, idx):
+        return self._backward_taint_id_trace_cache.get(idx, [])
+
+    def get_forward_tainted_idxs(self, taint_id):
+        return self._forward_taint_id_trace_cache.get(taint_id, [])
+    
+    def get_taint_trace(self, idx):
+        if idx not in self._idx_trace_cache:
+            return None
+        return self._idx_trace_cache[idx][1]
+    
+    def get_taint_ids(self, idx):
+        if idx not in self._idx_trace_cache:
+            return set()
+        taint_trace = self.get_taint_trace(idx)
+        if taint_trace is None:
+            return set()
+        return taint_trace.taint_ids
 
     #-------------------------------------------------------------------------
     # Timestamp API
@@ -1621,7 +1692,7 @@ class TraceReader(object):
         # sanity checks
         for reg_name in target_registers:
             if not reg_name in self.arch.REGISTERS:
-                raise ValueError(f"Invalid register name: '{reg_name}'")
+                output_registers[reg_name] = 0
             
 
         #

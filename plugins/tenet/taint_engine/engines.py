@@ -31,6 +31,12 @@ class EngineWrapper(abc.ABC):
 
     def clone(self):
         raise NotImplementedError()
+    
+    def is_next(self):
+        raise NotImplementedError()
+    
+    def step(self):
+        raise NotImplementedError()
 
 
 class TextEngine(EngineWrapper):
@@ -67,9 +73,11 @@ class TextEngine(EngineWrapper):
             return dict((cs_arm_regs[k], uc_arm_regs[k]) for k in cs_arm_regs if k in uc_arm_regs)
         raise ValueError("Unknown architecture type")
     
-    def next(self):
-        self.idx += 1
+    def is_next(self):
         return self.idx < self.trace.length
+    
+    def step(self):
+        self.idx += 1
         
     def get_ea(self):
         return self.trace.get_ip(self.idx)

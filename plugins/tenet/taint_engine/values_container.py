@@ -188,15 +188,21 @@ class RealValue:
 
     def __rshift__(self, other):
         other = other.clone()
-        other.value >>= self.value
-        other.value &= self.binary_mask
-        return other
+        if isinstance(other.value, int):
+            self.value = self.value >> other.value
+            return self
+        else:
+            other.value = _SymValue(BitVecVal(self.value, BINARY_ARCH_SIZE)) >> other.value
+            return other
 
     def __lshift__(self, other):
         other = other.clone()
-        other.value <<= self.value
-        other.value &= self.binary_mask
-        return other
+        if isinstance(other.value, int):
+            self.value = self.value >> other.value
+            return self
+        else:
+            other.value = _SymValue(BitVecVal(self.value, BINARY_ARCH_SIZE)) >> other.value
+            return other
 
     def ror(self, other):
         other = other.clone()
@@ -225,6 +231,7 @@ class SymValue:
         global ID_COUNTER
         self.color = Color()
         self.name = None
+        self.__cache_repr = None
         if isinstance(name, str):
             self.name = name.upper()
         self.v_wrapper = None
@@ -278,71 +285,76 @@ class SymValue:
         else:
             raise Exception("Target type unknown '{}'".format(type(target)))
 
-    def update_id(self, target):
+    def update_infos(self, target):
         global ID_COUNTER, COPY_CACHE
 
         if isinstance(target, (SymValue, RealValue)):
             self.id |= target.id
+            
+        self.__cache_repr = None
 
     def clone(self):
         clone = SymValue(self.name, self.v_wrapper)
         clone.id = set(self._id)
         clone.v_wrapper = self.v_wrapper.clone()
+        clone.__cache_repr = self.__cache_repr
         return clone
 
     def __repr__(self) -> str:
-        return f"{self.v_wrapper.__repr__()}"
+        if self.__cache_repr is None:
+            self.__cache_repr = self.v_wrapper.__repr__()
+        return self.__cache_repr
 
     def __add__(self, other):
         self.value += other.value
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __sub__(self, other):
         self.value = bitwise_math.binary_subtraction(self.value, other.value)
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __xor__(self, other):
         self.value ^= other.value
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __and__(self, other):
         self.value &= other.value
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __mul__(self, other):
         self.value *= other.value
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __or__(self, other):
         self.value |= other.value
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __div__(self, other):
         self.value /= other.value
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __rshift__(self, other):
         self.value >>= other.value
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def __lshift__(self, other):
         self.value <<= other.value
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def ror(self, other):
@@ -351,7 +363,7 @@ class SymValue:
         else:
             self.value = RotateRight(self.value, other.value)
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def rol(self, other):
@@ -360,7 +372,7 @@ class SymValue:
         else:
             self.value = RotateLeft(self.value, other.value)
         self.value &= self.binary_mask
-        self.update_id(other)
+        self.update_infos(other)
         return self
 
     def _not(self):

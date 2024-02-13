@@ -248,7 +248,10 @@ class IDAContextAPI(DisassemblerContextAPI):
         return instruction_addresses
 
     def is_mapped(self, address):
-        return ida_bytes.is_mapped(address)
+        try:
+            return ida_bytes.is_mapped(address)
+        except:
+            return False
 
     def get_next_insn(self, address):
 
@@ -466,9 +469,11 @@ class IDAContextAPI(DisassemblerContextAPI):
     def get_root_filename(self):
         return idc.get_root_filename()
         
-
     def is_mapped(self, address):
-        return ida_bytes.is_mapped(address)
+        try:
+            return ida_bytes.is_mapped(address)
+        except:
+            return False
     
     def rebase_0(self):
         offset = idaapi.get_imagebase()

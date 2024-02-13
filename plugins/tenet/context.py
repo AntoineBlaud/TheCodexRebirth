@@ -177,7 +177,7 @@ class TenetContext(object):
         # trace and querying information (memory, registers) from it at
         # chosen states of execution
         #
-
+        dctx = disassembler[self]
         self.reader = TraceReader(filepath, self.arch, disassembler[self], self)
         pmsg(f"Loaded trace {self.reader.trace.filepath}")
         pmsg(f"- {self.reader.trace.length:,} instructions...")
@@ -196,6 +196,7 @@ class TenetContext(object):
             
         pmsg(" +------------------------------------------------------")
         pmsg(" |- INFO: Taint analysis has been started.")
+        dctx.update_ui()
         self.taint_analysis_runner = TaintAnalysisRunner(self.arch, disassembler[self], self.reader)
         pmsg(" |- INFO: Taint analysis has been completed.")
         pmsg(" +------------------------------------------------------")

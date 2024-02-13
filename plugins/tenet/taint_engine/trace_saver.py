@@ -39,7 +39,12 @@ class Trace(dict):
         return self[self.last_addr][self.last_idx]
 
     def __repr__(self):
-        raise NotImplementedError()
+        repr_str = ""
+        for addr in self:
+            repr_str += (f"{hex(addr)}:")
+            for idx in self[addr]:
+                repr_str +=(f"\t{idx}:\n{self[addr][idx]}\n")
+        return repr_str
 
     def clone(self):
         clone = Trace()

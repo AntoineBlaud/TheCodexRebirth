@@ -57,7 +57,7 @@ class DebugLevel:
     DEBUG = 2
 
 
-BAD_OPERANDS_X86_64 = [".*pl", ".*il", ".*z", ".*h"]
+BAD_OPERANDS_X86_64 = [".*pl", ".*il", ".*z", ".*h", ".*w"]
 ID_COUNTER = alt_count()
 VAR_COUNTER = alt_count()
 
@@ -563,6 +563,7 @@ class OperationEngine:
         for bad_op_pattern in self.config["BAD_OPERANDS"]:
             if re.match(bad_op_pattern, cinsn.op_str):
                 logger.debug(f"Bad operand: {hex(cinsn_addr)} {cinsn.op_str}, the result operation may be wrong")
+                return None
 
         # mem_access can be calculated from cinsn of directly
         # read base, index, disp and scale from cinsn operands
@@ -630,7 +631,6 @@ class Runner:
     def get_current_pc(self):
         return self.engine.get_ea()
     
-    
     def register_operations(self, operation: Operation):
         idx = self.operation_executed_count.value
         if operation is None:
@@ -650,6 +650,7 @@ class Runner:
             self.store_evaluation_result()
 
         self.trace_records.register(self.engine.get_ea(), operation, idx)
+        logger.info(f"Registered operation with idx {idx}")
         next(self.operation_executed_count)
 
     def initialize_symbolic_evaluator(self):
@@ -719,7 +720,6 @@ class Runner:
                 if reg_name in self.symbolic_taint_store:
                     globals()[reg_name] = eval(str(self.symbolic_taint_store[reg_name]), globals())
 
-    
     def register_execution_state(self, current_operation: Operation, last_operation: Operation):
         idx = self.operation_executed_count.value
 
@@ -799,12 +799,14 @@ class Runner:
             self.initialize_configuration()
             self.initialize_execution_state()
             self.initialize_symbolic_evaluator()
-            while self.engine.next():
+            while self.engine.is_next():
                 self.register_operations(self.operation_engine.evaluate_instruction(self.symbolic_taint_store))
+                self.engine.step()
         except Exception as e:
             profile.print_stats()
             raise e
         profile.print_stats()
+        return self.trace_records
             
     def clone(self):
         self.engine.clear()
