@@ -238,6 +238,10 @@ class TenetCore(object):
     def _interactive_step_tracer(self, db):
         pctx = self.get_context(db)
         pctx.interactive_step_tracer()
+        
+    def _interactive_ultimap(self, db):
+        pctx = self.get_context(db)
+        pctx.interactive_ultimap()
 
     #--------------------------------------------------------------------------
     # Core Actions

@@ -92,11 +92,11 @@ class StepTracerController(object):
         print(f"[StepTracer] {msg}")
 
     def set_bp_on_imported_functions(self, importedFunctions):
-        for ea, name in importedFunctions:
-            if ea not in self.model.functionBreakpoints:
-                self.log(f"Set breakpoint on function {name} {hex(ea)}")
-                self.dctx.set_breakpoint(ea)
-                self.model.functionBreakpoints[ea] = True
+            for name, ea in importedFunctions.items():
+                if ea not in self.model.functionBreakpoints:
+                    self.log(f"Set breakpoint on function {name} {hex(ea)}")
+                    self.dctx.set_breakpoint(ea)
+                    self.model.functionBreakpoints[ea] = True
 
     def get_jump_target(self, ea):
         insn = self.dctx.print_insn_mnem(ea)
@@ -356,7 +356,7 @@ class StepTracerController(object):
                 line = line.strip()
                 offset, name = line.split(" ")
                 offset = int(offset[2:], 16)
-                importedFunctions.append((base + offset, name))
+                importedFunctions[name] = base + offset
         self.set_bp_on_imported_functions(importedFunctions)
         
         # continue until we reach a breakpoint

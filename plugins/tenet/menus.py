@@ -9,15 +9,12 @@ class ExportFunctionsMenuController:
         self._pctx = pctx
         self.model = ExportFunctionsMenuModel(pctx)
         self.view = ExportFuncsMenuView(self.model)
-        
-    
-    def show(self):
-        #  # if there is no Qt (eg, our UI framework...) then there is no UI
-        if not QT_AVAILABLE:
-            return
         self.view.show()
-        # keep open until the user closes it
-        self.view.exec_()
+        
+        
+    def show(self):
+        self.view.show()
+        raise "Showing the view"
         
     def hide(self):
         self.view.hide()

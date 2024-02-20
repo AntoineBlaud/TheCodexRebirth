@@ -356,7 +356,6 @@ class IDAContextAPI(DisassemblerContextAPI):
             """Compute the coverage of a function in the binary."""
             # get all sub calls
             if depth > 20:
-                print("depth limit")
                 return set()
             if func is None:
                 return set()

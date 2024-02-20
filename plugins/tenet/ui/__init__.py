@@ -7,3 +7,4 @@ if QT_AVAILABLE:
     from tenet.ui.reg_view import RegisterView
     from tenet.ui.breakpoint_view import BreakpointView
     from tenet.ui.step_tracer_view import StepTracerView
+    from tenet.ui.ultimap_view import UltimapView

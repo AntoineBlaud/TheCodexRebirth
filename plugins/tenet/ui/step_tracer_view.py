@@ -123,7 +123,10 @@ class StepTracerView(QMainWindow):
     def __init__(self, controller, model, parent=None):
         super(StepTracerView, self).__init__(parent)
         self.controller = controller
-        self.pctx = controller.pctx
+        try:
+            self.pctx = controller.pctx
+        except:
+            self.pctx = None
         self.model = model
         self._init_ui()
         # set windows always on top
@@ -328,6 +331,41 @@ class StepTracerView(QMainWindow):
         self.total_watcher = 12
         for i in range(self.total_watcher):
             self.add_watcher()
+            
+        # add a info button
+        self.info_button = QtWidgets.QPushButton("Info", self)
+        self.info_button.setFont(QFont('Arial', 10))
+        self.info_button.setAutoFillBackground(True)
+        self.info_button.setFixedWidth(50)
+        self.info_button.setStyleSheet(
+            "QPushButton {"
+            "   background-color: #4287f5;"
+            "   border-style: outset;"
+            "   border-width: 2px;"
+            "   border-radius: 10px;"
+            "   border-color: beige;"
+            "   font: bold 14px;"
+            "   color: white;"
+            "}"
+            "QPushButton:hover {"
+            "   background-color: #45a049;"
+            "}"
+            "QPushButton:pressed {"
+            "   background-color: #3c8c40;"
+            "}"
+        )
+        self.info_button.clicked.connect(self.show_info)
+        self.left_layout.addWidget(self.info_button)
+        
+        
+    def show_info(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Step Tracer")
+        msg.setInformativeText("Step Tracer is a dynamic analysis tool that allows you to trace the execution of a program and monitor the changes in memory and registers. It also allows you to set breakpoints on specific memory addresses and functions.")
+        msg.setWindowTitle("Step Tracer")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
             
         
     def select_file(self):

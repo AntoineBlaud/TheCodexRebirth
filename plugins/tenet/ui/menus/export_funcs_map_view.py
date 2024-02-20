@@ -14,8 +14,8 @@ class MyTreeView(QTreeView):
     
 
 class ExportFuncsMenuView(QMainWindow):
-    def __init__(self, model):
-        super(ExportFuncsMenuView, self).__init__()
+    def __init__(self, model, parent=None):
+        super(ExportFuncsMenuView, self).__init__(parent)
 
         self.setWindowTitle("Export Functions Map")
         self.setGeometry(100, 100, 800, 600)
@@ -43,10 +43,51 @@ class ExportFuncsMenuView(QMainWindow):
         self.file_path_button = QPushButton("Select File", self)
         self.file_path_button.clicked.connect(self.select_file)
         layout.addWidget(self.file_path_button)
+        
+        # add horizontal layout
+        h_layout = QHBoxLayout()
+        layout.addLayout(h_layout)
+        
+        # add filter label for coverage > 
+        self.coverage_label = QLabel(self)
+        self.coverage_label.setText("Coverage")
+        h_layout.addWidget(self.coverage_label)
+        
+        # add a button with text ">"
+        self.coverage_greater_than_button = QPushButton(">", self)
+        self.coverage_greater_than_button.setFixedWidth(20)
+        h_layout.addWidget(self.coverage_greater_than_button)
+        
+        # add a text box for coverage
+        self.coverage_text_box = QLineEdit(self)
+        self.coverage_text_box.setText("2")
+        h_layout.addWidget(self.coverage_text_box)
+        
+        
+        # add filter label for size >
+        
+        self.size_label = QLabel(self)
+        self.size_label.setText("Size")
+        h_layout.addWidget(self.size_label)
+        
+        # add a button with text ">"
+        self.size_greater_than_button = QPushButton(">", self)
+        self.size_greater_than_button.setFixedWidth(20)
+        h_layout.addWidget(self.size_greater_than_button)
+        
+        # add a text box for size
+        self.size_text_box = QLineEdit(self)
+        self.size_text_box.setText("40")
+        h_layout.addWidget(self.size_text_box)
+        
+
         # add the export button
         self.export_button = QPushButton("Export", self)
         self.export_button.clicked.connect(self.export_data)
         layout.addWidget(self.export_button)
+        
+        # set windows always on top
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.WindowCloseButtonHint)
         
     def select_file(self):
         # open a file dialog
@@ -57,8 +98,7 @@ class ExportFuncsMenuView(QMainWindow):
         # set the file path label
         
     
-    def exec_(self):
-        raise NotImplementedError("exec_ not implemented")
+
 
         
         
@@ -101,7 +141,7 @@ class ExportFuncsMenuView(QMainWindow):
             for function in functions:
                 # add a combobox for each function
                 f_name, f_addr , f_cover, f_size = function
-                function_node = QStandardItem(f"{hex(f_addr)} {f_name}:   coverage: {f_cover}     size: {f_size}")
+                function_node = QStandardItem(f"{hex(f_addr)} {f_name} :   coverage({f_cover})     size({f_size})")
 
                 function_node.setCheckable(True)
                 function_node.setCheckState(False)
@@ -124,14 +164,21 @@ class ExportFuncsMenuView(QMainWindow):
         
     def get_selected_functions(self):
         selected_items = []
+        size_filter = int(self.size_text_box.text())
+        coverage_filter = int(self.coverage_text_box.text())
+        
         root_item = self.tree_model.invisibleRootItem()
         for i in range(root_item.rowCount()):
             section_item = root_item.child(i)
             if section_item.checkState() == Qt.Checked:
                 for j in range(section_item.rowCount()):
                     function_item = section_item.child(j)
-                    if function_item.checkState() == Qt.Checked:
-                        selected_items.append(function_item.text().split(":")[0])
+                    function_item_text = function_item.text()
+                    data_to_export = function_item_text.split(" :")[0]
+                    coverage = int(function_item_text.split("coverage(")[1].split(")")[0])
+                    size = int(function_item_text.split("size(")[1].split(")")[0])
+                    if function_item.checkState() == Qt.Checked and coverage > coverage_filter and size > size_filter:
+                        selected_items.append(data_to_export)
         return selected_items
 
 

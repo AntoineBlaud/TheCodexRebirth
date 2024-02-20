@@ -12,6 +12,7 @@ from tenet.registers import RegisterController
 from tenet.breakpoints import BreakpointController
 from tenet.menus import ExportFunctionsMenuController
 from tenet.step_tracer import StepTracerController
+from tenet.ultimap import UltimapController
 from tenet.ui.trace_view import TraceDock
 from tenet.ui.tree_view import TreeDock
 
@@ -412,6 +413,14 @@ class TenetContext(object):
         """
         # load the function map controller
         controller = StepTracerController(self)
+        controller.show()
+        
+    def interactive_ultimap(self):
+        """
+        Handle UI actions for exporting the function map.
+        """
+        # load the function map controller
+        controller = UltimapController(self)
         controller.show()
     
 
