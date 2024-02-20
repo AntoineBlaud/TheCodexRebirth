@@ -8,6 +8,10 @@ class ArchX86:
 
     IP = "EIP"
     SP = "ESP"
+    
+    CALL_INSTRUCTION = "call"
+    JUMP_INSTRUCTION = "jmp"
+    COND_JUMP_INSTRUCTION = "j"
 
     REGISTERS = \
     [

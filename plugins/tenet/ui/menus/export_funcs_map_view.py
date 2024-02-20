@@ -50,7 +50,7 @@ class ExportFuncsMenuView(QMainWindow):
         
     def select_file(self):
         # open a file dialog
-        file_path = QFileDialog.getOpenFileName(self, 'Open file',
+        file_path = QFileDialog.getSaveFileName(self, 'Open file',
                                             QDir.currentPath())
         # set the file path text box
         self.file_path_text_box.setText(file_path[0])
@@ -101,7 +101,7 @@ class ExportFuncsMenuView(QMainWindow):
             for function in functions:
                 # add a combobox for each function
                 f_name, f_addr , f_cover, f_size = function
-                function_node = QStandardItem(f"{hex(f_addr)}   {f_name} :   coverage: {f_cover}     size: {f_size}")
+                function_node = QStandardItem(f"{hex(f_addr)} {f_name}:   coverage: {f_cover}     size: {f_size}")
 
                 function_node.setCheckable(True)
                 function_node.setCheckState(False)

@@ -8,6 +8,10 @@ class ArchARM:
 
     IP = "PC"
     SP = "SP"
+    
+    CALL_INSTRUCTION = "bl"
+    JUMP_INSTRUCTION = "b"
+    COND_JUMP_INSTRUCTION = "b"
 
     REGISTERS = \
     [

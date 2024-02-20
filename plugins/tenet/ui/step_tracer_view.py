@@ -8,7 +8,7 @@ import os
 import tempfile
 
 
-WIDTH = 800
+WIDTH = 900
 HEIGHT = 600
 
 class WatcherWidget(QWidget):
@@ -48,10 +48,10 @@ class WatcherWidget(QWidget):
          
         
     def _init_ui(self):
-        self.setMinimumWidth(WIDTH-240)
+        self.setMinimumWidth(WIDTH-300)
         self.setMinimumHeight(HEIGHT/15)
         self.setMaximumHeight(HEIGHT/15)
-        self.setMaximumWidth(WIDTH-240)
+        self.setMaximumWidth(WIDTH-300)
         self.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.horizontalLayout = QtWidgets.QHBoxLayout(self)
         self.horizontalLayout.setObjectName("horizontalLayout")
@@ -95,7 +95,7 @@ class WatcherWidget(QWidget):
         
     def _load(self):
         file_path = self.saved_value_label.text()
-        file_path = file_path.replace("$TEMP", tempfile.gettempdir())
+        file_path = file_path.replace("%TEMP%", tempfile.gettempdir())
         # check if the file exist
         if os.path.isfile(file_path):
             self.parentw.pctx.load_trace(file_path)
@@ -103,7 +103,7 @@ class WatcherWidget(QWidget):
             
     
     def set_saved(self, path):
-        path = path.replace(tempfile.gettempdir(), "$TEMP")
+        path = path.replace(tempfile.gettempdir(), "%TEMP%")
         self.saved_value_label.setText(path)
         self.saved_value_label.setStyleSheet(
             "background-color: #4CAF50;"  # Set background color to green
@@ -207,7 +207,7 @@ class StepTracerView(QMainWindow):
     
         # add Check Box for enable/disable
         self.dynamic_shellcode = QtWidgets.QCheckBox("Dynamic Code (slow)", self)
-        self.dynamic_shellcode.setChecked(True)
+        self.dynamic_shellcode.setChecked(False)
         self.dynamic_shellcode.setFont(QFont('Arial', 8))
         self.dynamic_shellcode.setStyleSheet(
             "background-color: #edebeb;"
@@ -224,10 +224,9 @@ class StepTracerView(QMainWindow):
         self.group_box.setLayout(self.group_box_layout)
         # add the group box to the left layout
         self.left_layout.addWidget(self.group_box)
-        # set max width for the group box
-        self.group_box.setMaximumWidth(WIDTH/4)
         # set max height for the group box
-        self.group_box.setMaximumHeight(300)
+        self.group_box.setMaximumHeight(450)
+        self.group_box.setMinimumWidth(270)
         # group option attached to the top absolute position
         self.group_box_layout.setAlignment(Qt.AlignTop)
         # add the run timeout, dump size and max step inside loop to the group box
@@ -235,6 +234,18 @@ class StepTracerView(QMainWindow):
         self.create_options_input("Run Timeout",  str(self.model.runTimeout))
         self.create_options_input("Dump Size", str(self.model.dumpSize))
         self.create_options_input("Max Step Inside Loop", str(self.model.maxStepInsideLoop))
+        self.create_options_input("Module to Trace", "ex: 'kernel32.dll' or 'explorer.exe'")
+        # add the file path label
+        self.file_path_label = QLabel(self)
+        self.file_path_label.setText("Exported functions File Path: ")
+        self.group_box_layout.addWidget(self.file_path_label)
+        # add the file path text box
+        self.file_path_text_box = QLineEdit(self)
+        self.group_box_layout.addWidget(self.file_path_text_box)
+        # add the file path button
+        self.file_path_button = QPushButton("Select File", self)
+        self.file_path_button.clicked.connect(self.select_file)
+        self.group_box_layout.addWidget(self.file_path_button)
         
         bLayout = QHBoxLayout()
         buttonsWidgets = QWidget()
@@ -283,8 +294,6 @@ class StepTracerView(QMainWindow):
         self.extendable_list_view_layout = QVBoxLayout()
         self.right_layout.addWidget(self.extendable_list_view)
         self.extendable_list_view.setLayout(self.extendable_list_view_layout)
-        # set max width for the extendable list view
-        self.extendable_list_view.setFixedWidth(WIDTH)
         # set max height for the extendable list view
         self.extendable_list_view.setFixedHeight(HEIGHT - 100)
         # item start at the top left corner
@@ -299,9 +308,15 @@ class StepTracerView(QMainWindow):
         self.progress_bar.setMinimum(0)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
-        self.progress_bar.setFormat("%p%")
+        self.progress_bar.setFormat(" %p%")
         # set progress bar at the bottom
         self.progress_bar.setAlignment(Qt.AlignBottom)
+        self.progress_bar.setStyleSheet(
+            "color: black;"
+            "border: 1px solid black;"
+            "border-radius: 3px;"
+            "height: 10px;"
+        )
         
         # add the progress bar to the right layout
         self.left_layout.addWidget(self.progress_bar)
@@ -313,6 +328,15 @@ class StepTracerView(QMainWindow):
         self.total_watcher = 12
         for i in range(self.total_watcher):
             self.add_watcher()
+            
+        
+    def select_file(self):
+        # open a file dialog
+        file_path = QFileDialog.getOpenFileName(self, 'Open file',
+                                            QDir.currentPath())
+        # set the file path text box
+        self.file_path_text_box.setText(file_path[0])
+        # set the file path label
     
     
     def add_watcher(self):
@@ -377,6 +401,8 @@ class StepTracerView(QMainWindow):
         self.model.runTimeout = int(self.group_box_layout.itemAt(2).widget().text())
         self.model.dumpSize = int(self.group_box_layout.itemAt(4).widget().text())
         self.model.maxStepInsideLoop = int(self.group_box_layout.itemAt(6).widget().text())
+        self.model.moduleToTrace = self.group_box_layout.itemAt(8).widget().text()
+        self.model.importedFunctionsFilePath = self.file_path_text_box.text()
         self.controller.run()
         
     def update_progress(self, value):

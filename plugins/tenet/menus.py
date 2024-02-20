@@ -29,9 +29,11 @@ class ExportFunctionsMenuModel:
     def __init__(self, pctx):
         self.pctx = pctx
         self.dctx = disassembler[self.pctx]
-        self.sections_data = self.read_sections_data()
-        self.register_callbacks = []
+        offset = self.dctx.get_imagebase()
         self.dctx.rebase_0()
+        self.sections_data = self.read_sections_data()
+        self.dctx.rebase_plus(offset)
+        self.register_callbacks = []
         
     def read_sections_data(self):
         sections = self.dctx.get_sections()

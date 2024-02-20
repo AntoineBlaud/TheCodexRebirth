@@ -8,6 +8,10 @@ class ArchAMD64:
 
     IP = "RIP"
     SP = "RSP"
+    
+    CALL_INSTRUCTION = "call"
+    JUMP_INSTRUCTION = "jmp"
+    COND_JUMP_INSTRUCTION = "j"
 
     REGISTERS = \
     [

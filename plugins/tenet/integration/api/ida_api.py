@@ -2,6 +2,7 @@ import logging
 import functools
 from capstone import *
 from keystone import *
+import os 
 #
 # TODO: should probably cleanup / document this file a bit better.
 #
@@ -20,6 +21,7 @@ import ida_xref
 import idautils
 import ida_bytes
 import ida_idaapi
+import ida_idd
 import ida_diskio
 import ida_kernwin
 import ida_segment
@@ -360,8 +362,8 @@ class IDAContextAPI(DisassemblerContextAPI):
                 return set()
             f_sub_calls = set()
             for ea in idautils.FuncItems(func.start_ea):
-                mnem = idc.print_insn_mnem(ea)
-                if mnem == "call":
+                mnem = idc.print_insn_mnem(ea).lower()
+                if mnem == "call" or mnem == "bl":
                     addr = idc.get_operand_value(ea, 0)
                     # get function name
                     name = idc.get_func_name(addr)
@@ -394,6 +396,24 @@ class IDAContextAPI(DisassemblerContextAPI):
     def here(self):
         return idc.here()
     
+    def get_module_name(self, ea):
+        modinfo = ida_idd.modinfo_t()
+        ida_dbg.get_module_info(ea, modinfo)
+        return os.path.basename(modinfo.name).lower()
+    
+    def get_module_text_base(self, name):
+        for seg_address in idautils.Segments():
+            modinfo = ida_idd.modinfo_t()
+            ida_dbg.get_module_info(seg_address, modinfo)
+            basename = os.path.basename(modinfo.name)
+            # get seg permissions
+            seg = ida_segment.getseg(seg_address)
+            # check is section executable
+            if name.lower() in basename.lower() and seg.perm & ida_segment.SEGPERM_EXEC:
+                return modinfo.base
+        return None
+        
+    
     def set_color(self, address, color):
         idc.set_color(address, idc.CIC_ITEM, color)
         
@@ -414,7 +434,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         elif isinstance(arch, ArchX86):
             md = Cs(CS_ARCH_X86, CS_MODE_32)
         elif isinstance(arch, ArchARM):
-            md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+            md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
         elif isinstance(arch, ArchARM64):
             md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
             
@@ -430,7 +450,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         elif isinstance(arch, ArchX86):
             ks = Ks(KS_ARCH_X86, KS_MODE_32)
         elif isinstance(arch, ArchARM):
-            ks = Ks(KS_ARCH_ARM, KS_MODE_ARM)
+            ks = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
         elif isinstance(arch, ArchARM64):
             ks = Ks(KS_ARCH_ARM64, KS_MODE_ARM)
         if ks is None:
@@ -482,6 +502,15 @@ class IDAContextAPI(DisassemblerContextAPI):
         while idaapi.get_imagebase() != 0:
             time.sleep(0.1)
             
+    def get_imagebase(self):
+        return idaapi.get_imagebase()
+    
+    def rebase_plus(self, offset):
+        idaapi.rebase_program(offset, idaapi.MSF_NOFIX)
+        # wait for rebase
+        while idaapi.get_imagebase() != offset:
+            time.sleep(0.1)
+            
     def take_memory_snapshot(self):
         idaapi.take_memory_snapshot(0)
         
@@ -531,7 +560,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         idc.create_insn(ea)
         
     def print_insn_mnem(self, ea):
-        return idc.print_insn_mnem(ea)
+        return idc.print_insn_mnem(ea).lower()
     
     def get_operand_value(self, ea, op):
         return idc.get_operand_value(ea, op)
@@ -539,6 +568,12 @@ class IDAContextAPI(DisassemblerContextAPI):
     def continue_process(self):
         idaapi.continue_process()
         idaapi.wait_for_next_event(idaapi.WFNE_SUSP, -1)
+        
+    def is_process_running(self):
+        # check idaapi.WFNE_SUSP is false
+        if idaapi.get_process_state() == idaapi.DSTATE_RUN:
+            return True
+        return False
         
     def get_func_name(self, ea):
         return idc.get_func_name(ea)
@@ -566,7 +601,7 @@ class IDAContextAPI(DisassemblerContextAPI):
     def get_root_filename(self):
         return idc.get_root_filename()
     
-    def is_process_running(self):
+    def is_debugger_on(self):
         return ida_dbg.is_debugger_on()
     
     def update_ui(self):

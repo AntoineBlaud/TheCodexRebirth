@@ -3,3 +3,7 @@ read_memory
 read reg from reader slow 
 16500 trace -> 20 sec
 50000 trace -> 150 sec
+
+
+100 step in local debug
+6 step /sec in remote debug
