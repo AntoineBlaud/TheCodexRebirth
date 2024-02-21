@@ -564,9 +564,9 @@ class IDAContextAPI(DisassemblerContextAPI):
     def get_operand_value(self, ea, op):
         return idc.get_operand_value(ea, op)
     
-    def continue_process(self):
+    def continue_process(self, timeout=-1):
         idaapi.continue_process()
-        idaapi.wait_for_next_event(idaapi.WFNE_SUSP, -1)
+        idaapi.wait_for_next_event(idaapi.WFNE_SUSP, timeout)
         
     def is_process_running(self):
         # check idaapi.WFNE_SUSP is false
@@ -574,6 +574,9 @@ class IDAContextAPI(DisassemblerContextAPI):
             return True
         return False
         
+    def get_bpt_qty(self):
+        return ida_dbg.get_bpt_qty()
+    
     def get_func_name(self, ea):
         return idc.get_func_name(ea)
     

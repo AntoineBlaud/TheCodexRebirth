@@ -61,7 +61,7 @@ class UltimapView(QMainWindow):
     def _init_ui(self):
 
         # child widgets
-        self.setWindowTitle("Step Tracer")
+        self.setWindowTitle("Ultimap")
         
         #create splitter layout
         splitter = QtWidgets.QSplitter(self)
@@ -101,7 +101,7 @@ class UltimapView(QMainWindow):
         self.left_layout.setAlignment(Qt.AlignTop)
         self.left_layout.addWidget(self.label2)
         self.right_layout.setAlignment(Qt.AlignTop)
-        left_widget.setMaximumWidth(WIDTH * 0.4)
+        left_widget.setMaximumWidth(int(WIDTH * 0.4))
         
         # create grid layout
         self.grid_layout = QtWidgets.QGridLayout()
@@ -119,7 +119,11 @@ class UltimapView(QMainWindow):
             button.clicked.connect(lambda checked, i=i: self.open_record(i))
             # add the button to the grid layout
             self.grid_layout.addWidget(button)
+            # handle right click event on the button
+            button.setContextMenuPolicy(Qt.CustomContextMenu)
+            button.customContextMenuRequested.connect(self._button_record_context_menu)
             self.recording_buttons.append(button)
+            
             
 
         
@@ -141,7 +145,7 @@ class UltimapView(QMainWindow):
         
         self.create_options_input("First Run Timeout (sec)",  str(self.model.firstRunTimeout))
         self.create_options_input("Run Timeout (sec)",  str(self.model.timeout))
-        self.create_options_input("Module to Trace", "ex: 'kernel32.dll' or 'explorer.exe'")
+        self.create_options_input("Module to Trace", self.controller.dctx.get_root_filename())
         # add the file path label
         self.file_path_label = QLabel(self)
         self.file_path_label.setText("Exported functions File Path: ")
@@ -176,6 +180,24 @@ class UltimapView(QMainWindow):
         )
         self.start_button.clicked.connect(self._start)
         
+        # add reset button
+        self.reset_button = QtWidgets.QPushButton("Reset", self)
+        self.reset_button.setFont(QFont('Arial', 10))
+        self.reset_button.setAutoFillBackground(True)
+        self.reset_button.setStyleSheet("""
+        QPushButton {
+            background-color: #edebeb;
+            color: black;
+            border: 1px solid black;
+            border-radius: 5px;
+        }
+        QPushButton:hover {
+            background-color: #8d9bf0;
+        }
+        """
+        )
+        self.reset_button.clicked.connect(self._reset)
+        
         
         # add a progress bar
         self.progress_bar = QtWidgets.QProgressBar(self)
@@ -197,6 +219,7 @@ class UltimapView(QMainWindow):
         self.left_layout.addWidget(self.progress_bar)
         
         self.left_layout.addWidget(self.start_button)
+        self.left_layout.addWidget(self.reset_button)
             
         # add a info button
         self.info_button = QtWidgets.QPushButton("Info", self)
@@ -234,11 +257,44 @@ class UltimapView(QMainWindow):
         msg.exec_()
         
         
+    def _button_record_context_menu(self, pos):
+        button = self.sender()
+        menu = QtWidgets.QMenu(self)
+        # create a new action
+        action = QtWidgets.QAction('Rename', self)
+        # add the action to the menu
+        menu.addAction(action)
+        # set the action on click event
+        action.triggered.connect(lambda checked, button=button: self.rename_record(button))
+        # show the menu
+        menu.exec_(button.mapToGlobal(pos))
+        
+        
+        
+    def rename_record(self, button):
+        # create a new input dialog
+        text, ok = QtWidgets.QInputDialog.getText(self, 'Rename Record', 'Enter new name:')
+        if ok:
+            # set the button text to the new name
+            button.setText(text)
+            
+            
+    def _reset(self):
+        self.model.reset()
+        self.progress_bar.setValue(0)
+        for i in range(70):
+            self.recording_buttons[i].setText(f"Record {i}")
+            self._refresh()
+            
+            
     def open_record(self, i):
+        
+        if i >= len(self.model.records):
+            return
         # create a new text windows with functions names and number of hits
         self.record_window = QtWidgets.QMainWindow()
         self.record_window.setWindowTitle(f"Record {i}")
-        self.record_window.setFixedHeight(400)
+        self.record_window.setFixedHeight(500)
         self.record_window.setFixedWidth(400)
         self.record_window.move(100, 100)
         self.record_window.show()
@@ -246,11 +302,9 @@ class UltimapView(QMainWindow):
         self.record_text = QtWidgets.QTextEdit(self.record_window)
         self.record_text.setReadOnly(True)
         self.record_text.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
-        self.record_text.setWordWrapMode(QtWidgets.QTextOption.NoWrap)
         self.record_text.setLineWrapColumnOrWidth(0)
-        self.record_text.setLineWrapMode(QtWidgets.QTextEdit.FixedPixelWidth)
         self.record_text.setFixedWidth(400)
-        self.record_text.setFixedHeight(400)
+        self.record_text.setFixedHeight(480)
         self.record_text.setFont(QFont('Arial', 10))
         self.record_text.setStyleSheet(
             "background-color: #edebeb;"
@@ -262,7 +316,7 @@ class UltimapView(QMainWindow):
         # add the text to the text edit
         records = self.model.records[i]
         for k, v in records.items():
-            self.record_text.append(f"{k} : {v}\n")
+            self.record_text.append(f"{k} : {v}")
             
         
  
@@ -293,6 +347,8 @@ class UltimapView(QMainWindow):
     
     def _refresh(self):
         pass
+    
+    
    
 
 
@@ -306,18 +362,20 @@ class UltimapView(QMainWindow):
 #         try:
 #             self.arch = self.pctx.arch
 #         except:
-#             self.arch = None
-#         self.firstRunTimeout= 5 * 60
+#             pass
+#         self.firstRunTimeout= 300
 #         self.timeout = 5
 #         self.importedFunctionsFilePath = ""
-#         self.moduleToTrace = ""
 #         self.reset()
         
 #     def reset(self):
 #         """
 #         Reset the model.
 #         """
-#         pass
+#         self.functionBreakpoints = {}
+#         self.importedFunctions = {}
+#         self.reverseImportedFunctions = {}
+#         self.records = [{ f"Function {i}": f"Record {i}" for i in range(100)}]
 
     
         

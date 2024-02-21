@@ -337,6 +337,10 @@ class StepTracerController(object):
 
     def run(self):
         
+        if self.dctx.get_bpt_qty() > 0:
+            show_msgbox("Please remove all breakpoints before starting StepTracer", "StepTracer - Error")
+            return
+        
         # check moduleToTrace exists
         base = self.dctx.get_module_text_base(self.model.moduleToTrace)
         if not base:

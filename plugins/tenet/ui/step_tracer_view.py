@@ -237,7 +237,7 @@ class StepTracerView(QMainWindow):
         self.create_options_input("Run Timeout",  str(self.model.runTimeout))
         self.create_options_input("Dump Size", str(self.model.dumpSize))
         self.create_options_input("Max Step Inside Loop", str(self.model.maxStepInsideLoop))
-        self.create_options_input("Module to Trace", "ex: 'kernel32.dll' or 'explorer.exe'")
+        self.create_options_input("Module to Trace", self.controller.dctx.get_root_filename())
         # add the file path label
         self.file_path_label = QLabel(self)
         self.file_path_label.setText("Exported functions File Path: ")

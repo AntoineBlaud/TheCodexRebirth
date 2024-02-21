@@ -26,6 +26,11 @@ class ExportFunctionsMenuModel:
     def __init__(self, pctx):
         self.pctx = pctx
         self.dctx = disassembler[self.pctx]
+        
+        if self.dctx.is_debugger_on():
+            raise Exception("Debugger must be off")
+        
+        
         offset = self.dctx.get_imagebase()
         self.dctx.rebase_0()
         self.sections_data = self.read_sections_data()
