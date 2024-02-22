@@ -337,37 +337,40 @@ class StepTracerController(object):
 
     def run(self):
         
-        if self.dctx.get_bpt_qty() > 0:
-            show_msgbox("Please remove all breakpoints before starting StepTracer", "StepTracer - Error")
-            return
-        
-        # check moduleToTrace exists
-        base = self.dctx.get_module_text_base(self.model.moduleToTrace)
-        if not base:
-            self.log(f"Module {self.model.moduleToTrace} not found")
-            return
-        self.log(f"Module {self.model.moduleToTrace} found at {hex(base)}")
-        
-        if not os.path.exists(self.model.importedFunctionsFilePath):
-            self.log(f"Imported functions file {self.model.importedFunctionsFilePath} not found")
-            return
-        
-        importedFunctions = []
-        # read imported functions
-        with open(self.model.importedFunctionsFilePath, "r") as f:
-            data = f.read().splitlines()
-            for line in data:
-                line = line.strip()
-                offset, name = line.split(" ")
-                offset = int(offset[2:], 16)
-                importedFunctions[name] = base + offset
-        self.set_bp_on_imported_functions(importedFunctions)
-        
-        # continue until we reach a breakpoint
-        if self.dctx.is_process_running():
-            msg = "Please continue process until we reach a breakpoint before starting StepTracer"
-            show_msgbox(msg, "StepTracer - Error")
-            raise Exception(msg)
+        if self.dctx.get_bpt_qty() == 0:
+
+            # check moduleToTrace exists
+            base = self.dctx.get_module_text_base(self.model.moduleToTrace)
+            if not base:
+                self.log(f"Module {self.model.moduleToTrace} not found")
+                return
+            self.log(f"Module {self.model.moduleToTrace} found at {hex(base)}")
+            
+            if not os.path.exists(self.model.importedFunctionsFilePath):
+                self.log(f"Imported functions file {self.model.importedFunctionsFilePath} not found")
+                return
+            
+            importedFunctions = {}
+            # read imported functions
+            counter = 0
+            with open(self.model.importedFunctionsFilePath, "r") as f:
+                data = f.read().splitlines()
+                for line in data:
+                    counter += 1
+                    line = line.strip()
+                    offset, name = line.split(" ")
+                    offset = int(offset[2:], 16)
+                    importedFunctions[name] = base + offset
+                    if counter > 1000:
+                        self.log(f"Too many imported functions, limit to 1000")
+                        break
+            self.set_bp_on_imported_functions(importedFunctions)
+            
+            # continue until we reach a breakpoint
+            if self.dctx.is_process_running():
+                msg = "Please continue process until we reach a breakpoint before starting StepTracer"
+                show_msgbox(msg, "StepTracer - Error")
+                raise Exception(msg)
         
         self._run()
 

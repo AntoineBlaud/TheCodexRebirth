@@ -162,6 +162,12 @@ class UltimapController(object):
             if self.dctx.is_process_running():
                 continue
             
+            # check if debugger is on
+            if not self.dctx.is_debugger_on():
+                self.log("Debugger is off")
+                break
+            
+            self.dctx.delete_breakpoint(self.ea)
             f_name = self.model.reverseImportedFunctions.get(self.ea, None)
             if not f_name:
                 continue
@@ -170,10 +176,6 @@ class UltimapController(object):
             else:
                 current_record[f_name] = 1
                 
-            if current_record[f_name] > self.model.maxHits:
-                self.dctx.delete_breakpoint(self.ea)
-                self.log(f"Reached max hits of {self.model.maxHits} for {f_name}")
-                continue
             self.log(f"Recorded {f_name}")
             
         self.update_view(start, timeout)

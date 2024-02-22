@@ -468,7 +468,10 @@ class IDAContextAPI(DisassemblerContextAPI):
         return None
     
     def get_reg_value(self, reg):
-        return idc.get_reg_value(reg)
+        try:
+            return idc.get_reg_value(reg)
+        except:
+            return 0
         
     def disasm(self, address, arch):
         md = self.get_capstone_md(arch)
