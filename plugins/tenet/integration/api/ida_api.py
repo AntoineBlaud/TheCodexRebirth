@@ -412,7 +412,6 @@ class IDAContextAPI(DisassemblerContextAPI):
                 return modinfo.base
         return None
         
-    
     def set_color(self, address, color):
         idc.set_color(address, idc.CIC_ITEM, color)
         
@@ -608,6 +607,12 @@ class IDAContextAPI(DisassemblerContextAPI):
     
     def update_ui(self):
         idaapi.refresh_idaview_anyway()
+        
+    def enable_breakpoint(self, ea, enable):
+        ida_dbg.enable_bpt(ea, enable)
+        
+    def disable_breakpoint(self, ea):
+        ida_dbg.enable_bpt(ea, False)
 
 #------------------------------------------------------------------------------
 # HexRays Util
