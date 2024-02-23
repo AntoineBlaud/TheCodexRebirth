@@ -7,3 +7,5 @@ read reg from reader slow
 
 100 step in local debug
 6 step /sec in remote debug
+ARM_REGTRACK_MAX_XREFS   = 33072  // max number of xrefs
+disable analysis (thinking)

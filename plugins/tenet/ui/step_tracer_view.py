@@ -238,18 +238,8 @@ class StepTracerView(QMainWindow):
         self.create_options_input("Dump Size", str(self.model.dumpSize))
         self.create_options_input("Max Step Inside Loop", str(self.model.maxStepInsideLoop))
         self.create_options_input("Module to Trace", self.controller.dctx.get_root_filename())
-        # add the file path label
-        self.file_path_label = QLabel(self)
-        self.file_path_label.setText("Exported functions File Path: ")
-        self.group_box_layout.addWidget(self.file_path_label)
-        # add the file path text box
-        self.file_path_text_box = QLineEdit(self)
-        self.group_box_layout.addWidget(self.file_path_text_box)
-        # add the file path button
-        self.file_path_button = QPushButton("Select File", self)
-        self.file_path_button.clicked.connect(self.select_file)
-        self.group_box_layout.addWidget(self.file_path_button)
-        
+      
+      
         bLayout = QHBoxLayout()
         buttonsWidgets = QWidget()
         buttonsWidgets.setLayout(bLayout)
@@ -367,14 +357,6 @@ class StepTracerView(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
             
-        
-    def select_file(self):
-        # open a file dialog
-        file_path = QFileDialog.getOpenFileName(self, 'Open file',
-                                            QDir.currentPath())
-        # set the file path text box
-        self.file_path_text_box.setText(file_path[0])
-        # set the file path label
     
     
     def add_watcher(self):
@@ -440,7 +422,6 @@ class StepTracerView(QMainWindow):
         self.model.dumpSize = int(self.group_box_layout.itemAt(4).widget().text())
         self.model.maxStepInsideLoop = int(self.group_box_layout.itemAt(6).widget().text())
         self.model.moduleToTrace = self.group_box_layout.itemAt(8).widget().text()
-        self.model.importedFunctionsFilePath = self.file_path_text_box.text()
         self.controller.run()
         
     def update_progress(self, value):

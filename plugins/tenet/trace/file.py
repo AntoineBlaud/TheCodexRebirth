@@ -9,6 +9,7 @@ import zipfile
 import binascii
 import itertools
 import collections
+import idaapi
 
 #-----------------------------------------------------------------------------
 # file.py -- Trace File
@@ -232,6 +233,7 @@ class TraceFile(object):
 
         # ASLR slide if present in file
         self.slide = None
+        
 
         # a sorted array of all unique PC / IP (eg, EIP, or RIP) that appear in the trace
         self.ip_addrs = None
@@ -626,11 +628,15 @@ class TraceFile(object):
         with open(filepath, 'r') as f:
 
             firstline = f.readline()
-            firstline = firstline.split('=')
-            if len(firstline) == 2 and firstline[0] == 'slide':
-                self.slide = int(firstline[1], 16)
-            else:
-                f.seek(0)
+            for info in firstline.split(","):
+                name, value = info.split("=")
+                if name == 'slide':
+                    current_base = idaapi.get_imagebase() 
+                    self.slide = current_base - int(value, 16)
+                else:
+                    f.seek(0)
+                    break
+                
 
             # loop until all of the lines in the file have been processed
             while True:
@@ -644,7 +650,7 @@ class TraceFile(object):
                 segment_id = len(self.segments)
 
                 # create a new trace segment from the given lines of text
-                segment = TraceSegment(self, segment_id, idx)
+                segment = TraceSegment(self, segment_id, idx, self.slide)
                 segment.from_lines(lines)
                 idx += segment.length
 
@@ -1061,10 +1067,11 @@ class TraceSegment(object):
     A segment of trace data.
     """
 
-    def __init__(self, trace, id=0, base_idx=0):
+    def __init__(self, trace, id=0, base_idx=0, slide=0):
         self.id = id
         self.arch = trace.arch
         self.trace = trace
+        self.slide = slide
 
         self.base_idx = base_idx
         self.length = 0
@@ -1740,7 +1747,7 @@ class TraceSegment(object):
 
             # special compression of IP
             if name == IP:
-                ip = int(value, 16)
+                ip = int(value, 16) +  + self.slide
 
                 try:
                     mapped_ip = self.trace.ip_map[ip]

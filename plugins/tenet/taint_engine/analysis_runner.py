@@ -25,7 +25,7 @@ class TaintAnalysisRunner:
         self.cs = self.dctx.get_capstone_md(self.arch)
         self.ks = self.dctx.get_keystone_md(self.arch)
         self._engine = TextEngine(self.arch, self.dctx, self.cs, self.ks, self.reader)
-        self._runner = Runner(self._engine, self.arch, self.cs, self.ks)
+        self._runner = Runner(self._engine)
         taint_trace_records = None
         try:
             taint_trace_records = self._runner.process_analysis()

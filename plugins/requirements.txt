@@ -1,6 +1,5 @@
-capstone
+capstone==4.0.2  
 unicorn
-qiling
 keystone-engine
 z3-solver
 superglobals

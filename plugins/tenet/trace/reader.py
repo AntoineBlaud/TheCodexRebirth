@@ -65,6 +65,10 @@ class TraceReader(object):
         # load the given trace file from disk
         self.trace = TraceFile(filepath, architecture)
         self.analysis = TraceAnalysis(self.trace, dctx)
+        
+        if self.analysis.base:
+            pmsg("Detected base address: 0x{:08X}".format(self.analysis.base))
+            self.dctx.rebase_to(self.analysis.base)
 
         self._idx_cached_registers = -1
         self._cached_registers = {}
@@ -189,9 +193,8 @@ class TraceReader(object):
         """
         Update the memory follow window, if it is enabled.
         """
-        slide = self.analysis.slide
-        c_ip = self.get_ip(self.idx) + slide
-        prev_ip = self.get_ip(max(self.idx - 1, 0)) + slide
+        c_ip = self.get_ip(self.idx)
+        prev_ip = self.get_ip(max(self.idx - 1, 0))
         
         for i, ip in enumerate([c_ip, prev_ip]):
             insn = self.dctx.disasm(ip, self.arch)
@@ -205,6 +208,8 @@ class TraceReader(object):
                         self.pctx.memories[i].navigate(reg_value)
                     except ValueError:
                         pass
+                    
+    
                     
     def seek_to_next_taint(self):
         idxs = self.get_backward_tainted_idxs(self.selected_idx)

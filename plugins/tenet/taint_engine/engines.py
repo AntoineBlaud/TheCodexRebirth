@@ -4,6 +4,7 @@ import abc
 from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 import binascii
 
+
 class EngineWrapper(abc.ABC):
     def get_ea(self):
         raise NotImplementedError()
@@ -86,12 +87,11 @@ class TextEngine(EngineWrapper):
         ea = self.get_ea()
         return self.dctx.disasm(ea, self.arch)
     
-    def get_currrent_instruction_disass(self):
-        ea = self.get_ea()
-        return self.dctx.disasm(ea, self.arch)
-    
     def is_mapped(self, address):
         return self.dctx.is_mapped(address)
+    
+    def log(self, msg):
+        print(f"[TextEngine] {msg}")
 
     def read_memory_int(self, address):
         if not self.is_mapped(address):
@@ -103,7 +103,11 @@ class TextEngine(EngineWrapper):
             return int.from_bytes(memory.data, byteorder="big")
     
     def read_reg(self, regname):
-        return self.reader.get_register(regname, self.idx)
+        try:
+            return self.reader.get_register(regname, self.idx)
+        except ValueError:
+            self.log(f"Register {regname} not found")
+            return 0
     
     def get_stack_pointer(self):
         return self.read_reg(self.arch.SP)

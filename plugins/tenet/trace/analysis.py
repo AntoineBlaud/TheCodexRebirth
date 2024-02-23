@@ -30,6 +30,7 @@ class TraceAnalysis(object):
         self._remapped_regions = []
         self._unmapped_entry_points = []
         self.slide = None
+        self.base = None
         self._analyze()
 
     #-------------------------------------------------------------------------
@@ -128,12 +129,9 @@ class TraceAnalysis(object):
 
         # convert to set for O(1) lookup in following loop
         instruction_addresses = set(instruction_addresses)
-
+        
         if self._trace.slide is not None:
             slide = self._trace.slide
-            # special case if its 0
-            if slide > 0:
-                slide -=idaapi.get_imagebase()
             print(f"ASLR Slide: {slide:#x} from trace")
         else:
             #
@@ -203,11 +201,8 @@ class TraceAnalysis(object):
 
         m1 = [disas_low_address, disas_high_address]
 
-        if slide < 0:
-            m2 = [m1[0] - slide, m1[1] - slide]
-        else:
-            m2 = [m1[0] + slide, m1[1] + slide]
-
+      
+        m2 = [m1[0], m1[1]]
         self.slide = slide
         self._remapped_regions.append((m1, m2))
 

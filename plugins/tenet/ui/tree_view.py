@@ -134,9 +134,12 @@ class CallTreeView(QWidget):
             else: self.all_items[i] = current
     
     def scrolld(self, idx):
-        self.tree.setCurrentIndex(self.all_items[idx].index())
-        self.tree.scrollTo(self.tree.currentIndex(), QTreeView.PositionAtCenter)
-        self.tree.horizontalScrollBar().setValue(0)
+        try:
+            self.tree.setCurrentIndex(self.all_items[idx].index())
+            self.tree.scrollTo(self.tree.currentIndex(), QTreeView.PositionAtCenter)
+            self.tree.horizontalScrollBar().setValue(0)
+        except AttributeError:
+            pass
 
     def action_filter(self):
         bst = ida_kernwin.ask_str("",6748, "Prepend with ! to invert a filter\nFilter is a regex")

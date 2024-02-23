@@ -58,6 +58,7 @@ class DebugLevel:
 
 
 BAD_OPERANDS_X86_64 = [".*pl", ".*il", ".*z", ".*h", ".*w"]
+BAD_OPERANDS_ARM = []
 ID_COUNTER = alt_count()
 VAR_COUNTER = alt_count()
 
@@ -75,19 +76,30 @@ if not logging_started():
 logger = logging.getLogger("Tenet.Taint_Engines.Core")
 logger.setLevel(logging.DEBUG)
 
-def create_sym_register_factory():
+def create_sym_register_factory(arch):
     """
     Create a dictionary of symbolic registers and their parts.
     Used also to link a register part to its parent register.
     """
     global SYM_REGISTER_FACTORY
-    import tenet.taint_engine.arch.x86 as x86
-    SYM_REGISTER_FACTORY = x86.create_sym_register_factory()
+    if isinstance(arch, ArchAMD64) or isinstance(arch, ArchX86):
+        import tenet.taint_engine.arch.x86 as arch_module
+    elif isinstance(arch, ArchARM) or isinstance(arch, ArchARM64):
+        import tenet.taint_engine.arch.arm as arch_module
+    else :
+        raise Exception("Unsupported architecture")
+    SYM_REGISTER_FACTORY = arch_module.create_sym_register_factory()
     return SYM_REGISTER_FACTORY
 
-def get_parent_register(register_name, arch_size):
-    import tenet.taint_engine.arch.x86 as x86
-    return x86.get_parent_register(register_name, arch_size)
+def get_parent_register(arch, register_name, arch_size):
+    register_name = register_name.upper()
+    if isinstance(arch, ArchAMD64) or isinstance(arch, ArchX86):
+        import tenet.taint_engine.arch.x86 as arch_module
+    elif isinstance(arch, ArchARM) or isinstance(arch, ArchARM64):
+        import tenet.taint_engine.arch.arm as arch_module
+    else :
+        raise Exception("Unsupported architecture")
+    return arch_module.get_parent_register(register_name, arch_size)
 
 def check_memory_access(insn):
     # lea instruction is not a memory access
@@ -210,27 +222,39 @@ class VariableStates(dict):
         return clone
 
 
-class OperationX86_64:
+class OperationAbstract:
+    def __init__(self, config, cs, engine, operation, mem_access, symbolic_taint_store):
+        self.config = config
+        self.cs = cs
+        self.engine = engine
+        self.arch = self.engine.arch
+        self.operation = operation
+        self.mem_access = mem_access
+        self.symbolic_taint_store = symbolic_taint_store
+        self.tainted_var_name = self.find_var_name_tainted(operation, mem_access)
+        
+    def find_var_name_tainted(self, operation: Operation, mem_access: int):
+        if not operation.op1:
+            return None
+        if operation.op1.type in [X86_OP_MEM, ARM_OP_MEM]:
+            return mem_access
+        else:
+            return get_reg_name(self.cs, operation.op1.reg)
+        
+    def process(self):
+        raise NotImplementedError("Operation.process() must be implemented in a subclass")
+    
+    def log(self, msg):
+        print("[Operation] ", msg)
+    
+
+class OperationX86_64(OperationAbstract):
     """
     A class for performing a symbolic operations on x86-64 machine code.
     """
 
     def __init__(self, config, cs, engine, operation, mem_access, symbolic_taint_store):
-        self.config = config
-        self.cs = cs
-        self.operation = operation
-        self.mem_access = mem_access
-        self.symbolic_taint_store = symbolic_taint_store
-        self.engine = engine
-        self.tainted_var_name = self.find_var_name_tainted(operation, mem_access)
-
-    def find_var_name_tainted(self, operation: Operation, mem_access: int):
-        if not operation.op1:
-            return None
-        if operation.op1.type == X86_OP_MEM:
-            return mem_access
-        else:
-            return get_reg_name(self.cs, operation.op1.reg)
+        super().__init__(config, cs, engine, operation, mem_access, symbolic_taint_store)
 
     def _add(self, operation, symbolic_taint_store):
         return symbolic_taint_store.update(self.tainted_var_name, operation.v_op1 + operation.v_op2)
@@ -347,50 +371,227 @@ class OperationX86_64:
     def process(self):
         if self.tainted_var_name not in self.symbolic_taint_store:
             return None
+        
         cinsn = self.operation.cinsn
+        mnemonic = cinsn.mnemonic
 
-        if "rep" in cinsn.mnemonic:
+        if "rep" in mnemonic:
             return None
-        if "mov" in cinsn.mnemonic:
+        if "mov" in mnemonic:
             return self._mov(self.operation, self.symbolic_taint_store, self.mem_access)
-        elif "lea" in cinsn.mnemonic:
+        elif "lea" in mnemonic:
             return self._lea(self.operation, self.symbolic_taint_store, self.mem_access)
-        elif cinsn.mnemonic.startswith("add"):
+        elif mnemonic.startswith("add"):
             return self._add(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("imul"):
+        elif mnemonic.startswith("imul"):
             return self._imul(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("sub"):
+        elif mnemonic.startswith("sub"):
             return self._sub(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("xor"):
+        elif mnemonic.startswith("xor"):
             return self._xor(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("and"):
+        elif mnemonic.startswith("and"):
             return self._and(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("or"):
+        elif mnemonic.startswith("or"):
             return self._or(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("shl"):
+        elif mnemonic.startswith("shl"):
             return self._shl(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("shr") or cinsn.mnemonic.startswith("sar"):
+        elif mnemonic.startswith("shr") or mnemonic.startswith("sar"):
             return self._shr(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("ror"):
+        elif mnemonic.startswith("ror"):
             return self._ror(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("rol"):
+        elif mnemonic.startswith("rol"):
             return self._rol(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("mul"):
+        elif mnemonic.startswith("mul"):
             return self._mul(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("not"):
+        elif mnemonic.startswith("not"):
             return self._not(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("push"):
+        elif mnemonic.startswith("push"):
             return self._push(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("pop"):
+        elif mnemonic.startswith("pop"):
             return self._pop(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("cdq"):
+        elif mnemonic.startswith("cdq"):
             return self._cdq(self.operation, self.symbolic_taint_store)
-        elif cinsn.mnemonic.startswith("test") or cinsn.mnemonic.startswith("cmp"):
+        elif mnemonic.startswith("test") or mnemonic.startswith("cmp"):
             return self.operation.v_op1
-        elif cinsn.mnemonic.startswith("call") or cinsn.mnemonic.startswith("j"):
+        elif mnemonic.startswith("call") or mnemonic.startswith("j"):
             return self.operation.v_op1
         else:
             return None
+        
+        
+class OperationArm_AArch64(OperationAbstract):
+    """
+    A class for performing symbolic operations on ARM/AArch64 machine code.
+    """
+    def __init__(self, config, cs, engine, operation, mem_access, symbolic_taint_store):
+        super().__init__(config, cs, engine, operation, mem_access, symbolic_taint_store)
+
+    # Define other methods similarly as before, adapting the instructions to ARM/AArch64 syntax
+    
+        
+    def compute_imm_shift(self, operation):
+        if operation.v_op3 is not None:
+            operation.v_op2 =  operation.v_op2 << operation.v_op3
+
+    
+    def _mov(self, operation, symbolic_taint_store, mem_access):
+        # instanciate a new symbolic register if needed
+        # if condition is not met, then delete the symbolic register
+        if operation.op1.type == X86_OP_REG:
+            regname = get_reg_name(self.cs, operation.op1.reg)
+            symbolic_taint_store.update(regname, operation.v_op2)
+            return symbolic_taint_store[regname]
+
+        elif operation.op1.type == X86_OP_MEM:
+            symbolic_taint_store.update(mem_access, operation.v_op2)
+            return symbolic_taint_store[mem_access]
+        
+        
+    def _str(self, operation, symbolic_taint_store, mem_access):
+        symbolic_taint_store.update(mem_access, operation.v_op1)
+        return symbolic_taint_store[mem_access]
+    
+    def _stmia(operation, symbolic_taint_store, mem_access):
+        raise NotImplementedError("Operation._stmia() must be implemented in a subclass")
+    
+    def _ldmia(operation, symbolic_taint_store, mem_access):
+        raise NotImplementedError("Operation._ldmia() must be implemented in a subclass")
+        
+    def _add(self, operation, symbolic_taint_store):
+        self.compute_imm_shift(operation)
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op1 + operation.v_op2)
+    
+    def _sub(self, operation, symbolic_taint_store):
+        self.compute_imm_shift(operation)
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op1 + operation.v_op2)
+    
+    def _mul(self, operation, symbolic_taint_store):
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op2 * operation.v_op3)
+    
+    def _mla(self, operation, symbolic_taint_store):
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op4 + operation.v_op2 * operation.v_op3)
+    
+    def _mls(self, operation, symbolic_taint_store):
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op4 - operation.v_op2 * operation.v_op3)
+    
+    def  _and(self, operation, symbolic_taint_store):
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op1 & operation.v_op2)
+    
+    def _xor(self, operation, symbolic_taint_store):
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op1 + operation.v_op2)
+    
+    def _or(self, operation, symbolic_taint_store):
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op1 | operation.v_op2)
+    
+    def _lsl(self, operation, symbolic_taint_store):
+        destination = operation.v_op1
+        bsize = self.config["BINARY_ARCH_SIZE"]
+        if operation.v_op3 is not None:
+            source = operation.v_op2
+            count = operation.v_op3.value % bsize
+            shifted_bits = destination << RealValue(count)
+            shifted_bits |= source >> RealValue(bsize - count)
+        else:
+            count = operation.v_op2
+            shifted_bits = destination << count
+        return symbolic_taint_store.update(self.tainted_var_name, shifted_bits)
+
+    def _lsr(self, operation, symbolic_taint_store):
+        destination = operation.v_op1
+        bsize = self.config["BINARY_ARCH_SIZE"]
+        if operation.v_op3 is not None:
+            source = operation.v_op2
+            count = operation.v_op3.value % bsize
+            shifted_bits = destination >> RealValue(count)
+            shifted_bits |= source << RealValue(bsize - count)
+        else:
+            count = operation.v_op2
+            shifted_bits = destination >> count
+        return symbolic_taint_store.update(self.tainted_var_name, shifted_bits)
+    
+    
+    def _ror(self, operation, symbolic_taint_store):
+        return symbolic_taint_store.update(self.tainted_var_name, operation.v_op2.ror(operation.v_op3))
+    
+    
+    def _push(self, operation, symbolic_taint_store):
+        
+        operands = operation.cinsn.operands
+        sp_offset = 0
+        for op in operands:
+            
+            reg_name = get_reg_name(self.cs, op.reg)
+            stack_pointer = self.engine.get_stack_pointer() + sp_offset
+            symbolic_taint_store.create_sym_mem(stack_pointer, 0)
+            symbolic_taint_store.update(stack_pointer, operation.v_op1)
+            # increment the stack pointer
+            if isinstance(self.arch, ArchARM):
+                sp_offset -= 4
+            else:
+                sp_offset -= 8
+            
+            
+    def _pop(self, operation, symbolic_taint_store):
+        operands = operation.cinsn.operands
+        sp_offset = 0
+        for op in operands:
+            reg_name = get_reg_name(self.cs, op.reg)
+            stack_pointer = self.engine.get_stack_pointer() + sp_offset
+            # Delete the symbolic register
+            if not reg_name in symbolic_taint_store:
+                symbolic_taint_store.create_sym_reg(reg_name)
+
+            if stack_pointer in symbolic_taint_store:
+                symbolic_taint_store.update(reg_name, symbolic_taint_store[stack_pointer])
+                symbolic_taint_store.del_sym_var(stack_pointer)
+            else:
+                value = self.engine.read_memory_int(stack_pointer)
+                symbolic_taint_store.update(reg_name, symbolic_taint_store.create_sym_mem(stack_pointer, value))
+            # increment the stack pointer
+            if isinstance(self.arch, ArchARM):
+                sp_offset += 4
+            else:
+                sp_offset += 8
+        
+        
+    def process(self):
+        if self.tainted_var_name not in self.symbolic_taint_store:
+            self.log(f"tainted_var_name {self.tainted_var_name} not in symbolic_taint_store")
+            return None
+        
+        cinsn = self.operation.cinsn
+        mnemonic = cinsn.mnemonic
+
+        if mnemonic in ["ldr", "ldp", "mov"]:
+            return self._mov(self.operation, self.symbolic_taint_store, self.mem_access)
+        elif mnemonic in ["str", "stp"]:
+            return self._str(self.operation, self.symbolic_taint_store, self.mem_access)
+        elif mnemonic in ["add", "adds"]:
+            return self._add(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["mul"]:
+            return self._mul(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["mla"]:
+            return self._mla(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["mls"]:
+            return self._mls(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["sub", "subs"]:
+            return self._sub(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["eor", "eor3"]:
+            return self._xor(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["and", "ands"]:
+            return self._and(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["orr", "orrs"]:
+            return self._or(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["lsl", "lslv"]:
+            return self._lsl(self.operation, self.symbolic_taint_store)
+        elif mnemonic in ["lsr", "lsrv", "asr", "asrv"]:
+            return self._lsr(self.operation, self.symbolic_taint_store)
+        elif mnemonic == "ror":
+            return self._ror(self.operation, self.symbolic_taint_store)
+
+        else:
+            return None
+
 
 
 class OperationEngine:
@@ -401,17 +602,17 @@ class OperationEngine:
         engine (Qiling): An instance of the Qiling emulator.
     """
 
-    def __init__(self, engine, arch, cs, ks):
+    def __init__(self, engine):
         # Store the Qiling instance and configure Capstone disassembler and Keystone assembler
         self.engine = engine
-        self.arch = arch
-        self.cs = cs
-        self.ks = ks
-        if isinstance(arch, ArchAMD64) or isinstance(arch, ArchX86):
+        self.arch = self.engine.arch
+        self.cs = self.engine.cs
+        self.ks = self.engine.ks
+        if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
             self.op_reg_type = X86_OP_REG
             self.op_imm_type = X86_OP_IMM
             self.op_mem_type = X86_OP_MEM
-        elif isinstance(arch, ArchARM) or isinstance(arch, ArchARM64):
+        elif isinstance(self.arch, ArchARM) or isinstance(self.arch, ArchARM64):
             self.op_reg_type = ARM_OP_REG
             self.op_imm_type = ARM_OP_IMM
             self.op_mem_type = ARM_OP_MEM
@@ -487,12 +688,9 @@ class OperationEngine:
 
             # Process MEM operands
             elif operand.type == self.op_mem_type:
-                if mem_access not in symbolic_taint_store and self.engine.is_mapped(mem_access):
-                    symbolic_taint_store.create_sym_mem(mem_access, self.engine.read_memory_int(mem_access))
-                if mem_access in symbolic_taint_store:
-                    setattr(operation, f"v_op{i+1}", symbolic_taint_store[mem_access])
-                else:
-                    setattr(operation, f"v_op{i+1}", RealValue(0))
+                if mem_access not in symbolic_taint_store:
+                    symbolic_taint_store.create_sym_mem(mem_access, self.engine.read_memory_int(mem_access))    
+                setattr(operation, f"v_op{i+1}", symbolic_taint_store[mem_access])
 
             assert getattr(operation, f"v_op{i+1}") is not None
 
@@ -505,7 +703,7 @@ class OperationEngine:
                 reg_value = self.engine.read_reg(regname.upper())
                 setattr(operation, f"r_op{i + 1}", reg_value)
 
-            elif op.type == self.op_mem_type and self.engine.is_mapped(mem_access):
+            elif op.type == self.op_mem_type:
                 mem_value = self.engine.read_memory_int(mem_access)
                 setattr(operation, f"r_op{i + 1}", hex(mem_value))
 
@@ -553,6 +751,9 @@ class OperationEngine:
 
         # Get the current instruction
         cinsn = self.engine.get_currrent_instruction_disass()
+        if cinsn is None:
+            logger.debug(f"Failed to disassemble instruction at {hex(self.engine.get_ea())}")
+            return None
         cinsn_addr = self.engine.get_ea()
         # Check if the instruction is the same as the last one executed
         if cinsn_addr == self.last_instruction_executed:
@@ -576,18 +777,23 @@ class OperationEngine:
         # Parse operands do a lot of things, like creating symbolic values, fetching values from memory
         # All the results are stored in the Operation object (v_op1, v_op2, v_op3)
         operation = self.parse_operation_operands(cinsn, mem_access, symbolic_taint_store)
+        print(operation)
         # Compute the result of the operation
         if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
-            op_engine = OperationX86_64(
+            OPClass = OperationX86_64
+        elif isinstance(self.arch, ArchARM) or isinstance(self.arch, ArchARM64):
+            OPClass = OperationArm_AArch64
+        else:
+            raise Exception("Unsupported architecture")
+    
+        op_engine = OPClass(
                 self.config,
                 self.cs,
                 self.engine,
                 operation,
                 mem_access,
-                symbolic_taint_store,
-            )
-        else:
-            raise Exception("Unsupported architecture")
+                symbolic_taint_store)
+        
         operation.v_result = op_engine.process()
         print(hex(cinsn_addr), operation)
         # Update variables in symbolic_taint_store
@@ -596,11 +802,12 @@ class OperationEngine:
 
 
 class Runner:
-    def __init__(self, engine, arch, cs, ks, *args):
-        # Set the debug level and create a VariableStates instance
-        self.arch = arch
-        self.cs = cs
-        self.ks = ks
+    def __init__(self, engine, *args):
+        # instantiate the engine
+        self.engine = engine
+        self.arch = self.engine.arch
+        self.cs = self.engine.cs
+        self.ks = self.engine.ks
         # only for debugging
         self.symbolic_check = False
         self.symbolic_taint_store = VariableStates()
@@ -609,10 +816,8 @@ class Runner:
         self.operation_executed_count = ID_COUNTER
         self.registers_state = DataStoreManager()
         self.memory_state = DataStoreManager()
-        # instantiate the engine
-        self.engine = engine
         # Create an instance of the CodexOperationEngine
-        self.operation_engine = OperationEngine(self.engine, self.arch, self.cs, self.ks, *args)
+        self.operation_engine = OperationEngine(self.engine)
         self.emulation_time = 0
         
 
@@ -632,11 +837,13 @@ class Runner:
         return self.engine.get_ea()
     
     def register_operations(self, operation: Operation):
+        if operation is None:
+            return
         idx = self.operation_executed_count.value
         if operation is None:
             cinsn = self.engine.get_currrent_instruction_disass()
             operation = Operation(cinsn)
-
+            
         last_trace = self.trace_records.get_last_entry()
         last_operation = last_trace.operation if last_trace else None
 
@@ -733,7 +940,7 @@ class Runner:
 
                 if operand.type in [X86_OP_REG, ARM_OP_REG]:
                     # update the parent register
-                    register_name = get_parent_register(get_reg_name(self.cs, operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
+                    register_name = get_parent_register(self.arch, get_reg_name(self.cs, operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
                     register_value = self.engine.read_reg(register_name.upper())
                     self.registers_state.register_item(register_name, idx, register_value)
 
@@ -769,6 +976,9 @@ class Runner:
         """
         if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
             self.CONFIG["BAD_OPERANDS"] = BAD_OPERANDS_X86_64
+            
+        elif isinstance(self.arch, ArchARM) or isinstance(self.arch, ArchARM64):
+            self.CONFIG["BAD_OPERANDS"] = BAD_OPERANDS_ARM
 
         if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchARM64):
             self.CONFIG["BINARY_MAX_MASK"] = 0xFFFFFFFFFFFFFFFF
@@ -785,7 +995,7 @@ class Runner:
         # make first update
         setglobal("CONFIG", self.CONFIG)
         # Must be called after CONFIG BINARY_MAX_MASK and BINARY_ARCH_SIZE are set
-        self.CONFIG["SYM_REGISTER_FACTORY"] = create_sym_register_factory()
+        self.CONFIG["SYM_REGISTER_FACTORY"] = create_sym_register_factory(self.arch)
         self.CONFIG["IS_INITIALIZED"] = True
         # make second update
         setglobal("CONFIG", self.CONFIG)

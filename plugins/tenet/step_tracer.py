@@ -9,6 +9,8 @@ from capstone.x86_const import *
 from capstone.arm_const import *
 
 
+
+
 class JHook:
     def __init__(self):
         self.j_next = None
@@ -27,30 +29,24 @@ class Watcher:
 class StepTracerModel:
     def __init__(self, pctx):
         self.pctx = pctx
-        self.isDynamicShellcode = True
+        self.isDynamicShellcode = False
         self.runTimeout = 20
-        self.resetSegmentInc = 20
+        self.resetSegmentInc = 0xFFFFFFFF
         self.dumpSize = 10
         self.maxStepInsideLoop = 2
         self.counter = 0
         self.moduleToTrace = ""
-        self.importedFunctionsFilePath = ""
         self.watchers = []
         self.reset()
 
     def reset(self):
-        self.functionBreakpoints = {}
         self.loopAlreadySkipped = {}
         self.currentJumps = {}
         self.loopCounts = {}
         self.breakpoints = {}
         self.seenInstructionsCount = {}
         self.tempDataBuffer = {}
-        self.tenetTrace = [["slide=0"]]
-        if not self.isDynamicShellcode:
-            self.resetSegmentInc = 0xFFFFFFFF
-        else:
-            self.resetSegmentInc = 20
+        self.tenetTrace = []
 
     def add_watcher(self, address):
         self.watchers.append(Watcher(address))
@@ -58,6 +54,12 @@ class StepTracerModel:
     def update_watcher(self, index, address):
         w = self.watchers[index]
         w.address = address
+        
+    def init_segment_inf(self):
+        if not self.isDynamicShellcode:
+            self.resetSegmentInc = 0xFFFFFFFF
+        else:
+            self.resetSegmentInc = 20
 
     def on_watcher(self, ea):
         for w in self.watchers:
@@ -91,12 +93,6 @@ class StepTracerController(object):
     def log(self, msg):
         print(f"[StepTracer] {msg}")
 
-    def set_bp_on_imported_functions(self, importedFunctions):
-            for name, ea in importedFunctions.items():
-                if ea not in self.model.functionBreakpoints:
-                    self.log(f"Set breakpoint on function {name} {hex(ea)}")
-                    self.dctx.set_breakpoint(ea)
-                    self.model.functionBreakpoints[ea] = True
 
     def get_jump_target(self, ea):
         insn = self.dctx.print_insn_mnem(ea)
@@ -148,9 +144,6 @@ class StepTracerController(object):
             self.dctx.delete_breakpoint(bp)
 
         self.model.breakpoints.clear()
-        for bp in self.model.functionBreakpoints.keys():
-            self.dctx.delete_breakpoint(bp)
-
         self.prev_ea = None
 
     def compute_mem_access(self, cinsn):
@@ -220,8 +213,9 @@ class StepTracerController(object):
 
         # add memory read for the current instruction
         disasm = self.dctx.disasm(self.ea, self.arch)
-        mem_access = self.compute_mem_access(disasm)
-        read_memory_and_append_entry(mem_access)
+        if disasm is not None:
+            mem_access = self.compute_mem_access(disasm)
+            read_memory_and_append_entry(mem_access)
         self.model.tenetTrace.append(new_entry)
 
     def save_trace(self):
@@ -248,10 +242,9 @@ class StepTracerController(object):
         # add bp to next instruction, then we continue the process if
         # we are in a library the next instruction
         insn = self.dctx.print_insn_mnem(ea)
-        if insn is None:
-            if insn.startswith(self.arch.CALL_INSTRUCTION):
-                next_insn = ea + self.dctx.get_item_size(ea)
-                self.dctx.set_breakpoint(next_insn)
+        if insn == self.arch.CALL_INSTRUCTION:
+            next_insn = ea + self.dctx.get_item_size(ea)
+            self.dctx.set_breakpoint(next_insn)
 
         # check we are not in a library # TO CHANGE
         mod_name = self.dctx.get_module_name(ea)
@@ -264,6 +257,7 @@ class StepTracerController(object):
             self.dctx.set_breakpoint(next_insn)
             self.dctx.continue_process()
             self.log(f"Skipping instruction at {hex(ea)}")
+
 
     def step_loop(self):
         ea = self.ea
@@ -334,50 +328,41 @@ class StepTracerController(object):
 
         # step into the next instruction
         self.dctx.step_into()
+        
+    def initialize(self):
+        
+        self.model.init_segment_inf()
+        
+        # check moduleToTrace exists
+        base = self.dctx.get_module_text_base(self.model.moduleToTrace)
+        if not base:
+            raise Exception(f"Module {self.model.moduleToTrace} not found")
+        
+        self.log(f"Module {self.model.moduleToTrace} found at {hex(base)}")
+        self.model.tenetTrace.append([f"slide={hex(base)}"])
+           
+        # continue until we reach a breakpoint
+        if self.dctx.is_process_running():
+            msg = "Please continue process until we reach a breakpoint before starting StepTracer"
+            show_msgbox(msg, "StepTracer - Error")
+            raise Exception(msg)
+    
+        return True
+        
 
     def run(self):
-        
-        if self.dctx.get_bpt_qty() == 0:
-
-            # check moduleToTrace exists
-            base = self.dctx.get_module_text_base(self.model.moduleToTrace)
-            if not base:
-                self.log(f"Module {self.model.moduleToTrace} not found")
-                return
-            self.log(f"Module {self.model.moduleToTrace} found at {hex(base)}")
-            
-            if not os.path.exists(self.model.importedFunctionsFilePath):
-                self.log(f"Imported functions file {self.model.importedFunctionsFilePath} not found")
-                return
-            
-            importedFunctions = {}
-            # read imported functions
-            counter = 0
-            with open(self.model.importedFunctionsFilePath, "r") as f:
-                data = f.read().splitlines()
-                for line in data:
-                    counter += 1
-                    line = line.strip()
-                    offset, name = line.split(" ")
-                    offset = int(offset[2:], 16)
-                    importedFunctions[name] = base + offset
-                    if counter > 1000:
-                        self.log(f"Too many imported functions, limit to 1000")
-                        break
-            self.set_bp_on_imported_functions(importedFunctions)
-            
-            # continue until we reach a breakpoint
-            if self.dctx.is_process_running():
-                msg = "Please continue process until we reach a breakpoint before starting StepTracer"
-                show_msgbox(msg, "StepTracer - Error")
-                raise Exception(msg)
-        
-        self._run()
+                
+        if not self.initialize():
+            return
+        try:
+            self._run()
+        finally:
+            self.stop()
 
     def _run(self):
-        self.model.reset()
+       
         self.clear()
-        self.log("Starting StepTracer")
+        self.log("Start StepTracer")
         start = time.time()
         # self.set_bp_on_all_functions()
         # check debugged process is running
@@ -385,18 +370,15 @@ class StepTracerController(object):
             self.prev_ea = self.ea
             if self.dctx.user_cancelled():
                 self.log("User cancelled")
-                self.stop()
-                break
+                return
 
             if time.time() - start > self.model.runTimeout:
                 self.log("Timeout")
-                self.stop()
-                break
+                return
 
             if self.model.on_watcher(self.prev_ea):
                 self.log("Watcher reached")
-                self.stop()
-                break
+                return
 
             if self.model.counter % 1000 == 0:
                 self.save_trace()
@@ -404,10 +386,6 @@ class StepTracerController(object):
             self.step_loop()
             new_ea = self.ea
 
-            if new_ea in self.model.functionBreakpoints:
-                self.log("Function breakpoint reached")
-                self.delete_breakpoint(self.ea)
-                continue
 
             self.finalize_step(new_ea, self.prev_ea)
             line = self.log_instr_exec(new_ea)

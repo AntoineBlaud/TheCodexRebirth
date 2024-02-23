@@ -521,8 +521,7 @@ class TenetContext(object):
         current_address = dctx.here()
 
         blocks_info = dctx.get_fn_blocks(current_address)[1:]  # remove first block
-        slide = self.reader.analysis.slide
-        blocks_execution_count = {(start - slide): 0 for start, _ in blocks_info}
+        blocks_execution_count = {(start): 0 for start, _ in blocks_info}
 
         forward_ips = self.reader.get_next_ips(trail_length)
         backward_ips = self.reader.get_prev_ips(trail_length)
@@ -535,7 +534,7 @@ class TenetContext(object):
                     blocks_execution_count[address] += 1
 
         for block_start, execution_count in blocks_execution_count.items():
-            dctx.set_cmt(block_start+slide, f"Executed {execution_count} times  ")
+            dctx.set_cmt(block_start, f"Executed {execution_count} times  ")
             
             
                 

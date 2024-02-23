@@ -475,7 +475,11 @@ class IDAContextAPI(DisassemblerContextAPI):
         
     def disasm(self, address, arch):
         md = self.get_capstone_md(arch)
-        insn = next(md.disasm(bytes(self.read_memory(address, 16)), address))
+        raw_insn = bytes(self.read_memory(address, 16))
+        try:
+            insn = next(md.disasm(raw_insn, address))
+        except StopIteration:
+            return None
         return insn
     
     def get_register_name(self, register, arch):
@@ -512,6 +516,11 @@ class IDAContextAPI(DisassemblerContextAPI):
         while idaapi.get_imagebase() != offset:
             time.sleep(0.1)
             
+    def rebase_to(self, target_base):
+        current_base = idaapi.get_imagebase()
+        offset = target_base - current_base
+        self.rebase_plus(offset)
+        
     def take_memory_snapshot(self):
         idaapi.take_memory_snapshot(0)
         
@@ -553,10 +562,11 @@ class IDAContextAPI(DisassemblerContextAPI):
     def get_segm_start(self, seg):
         return idc.get_segm_start(seg)
     
+    
     def get_segm_end(self, seg):
         return idc.get_segm_end(seg)
     
-            
+    
     def create_insn(self, ea):
         idc.create_insn(ea)
         
@@ -566,9 +576,12 @@ class IDAContextAPI(DisassemblerContextAPI):
     def get_operand_value(self, ea, op):
         return idc.get_operand_value(ea, op)
     
-    def continue_process(self, timeout=-1):
+    def continue_process(self, timeout=15):
         idaapi.continue_process()
         idaapi.wait_for_next_event(idaapi.WFNE_SUSP, timeout)
+        if self.is_process_running():
+            print("Process still running after", timeout, "seconds")
+            raise Exception(f"Process still running after {timeout} seconds")
         
     def is_process_running(self):
         # check idaapi.WFNE_SUSP is false
