@@ -452,10 +452,10 @@ class OperationArm_AArch64(OperationAbstract):
         return symbolic_taint_store[mem_access]
     
     def _stmia(operation, symbolic_taint_store, mem_access):
-        raise NotImplementedError("Operation._stmia() must be implemented in a subclass")
+        logger.error("Operation._stmia() must be implemented in a subclass")
     
     def _ldmia(operation, symbolic_taint_store, mem_access):
-        raise NotImplementedError("Operation._ldmia() must be implemented in a subclass")
+        logger.error("Operation._ldmia() must be implemented in a subclass")
         
     def _add(self, operation, symbolic_taint_store):
         self.compute_imm_shift(operation)
