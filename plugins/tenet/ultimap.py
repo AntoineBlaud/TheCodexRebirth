@@ -30,7 +30,7 @@ class UltimapModel(object):
         """
         self.functionBreakpoints = {}
         self.importedFunctions = {}
-        self.reverseImportedFunctions = {}
+        self.offsetsFunctions = {}
         self.records = []
     
     
@@ -66,6 +66,7 @@ class UltimapController(object):
     def set_bp_on_imported_functions(self, importedFunctions):
         for name, ea in importedFunctions.items():
             if ea not in self.model.functionBreakpoints:
+                ea = ea + self.base
                 self.log(f"Set breakpoint on function {name} {hex(ea)}")
                 self.dctx.set_breakpoint(ea)
                 self.model.functionBreakpoints[ea] = True
@@ -77,11 +78,11 @@ class UltimapController(object):
             show_msgbox("Please remove all breakpoints before starting StepTracer", "StepTracer - Error")
             return False
         
-        base = self.dctx.get_module_text_base(self.model.moduleToTrace)
-        if not base:
+        self.base = self.dctx.get_module_text_base(self.model.moduleToTrace)
+        if not self.base:
             self.log(f"Module {self.model.moduleToTrace} not found")
             return False
-        self.log(f"Module {self.model.moduleToTrace} found at {hex(base)}")
+        self.log(f"Module {self.model.moduleToTrace} found at {hex(self.base)}")
         
         if not os.path.exists(self.model.importedFunctionsFilePath):
             self.log(f"Imported functions file {self.model.importedFunctionsFilePath} not found")
@@ -95,11 +96,11 @@ class UltimapController(object):
                 line = line.strip()
                 offset, name = line.split(" ")
                 offset = int(offset[2:], 16)
-                self.model.importedFunctions[name] = base + offset
-                self.model.reverseImportedFunctions[base + offset] = name
+                self.model.importedFunctions[name] = offset
+                self.model.offsetsFunctions[offset] = name
                 counter += 1
-                if counter > 1000:
-                    self.log(f"Too many imported functions, limit to 1000")
+                if counter > 1100:
+                    show_msgbox("Too many imported functions, limit to 1100", "StepTracer - Error")
                     break
         self.set_bp_on_imported_functions(self.model.importedFunctions)
         return True
@@ -118,6 +119,8 @@ class UltimapController(object):
             if not self.initialize():
                 return 
     
+        # update base each time
+        self.base = self.dctx.get_module_text_base(self.model.moduleToTrace)
         self._run()
             
             
@@ -155,7 +158,11 @@ class UltimapController(object):
         timeout = self.model.timeout
         current_record = {}
         while time.time() - start < timeout:
-            self.dctx.continue_process(1)     
+            try:
+                self.dctx.continue_process()     
+            except Exception as e:
+                self.log(f"Error: {e}")
+                break
             self.update_view(start, timeout)
             
             # check if process is running or stopped
@@ -168,9 +175,9 @@ class UltimapController(object):
                 break
             
             self.dctx.delete_breakpoint(self.ea)
-            f_name = self.model.reverseImportedFunctions.get(self.ea, None)
+            f_name = self.model.offsetsFunctions.get(self.ea - self.base, None)
             if not f_name:
-                continue
+                self.log(f"Function {hex(self.ea + self.base)} not found")
             if f_name in current_record:
                 current_record[f_name] += 1
             else:

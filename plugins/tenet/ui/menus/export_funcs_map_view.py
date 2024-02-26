@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import QDir
 from PyQt5.QtCore import Qt
+from tenet.util.common import *
 
 class MyTreeView(QTreeView):
     def __init__(self, parent=None):
@@ -60,7 +61,7 @@ class ExportFuncsMenuView(QMainWindow):
         
         # add a text box for coverage
         self.coverage_text_box = QLineEdit(self)
-        self.coverage_text_box.setText("2")
+        self.coverage_text_box.setText("80")
         h_layout.addWidget(self.coverage_text_box)
         
         
@@ -156,8 +157,10 @@ class ExportFuncsMenuView(QMainWindow):
         # export the data
         print("Exporting data to: ", file_path)
         with open(file_path, "w") as f:
-            for function in selected_functions:
+            for i, function in enumerate(selected_functions):
                 f.write(function + "\n")
+                if i > 900:
+                    show_msgbox("Too many functions, limit to 900", "Export Functions - Error")
         # close the window
         self.close()
         
