@@ -1686,7 +1686,7 @@ class TraceReader(object):
 
         # no registers were specified, so we'll return *all* registers
         if reg_names is None:
-            reg_names = self.arch.REGISTERS.copy()
+            reg_names = self.arch.REGISTERS_MAIN.copy()
 
         #
         # if the query matches the cached (most recently acces)
@@ -1696,7 +1696,7 @@ class TraceReader(object):
 
         # sanity checks
         for reg_name in target_registers:
-            if not reg_name in self.arch.REGISTERS:
+            if not reg_name in self.arch.REGISTERS_MAIN:
                 output_registers[reg_name] = 0
             
 

@@ -57,8 +57,9 @@ class DebugLevel:
     DEBUG = 2
 
 
-BAD_OPERANDS_X86_64 = [".*pl", ".*il", ".*z", ".*h", ".*w"]
+BAD_OPERANDS_X86_64 = []
 BAD_OPERANDS_ARM = []
+
 ID_COUNTER = alt_count()
 VAR_COUNTER = alt_count()
 
@@ -837,8 +838,6 @@ class Runner:
         return self.engine.get_ea()
     
     def register_operations(self, operation: Operation):
-        if operation is None:
-            return
         idx = self.operation_executed_count.value
         if operation is None:
             cinsn = self.engine.get_currrent_instruction_disass()
@@ -940,9 +939,13 @@ class Runner:
 
                 if operand.type in [X86_OP_REG, ARM_OP_REG]:
                     # update the parent register
-                    register_name = get_parent_register(self.arch, get_reg_name(self.cs, operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
-                    register_value = self.engine.read_reg(register_name.upper())
-                    self.registers_state.register_item(register_name, idx, register_value)
+                    try:
+                        register_name = get_reg_name(self.cs, operand.reg)
+                        register_name = get_parent_register(self.arch, get_reg_name(self.cs, operand.reg), self.CONFIG["BINARY_ARCH_SIZE"])
+                        register_value = self.engine.read_reg(register_name.upper())
+                        self.registers_state.register_item(register_name, idx, register_value)
+                    except KeyError:
+                        logger.error(f"Failed to read {register_name}")
 
                 elif operand.type in [X86_OP_MEM, ARM_OP_MEM]:
                     address = operation.mem_access

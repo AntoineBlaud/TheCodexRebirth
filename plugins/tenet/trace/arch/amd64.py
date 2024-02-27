@@ -5,6 +5,7 @@ class ArchAMD64:
     MAGIC = 0x41424344
 
     POINTER_SIZE = 8
+    MAX_INT_VALUE = 0xFFFFFFFFFFFFFFFF
 
     IP = "RIP"
     SP = "RSP"
@@ -15,6 +16,7 @@ class ArchAMD64:
 
     REGISTERS = \
     [
+
         "RAX",
         "RBX",
         "RCX",

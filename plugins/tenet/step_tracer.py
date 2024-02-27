@@ -165,7 +165,7 @@ class StepTracerController(object):
         return mem_access
 
     def add_trace_entry(self):
-        PTR_SIZE = 8
+        PTR_SIZE = self.arch.POINTER_SIZE
         cacheBuffer = self.model.tempDataBuffer
         dumpSize = self.model.dumpSize
 
@@ -175,6 +175,9 @@ class StepTracerController(object):
         def read_memory_and_append_entry(reg_value):
             try:
                 if not self.dctx.is_mapped(reg_value):
+                    return
+                # check value is lower than INT_MAX
+                if self.arch.MAX_INT_VALUE < reg_value:
                     return
             except:
                 return
@@ -189,7 +192,7 @@ class StepTracerController(object):
             cacheBuffer[reg_value] = mem_value
 
         new_entry = []
-        for reg in self.arch.REGISTERS:
+        for reg in self.arch.REGISTERS_MAIN:
             reg_value = self.dctx.get_reg_value(reg)
             if reg_value == cacheBuffer.get(reg, None):
                 continue
@@ -197,7 +200,7 @@ class StepTracerController(object):
             cacheBuffer[reg] = reg_value
 
         # for each register, read 5 memory values before and after
-        for reg in self.arch.REGISTERS:
+        for reg in self.arch.REGISTERS_MAIN:
             v = self.dctx.get_reg_value(reg)
             reg_value = v + v % 8
             saved_reg_value = reg_value
@@ -255,6 +258,7 @@ class StepTracerController(object):
         if ea == prev_ea:
             next_insn = ea + self.dctx.get_item_size(ea)
             self.dctx.set_breakpoint(next_insn)
+            self.dctx.delete_breakpoint(ea)
             self.dctx.continue_process()
             self.log(f"Skipping instruction at {hex(ea)}")
 

@@ -5,6 +5,7 @@ class ArchX86:
     MAGIC = 0x386
 
     POINTER_SIZE = 4
+    MAX_INT_VALUE = 0xFFFFFFFF
 
     IP = "EIP"
     SP = "ESP"

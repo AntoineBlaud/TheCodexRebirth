@@ -5,6 +5,7 @@ class ArchARM64:
     MAGIC = 0x42424242
 
     POINTER_SIZE = 8
+    MAX_INT_VALUE = 0xFFFFFFFFFFFFFFFF
 
     IP = "PC"
     SP = "SP"
