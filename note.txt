@@ -1,0 +1,30 @@
+z3 to str slow 
+read_memory 
+read reg from reader slow 
+16500 trace -> 20 sec
+50000 trace -> 150 sec
+
+
+100 step in local debug
+between 6 and 40  step /sec in remote debug
+ARM_REGTRACK_MAX_XREFS   = 33072  // max number of xrefs
+disable analysis (thinking)
+
+ultimap -> loop
+           some functions, like movement or others
+
+step tracer on discovered functions, search strings
+
+strings deobfuscatiion
+           
+net protocol, how data is obfuscated
+
+how data is sent to net stack
+
+
+
+essayer step gdb clash of clans (android)
+
+/optimize single steeping
+use hardware breakpoints
+disable analysis (thinking)

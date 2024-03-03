@@ -1,9 +1,0 @@
-{
-    "rootfs_path": "<YOUR_PATH>/rootfs/",
-    "log_plain": true,
-    "debug_level": 1,
-    "openai_key": "Currently unnecessary,
-    "timeout" : 1000,
-    "similarity_factor": 0.65,
-    "symbolic_check": false
-}

@@ -1,0 +1,2 @@
+import gc
+for e in gc.get_objects(): e.core.unload() if isinstance(e,tenet.integration.ida_loader.TenetIDAPlugin) else None
