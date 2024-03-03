@@ -5,9 +5,7 @@
 
 The CodexRebirth project seeks to revolutionize the process of reverse engineering by introducing a Taint Analysis approach specifically designed to simplify the unraveling of **obfuscated methods**. This method involves a comprehensive examination of all assembly instructions, tainting every memory address and register in the process. Subsequently, when an instruction relies on a tainted register, memory, or a result derived from these tainted elements, it will execute the operation and update the associated equations. This approach enables the user to easily trace the progression of equations and values, pinpointing the instruction responsible for any value change. Furthermore, the ability to color-code instructions based on their 'taint_id' or 'block similarity' adds an additional layer of clarity to the analysis.
 
-With the assistance of the IDA plugin, program segments are seamlessly mapped into qiling, providing an exact replica of the program in memory. Additionally, the plugin automatically configures registers and memory to their initial values at the start of the function being analyzed, streamlining the reverse engineering process.
-
-*Big Thanks to Markus Gaasedelen (@gaasedelen) because I used his Tenet IDA plugin as a base for mine*
+*Big Thanks to Markus Gaasedelen (@gaasedelen) because I used his Tenet IDA plugin as a base for mine,  I also took a part of the code from the frinet project.*
 
 !["IDA plugin"](./doc/imgs/plugin.gif)
 
@@ -29,6 +27,15 @@ Then backward propagation can be represented as a tree. On same line are represe
 
 ![Alt text](doc/imgs/backward.png)
 
+## Features
+
+- **Step Tracer**: The step tracer is a standalone tool that can be used to trace the execution of a program. It can be used to any program that can be debugged with IDA. The step tracer is able to trace the execution of a program and generate a trace file that can be imported into CodexRebirth. While, we can think that step tracing is to slow and not efficient, it has the advantage to be able to exit code loops, so even a very large program can be traced. When investigating on a trace, displaying the all the hits of a loop is not necessary, so the step tracer is a good compromise between performance and efficiency.
+
+![Alt text](doc/imgs/step_tracer.png)
+
+- **Ultimap**: Ultimap is a powerful  tool designed to assist users in pinpointing specific actions within a program, such as jumping in a video game. It operates by setting breakpoints on functions that have been pre-defined or exported by the user. When a breakpoint is triggered during program execution, Ultimap records pertinent data, allowing for precise analysis and tracking of the desired action.
+
+![Alt text](doc/imgs/ultimap.png)
 
 
 ## Installation
@@ -38,64 +45,40 @@ Then backward propagation can be represented as a tree. On same line are represe
 - After python 3.8 is installed, you need run idapyswitch to python 3.8.10, then install setuptools and wheel.
 - After that, you can install the CodexRebirth plugin by using python 3.8.10 binary full path (*ex: C:\Users\antoi\AppData\Local\Programs\Python\Python38\python.exe*)
 
-Edit configuration template file **codexrebirth_config.json.template**, set rootfs path to your qiling rootfs path (ex: *C:/your_path/qiling/rootfs*), and rename it to *codexrebirth_config.json*.
-
-Command line installation for the CodexRebirth library:
+- Install required python packages by running the following command:
 ```bash
-python-ida=C:\Users\antoi\AppData\Local\Programs\Python\Python38\python.exe
-git clone git@github.com:AntoineBlaud/TheCodexRebirth.git
-cd TheCodexRebirth/src
-python-ida setup.py sdist bdist_wheel 
-python-ida -pip install . 
+python -m pip install -r requirements.txt
 ```
-Then copy config file **codexrebirth_config.json** and **src/ida_codexrebirth.py** and to your IDA plugins folder (ex: *C:\Program Files\IDA 7.6\plugins*)
+
+
+Then copy the content of the 'plugin' folder into the IDA plugin folder.(ex: *C:\Program Files\IDA 7.6\plugins*)
 
 
 ## Basic Usage
 
 - Open the IDA database of the program to analyze.
-- Start debugging mode and stop the execution of the program at the beginning of the function to analyze.
-- Specify an optional end address for the analysis or modify the default timeout value configured in the CodexRebirth settings
-- Open the CodexRebirth context menu and select **Run Symbolic Execution**.
-- Wait for the analysis to finish.
+- Use step tracing to register the instructions and their results.
+- Import the trace file into CodexRebirth.
 - Explore by using mouse wheel while hovering the timeline, or by using previous/next buttons or shortcuts.
-
-## Advanced Usage Insights
-
-- The advanced features of CodexRebirth introduce a powerful capability known as "synchronize variable." This feature enables the synchronization of stack and heap variables with registers, simplifying the task of tracking assembly variables. 
-
-    For instance, consider the following assembly code snippet:
-
-    ```asm
-    mov     rax, [rbp+var_1D0]
-    mov     eax, [rax]
-    ```
-
-    Through CodexRebirth's advanced usage, this code transformation occurs:
-
-    ```asm
-    rax_var_1D0 = rax       ; rax = rax_var_1D0
-    mov     rax_var_1D0, [rbp+var_1D0]
-    mov     eax, [rax_var_1D0]
-    ```
-
-    By employing this synchronization feature, CodexRebirth significantly enhances your ability to manage and understand assembly variables, making the reverse engineering process more efficient and intuitive.
-
-- CodexRebirth further enhances the reverse engineering experience by providing a feature that allows users to navigate from a specific instruction to its subsequent or preceding occurrences. This capability facilitates a quick and insightful understanding of an instruction's purpose and functionality.
-
 
 
 ## Key Usage Considerations
 
 - It's important to note that CodexRebirth currently only implements a partial set of instructions. You are encouraged to contribute by creating an issue or a pull request to expand this list.
 
-- While the analysis of operations is robust, it may not be flawless. For debugging and verification purposes, CodexRebirth provides a valuable parameter: **symbolic_check**. When enabled (set to True), this feature cross-checks the results produced by the Symbolic Engine against those generated by Qiling. If any disparities are detected, the relevant instruction will be highlighted in red within the trace view.
+- When debugging a program, you can do the following things to improve the performance:
+    - set optimize single stepping in the debugger options.
+    - set use hardware breakpoints in the debugger options.
+    - disable analysis (thinking) when the debugger is attached.
+    - set 'ARM_REGTRACK_MAX_XREFS' to 33072 in the ida.cfg file to avoid the 'too many xrefs' error.
+
+- While the analysis of operations is robust, it may not be flawless. For debugging and verification purposes, CodexRebirth provides a valuable parameter: **symbolic_check**. When enabled (set to True), this feature cross-checks the results produced by the Symbolic Engine.
 
 ## Performance Insights
 
-The execution speed of CodexRebirth typically ranges between 500 and 1500 instructions per second. However, it's important to note that enabling the **symbolic_check** parameter can significantly impact performance. It's recommended to disable this feature if achieving a precise equation result is not your primary concern.
+The execution speed of The Step tracer is about 100 instructions per second on a local machine, and about 35 instructions per second for a remote machine via adb. However, the particularity of the step tracer is to exit code loops, so the number of instructions per second is not representative of the real performance of the tracer. 
 
-Furthermore, it's worth considering that the choice between running Windows or Linux binaries can influence the performance, and Qiling's loading time on Windows systems is notably slower, which will extend the analysis initiation process.
+After registering a trace, the performance of the plugin is highly dependent on the number of instructions and the complexity of the program. The plugin is capable of handling a trace of 16,500 instructions in less than 20 seconds, and a trace of 50,000 instructions in less than 2.5 minute. However, the performance will degrade as the number of instructions increases. The main cause is the bad performance of z3 when transforming into string the equations of the variables. The other causes is a slow performances of the tenet plugin when reading memory and registers values, because it highlights the size of the data as a factor influencing the performance of reading.
 
 *These performance metrics were obtained using Python 3.8 on a CPU Ryzen 5900HX with a clock speed ranging from 3.3GHz to 4.6GHz.*
 
@@ -110,19 +93,5 @@ Furthermore, it's worth considering that the choice between running Windows or L
 - Print the equation of the current instruction in the output window.
 
 
-## What's Next ? 
-
-The current version of the tool operates through a single function, which requires manual initiation. Our next objective is to develop a tool that can seamlessly attach to the process and automatically initiate the analysis of all program functions.
-
-
-- Leveraging Dynamic Binary Instrumentation to optimize the performance of the tracing engine.
-- Refactoring the backend in C/C++ or Rust to boost the efficiency of the plugin.
-- Exploring methods for the straightforward implementation of new instructions, or identifying existing projects that align with our operational model.
-- Introducing new visual views to provide better insights, such as:
-    - taint tree view.
-    - call graph presented in a directory/subdirectory structure with well-organized functions and the ability to group call sequences.
-    - block graph that mirrors the structure of the call graph.
-    - memory view with segment selection, a preview of memory read and write operations, and a timeline for navigating memory data.
-    - string view capable of searching across the entire timeline for strings and presenting them in a user-friendly list
 
 
