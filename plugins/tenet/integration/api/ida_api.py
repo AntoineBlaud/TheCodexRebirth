@@ -450,7 +450,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         elif isinstance(arch, ArchARM):
             ks = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
         elif isinstance(arch, ArchARM64):
-            ks = Ks(KS_ARCH_ARM64, KS_MODE_ARM)
+            ks = Ks(KS_ARCH_ARM64, KS_MODE_LITTLE_ENDIAN)
         if ks is None:
             return None
         ks.detail = True

@@ -384,7 +384,7 @@ class StepTracerController(object):
                 self.log("Watcher reached")
                 return
 
-            if self.model.counter % 1000 == 0:
+            if self.model.counter % 3000 == 0 and self.model.counter != 0:
                 self.save_trace()
 
             self.step_loop()

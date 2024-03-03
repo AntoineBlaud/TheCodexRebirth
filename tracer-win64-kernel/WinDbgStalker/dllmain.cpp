@@ -928,7 +928,7 @@ VOID Run(HANDLE hCurrentProcess, HANDLE hCurrentThread, ULONG dwCurrentPc, ULONG
 	}
 	int counter = 0;
 	// run until breakpoint hit (fn start)
-	m_ExtControl4->SetExecutionStatus(DEBUG_STATUS_GO);
+	//m_ExtControl4->SetExecutionStatus(DEBUG_STATUS_GO);
 	m_ExtControl4->WaitForEvent(0, INFINITE);
 	while (elapsed_time / 1000.0 < max_running_time)
 	{
