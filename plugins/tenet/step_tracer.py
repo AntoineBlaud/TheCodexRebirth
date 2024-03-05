@@ -116,13 +116,11 @@ class StepTracerController(object):
     def delete_breakpoint(self, ea):
         if ea in self.model.breakpoints:
             del self.model.breakpoints[ea]
-        self.log(f"Delete breakpoint at {hex(ea)}")
         self.dctx.delete_breakpoint(ea)
 
     def set_breakpoint(self, ea):
         if ea not in self.model.breakpoints:
             self.model.breakpoints[ea] = True
-        self.log(f"Set breakpoint at {hex(ea)}")
         self.dctx.set_breakpoint(ea)
 
     def stop(self):
@@ -245,8 +243,8 @@ class StepTracerController(object):
 
         # add bp to next instruction, then we continue the process if
         # we are in a library the next instruction
-        insn = self.dctx.print_insn_mnem(ea)
-        if insn == self.arch.CALL_INSTRUCTION:
+        nmemonic = self.dctx.print_insn_mnem(ea)
+        if nmemonic.startswith(self.arch.CALL_INSTRUCTION):
             next_insn = ea + self.dctx.get_item_size(ea)
             self.dctx.set_breakpoint(next_insn)
 
