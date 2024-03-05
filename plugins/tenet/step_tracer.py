@@ -95,18 +95,19 @@ class StepTracerController(object):
 
 
     def get_jump_target(self, ea):
-        insn = self.dctx.print_insn_mnem(ea)
-        if insn is None:
+        mnemonic = self.dctx.print_insn_mnem(ea)
+        if mnemonic is None:
             if random.randint(0, self.model.resetSegmentInc) == 0:
                 self.dctx.reset_code_segment(ea, hard=False)
                 self.dctx.create_insn(ea)
-                insn = self.dctx.print_insn_mnem(ea)
-                if insn is None:
+                mnemonic = self.dctx.print_insn_mnem(ea)
+                if mnemonic is None:
                     print("Cannot create instruction at %x" % ea)
                     return None
         if (
-            insn.startswith(self.arch.COND_JUMP_INSTRUCTION)
-            and insn != self.arch.JUMP_INSTRUCTION
+            mnemonic.startswith(self.arch.COND_JUMP_INSTRUCTION)
+            and mnemonic != self.arch.JUMP_INSTRUCTION
+            and not mnemonic.startswith("bic")
         ):
             j_target_address = self.dctx.get_operand_value(ea, 0)
             return j_target_address if j_target_address != 0 else None
@@ -257,14 +258,15 @@ class StepTracerController(object):
 
         if ea == prev_ea:
             next_insn = ea + self.dctx.get_item_size(ea)
-            self.dctx.set_breakpoint(next_insn)
-            self.dctx.delete_breakpoint(ea)
+            self.set_breakpoint(next_insn)
+            self.delete_breakpoint(ea)
             self.dctx.continue_process()
             self.log(f"Skipping instruction at {hex(ea)}")
 
 
     def step_loop(self):
         ea = self.ea
+        self.delete_breakpoint(self.ea)
         if random.randint(0, self.model.resetSegmentInc) == 0:
             self.dctx.reset_code_segment(ea, hard=True)
         # Already skipped loop are stored in skipped dict
@@ -273,7 +275,6 @@ class StepTracerController(object):
         if ea in self.model.loopAlreadySkipped:
             self.log(f"Already skipped loop at {hex(ea)}")
             self.dctx.continue_process()
-            self.delete_breakpoint(self.ea)
             return
 
         # Check if the current instruction is a jump (conditional)
@@ -281,7 +282,6 @@ class StepTracerController(object):
         if (
             j_target_address is not None
             and ea not in self.model.currentJumps
-            and ea not in self.model.loopAlreadySkipped
         ):
             j_next = ea + self.dctx.get_item_size(ea)
             # store current j address, target address and next address
@@ -303,7 +303,6 @@ class StepTracerController(object):
             if ea == j.j_next:
                 self.log(f"Disable j_next {hex(j.j_next)}")
                 j.j_next = None
-                self.delete_breakpoint(ea)
                 if j.j_target == None:
                     j.enabled = False
 
@@ -311,7 +310,6 @@ class StepTracerController(object):
             if ea == j.j_target:
                 self.log(f"Disable j_target {hex(j.j_target)}")
                 j.j_target = None
-                self.delete_breakpoint(ea)
                 if j.j_next == None:
                     j.enabled = False
 
@@ -320,15 +318,14 @@ class StepTracerController(object):
         if ea in self.model.currentJumps:
             if self.model.currentJumps[ea].enabled:
                 self.model.loopCounts[ea] += 1
-                # if loop counter is greater than MAX_INSTRUCTIONS, we found a loop
-                # we continue the process until we are stopped by a breakpoint
-                if self.model.loopCounts[ea] > self.model.maxStepInsideLoop:
-                    self.log("Loop found, skipping")
-                    self.dctx.continue_process()
-                    self.delete_breakpoint(self.ea)
-                    self.model.currentJumps.clear()
-                    self.model.loopAlreadySkipped[ea] = True
-                    return
+            # if loop counter is greater than MAX_INSTRUCTIONS, we found a loop
+            # we continue the process until we are stopped by a breakpoint
+            if self.model.loopCounts[ea] >= self.model.maxStepInsideLoop:
+                self.log("Loop found, skipping")
+                self.dctx.continue_process()
+                self.model.currentJumps.clear()
+                self.model.loopAlreadySkipped[ea] = True
+                return
 
         # step into the next instruction
         self.dctx.step_into()
