@@ -194,8 +194,9 @@ class DisasmContext:
                 
     def get_root_filename(self):
         f_name = gdb.current_progspace().filename
-        if not f_name:
+        if f_name is None:
             return "unknown"
+        return f_name
         
     def generate_disasm_line(self, ea):
         insn = self.get_instruction(ea)
