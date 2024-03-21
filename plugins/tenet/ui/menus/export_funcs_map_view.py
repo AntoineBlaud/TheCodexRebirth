@@ -159,8 +159,6 @@ class ExportFuncsMenuView(QMainWindow):
         with open(file_path, "w") as f:
             for i, function in enumerate(selected_functions):
                 f.write(function + "\n")
-                if i > 900:
-                    show_msgbox("Too many functions, limit to 900", "Export Functions - Error")
         # close the window
         self.close()
         
