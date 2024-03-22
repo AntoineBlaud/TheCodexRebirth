@@ -100,8 +100,7 @@ class UltimapController(object):
                 self.model.offsetsFunctions[offset] = name
                 counter += 1
                 if counter > 1100:
-                    show_msgbox("Too many imported functions, limit to 1100", "StepTracer - Error")
-                    break
+                    show_msgbox("The number of imported functions is too high. This may cause performance issues", "Warning")
         self.set_bp_on_imported_functions(self.model.importedFunctions)
         return True
     
