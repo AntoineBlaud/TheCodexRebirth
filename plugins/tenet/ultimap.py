@@ -91,6 +91,7 @@ class UltimapController(object):
         # read imported functions
         with open(self.model.importedFunctionsFilePath, "r") as f:
             data = f.read().splitlines()
+            warning_shown = False
             counter = 0
             for line in data:
                 line = line.strip()
@@ -99,7 +100,8 @@ class UltimapController(object):
                 self.model.importedFunctions[name] = offset
                 self.model.offsetsFunctions[offset] = name
                 counter += 1
-                if counter > 1100:
+                if counter > 1100 and not warning_shown:
+                    warning_shown = True
                     show_msgbox("The number of imported functions is too high. This may cause performance issues", "Warning")
         self.set_bp_on_imported_functions(self.model.importedFunctions)
         return True

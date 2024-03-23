@@ -90,7 +90,10 @@ After registering a trace, the performance of the plugin is highly dependent on 
 
 ## Maybe Future Work
 
+- Switch to a more efficient ast and re-enable the equation 
 - Print the equation of the current instruction in the output window.
+- Read children and parent reg from engines. Ex W8 -> X8 & 0xFFFFFFFF
+- refactor everything and imrprove taint engines instructions coverage and implementation.
 
 
 

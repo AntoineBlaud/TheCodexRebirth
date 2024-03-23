@@ -151,6 +151,13 @@ class VariableStates(dict):
     def update(self, key, value):
         global SYM_REGISTER_FACTORY
         _object = self[key]
+        
+        # fix error if a SymReg has been set to a mem
+        if key not in SYM_REGISTER_FACTORY:
+            copy = _object
+            _object = SymMemory(key, 0)
+            _object.update(_object)
+            self[key] = _object
         # update depend register parts 
         # ex: rax -> [rax, eax, ax, ah, al]
         if isinstance(_object, SymRegister):
@@ -451,6 +458,32 @@ class OperationArm_AArch64(OperationAbstract):
     def _str(self, operation, symbolic_taint_store, mem_access):
         symbolic_taint_store.update(mem_access, operation.v_op1)
         return symbolic_taint_store[mem_access]
+        
+    def _ldp(self, operation, symbolic_taint_store, mem_access):
+        register_name_op1 = get_reg_name(self.cs, operation.op1.reg)
+        symbolic_taint_store.update(register_name_op1, symbolic_taint_store[mem_access])
+        
+        byte_size = self.config["BINARY_ARCH_SIZE"] // 8
+        next_mem_access = mem_access + byte_size
+        
+        if next_mem_access not in symbolic_taint_store:
+            symbolic_taint_store.create_sym_mem(next_mem_access, self.engine.read_memory_int(next_mem_access))
+            
+        register_name_op2 = get_reg_name(self.cs, operation.op2.reg)
+        symbolic_taint_store.update(register_name_op2, symbolic_taint_store[next_mem_access])
+        
+        
+    def _stp(self, operation, symbolic_taint_store, mem_access):
+        symbolic_taint_store.update(mem_access, operation.v_op1)
+        
+        byte_size = self.config["BINARY_ARCH_SIZE"] // 8
+        next_mem_access = mem_access + byte_size
+        
+        if next_mem_access not in symbolic_taint_store:
+            symbolic_taint_store.create_sym_mem(next_mem_access, self.engine.read_memory_int(next_mem_access))
+            
+        symbolic_taint_store.update(mem_access + byte_size, operation.v_op2)
+
     
     def _stmia(operation, symbolic_taint_store, mem_access):
         logger.error("Operation._stmia() must be implemented in a subclass")
@@ -563,9 +596,13 @@ class OperationArm_AArch64(OperationAbstract):
         cinsn = self.operation.cinsn
         mnemonic = cinsn.mnemonic
 
-        if mnemonic in ["ldr", "ldp", "mov"]:
+        if mnemonic in ["ldr", "mov"]:
             return self._mov(self.operation, self.symbolic_taint_store, self.mem_access)
-        elif mnemonic in ["str", "stp"]:
+        elif mnemonic in ["stp"]:
+            return self._stp(self.operation, self.symbolic_taint_store, self.mem_access)
+        elif mnemonic in ["ldp"]:
+            return self._ldp(self.operation, self.symbolic_taint_store, self.mem_access)
+        elif mnemonic in ["str"]:
             return self._str(self.operation, self.symbolic_taint_store, self.mem_access)
         elif mnemonic in ["add", "adds"]:
             return self._add(self.operation, self.symbolic_taint_store)
@@ -681,7 +718,7 @@ class OperationEngine:
                     setattr(
                         operation,
                         f"v_op{i+1}",
-                        RealValue(self.engine.read_reg(regname.upper())),
+                        SymValue(regname)
                     )
             # Process IMM operands
             elif operand.type == self.op_imm_type:
@@ -693,7 +730,12 @@ class OperationEngine:
                     symbolic_taint_store.create_sym_mem(mem_access, self.engine.read_memory_int(mem_access))    
                 setattr(operation, f"v_op{i+1}", symbolic_taint_store[mem_access])
 
-            assert getattr(operation, f"v_op{i+1}") is not None
+                
+            else:
+                logger.error(f"Operand type {operand.type} not supported")
+                continue
+
+            #assert getattr(operation, f"v_op{i+1}") is not None
 
         #
         # Parse real values of the operands
@@ -720,15 +762,15 @@ class OperationEngine:
 
         var_size = z3_ast_size(tainted_var_value.value)
         # count sub variables inside the value
-        sub_var_count = str(tainted_var_value).count("VAR_")
+        #sub_var_count = str(tainted_var_value).count("VAR_")
         # if not, then we didn't updated yet, so we create a new varname and assign it to the tainted_var_value
-        if var_size > self.config["MAX_VAR_OPERANDS"] * (sub_var_count + 1):
+        if var_size > self.config["MAX_VAR_OPERANDS"]:
             new_var = f"VAR_{next(VAR_COUNTER):06d}"
             new_value = SymValue(new_var)
             new_value.id = set(tainted_var_value.id)
             symbolic_taint_store[new_var] = tainted_var_value.clone()
             symbolic_taint_store.update(tainted_var_name, new_value)
-            logger.info(f"Substituting {symbolic_taint_store[new_var]} to {new_var}")
+            #logger.info(f"Substituting {symbolic_taint_store[new_var]} to {new_var}")
 
     def compute_mem_access(self, cinsn):
         mem_access = 0
@@ -738,7 +780,10 @@ class OperationEngine:
                     mem_access += self.engine.read_reg(get_reg_name(self.cs, op.mem.base)) if op.mem.base != 0 else 0
                     mem_access += self.engine.read_reg(get_reg_name(self.cs, op.mem.index)) if op.mem.index != 0 else 0
                     mem_access += op.mem.disp
-                    mem_access *= op.mem.scale if op.mem.scale > 1 else 1
+                    try:
+                        mem_access *= op.mem.scale if op.mem.scale > 1 else 1
+                    except AttributeError:
+                        pass
 
         except Exception as e:
             raise e
@@ -778,7 +823,6 @@ class OperationEngine:
         # Parse operands do a lot of things, like creating symbolic values, fetching values from memory
         # All the results are stored in the Operation object (v_op1, v_op2, v_op3)
         operation = self.parse_operation_operands(cinsn, mem_access, symbolic_taint_store)
-        print(operation)
         # Compute the result of the operation
         if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
             OPClass = OperationX86_64
@@ -796,9 +840,9 @@ class OperationEngine:
                 symbolic_taint_store)
         
         operation.v_result = op_engine.process()
-        print(hex(cinsn_addr), operation)
+        print(hex(cinsn_addr), cinsn.mnemonic, cinsn.op_str)
         # Update variables in symbolic_taint_store
-        self.make_var_substitutions(symbolic_taint_store, op_engine.tainted_var_name)
+        #self.make_var_substitutions(symbolic_taint_store, op_engine.tainted_var_name)
         return operation.clone()
 
 
@@ -836,6 +880,7 @@ class Runner:
 
     def get_current_pc(self):
         return self.engine.get_ea()
+    
     
     def register_operations(self, operation: Operation):
         idx = self.operation_executed_count.value

@@ -104,14 +104,18 @@ class StepTracerController(object):
                 if mnemonic is None:
                     print("Cannot create instruction at %x" % ea)
                     return None
+        j_target_address = None
         if (
             mnemonic.startswith(self.arch.COND_JUMP_INSTRUCTION)
             and mnemonic != self.arch.JUMP_INSTRUCTION
             and not mnemonic.startswith("bic")
         ):
             j_target_address = self.dctx.get_operand_value(ea, 0)
-            return j_target_address if j_target_address != 0 else None
-        return None
+            
+        elif mnemonic.startswith("cbz") or mnemonic.startswith("cbnz"):
+            j_target_address = self.dctx.get_operand_value(ea, 1)
+            
+        return j_target_address if j_target_address != 0 else None
 
     def delete_breakpoint(self, ea):
         if ea in self.model.breakpoints:

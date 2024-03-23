@@ -103,6 +103,11 @@ class TextEngine(EngineWrapper):
             return int.from_bytes(memory.data, byteorder="big")
     
     def read_reg(self, regname):
+        regname = regname.upper()
+        if regname == "X29":
+            regname = "FP"
+        if regname == "X30":
+            regname = "LR"
         try:
             return self.reader.get_register(regname, self.idx)
         except ValueError:

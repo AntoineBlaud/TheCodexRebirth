@@ -261,11 +261,16 @@ class StepTracer(gdb.Command):
 
     def get_jump_target(self, ea):
         mnemonic = self.dctx.print_insn_mnemonic(ea)
+        j_target_address = None
+        
         if (mnemonic.startswith(COND_JUMP_INSTRUCTION[self.arch]) and 
             mnemonic != JUMP_INSTRUCTION[self.arch] and not mnemonic.startswith("bic")):
             j_target_address = self.dctx.get_operand_value(ea, 0)
-            return j_target_address if j_target_address != 0 else None
-        return None
+            
+        elif mnemonic.startswith("cbz") or mnemonic.startswith("cbnz"):
+            j_target_address = self.dctx.get_operand_value(ea, 1)
+            
+        return j_target_address if j_target_address != 0 else None
 
     def delete_breakpoint(self, ea):
         if ea in self.model.breakpoints:
