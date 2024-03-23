@@ -463,7 +463,8 @@ class OperationArm_AArch64(OperationAbstract):
         register_name_op1 = get_reg_name(self.cs, operation.op1.reg)
         symbolic_taint_store.update(register_name_op1, symbolic_taint_store[mem_access])
         
-        byte_size = self.config["BINARY_ARCH_SIZE"] // 8
+        reg_name = get_reg_name(self.cs, operation.op1.reg).upper()
+        byte_size = 8 if reg_name.startswith("X") else 4
         next_mem_access = mem_access + byte_size
         
         if next_mem_access not in symbolic_taint_store:
@@ -476,7 +477,8 @@ class OperationArm_AArch64(OperationAbstract):
     def _stp(self, operation, symbolic_taint_store, mem_access):
         symbolic_taint_store.update(mem_access, operation.v_op1)
         
-        byte_size = self.config["BINARY_ARCH_SIZE"] // 8
+        reg_name = get_reg_name(self.cs, operation.op1.reg).upper()
+        byte_size = 8 if reg_name.startswith("X") else 4
         next_mem_access = mem_access + byte_size
         
         if next_mem_access not in symbolic_taint_store:

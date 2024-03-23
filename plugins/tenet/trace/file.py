@@ -747,7 +747,6 @@ class TraceFile(object):
         mem_map = self.mem_map
         mem_map_len = len(mem_map)
         mem_addrs = sorted(list(mem_map.keys()))
-        print(pointer_type, mem_addrs)
         self.mem_addrs = array.array(pointer_type, mem_addrs)
         self.mem_masks = array.array('B', [0] * len(mem_addrs))
 
