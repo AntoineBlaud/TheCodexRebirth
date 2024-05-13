@@ -18,13 +18,13 @@ BINARY_MAX_MASK = None
 BINARY_ARCH_SIZE = None
 SYM_REGISTER_FACTORY = None
 ID_COUNTER = None
+DISABLE_Z3 = None
 
-from .debug_profiler import profile
 
 
 def initialize_global(func):
     def wrapper(*args, **kwargs):
-        global BINARY_MAX_MASK, BINARY_ARCH_SIZE, SYM_REGISTER_FACTORY, ID_COUNTER
+        global BINARY_MAX_MASK, BINARY_ARCH_SIZE, SYM_REGISTER_FACTORY, ID_COUNTER, DISABLE_Z3
 
         # we have to create a wrapper to avoid calling getglobal multiple times, it slow down the execution
         def get_config(varname, func):
@@ -40,6 +40,8 @@ def initialize_global(func):
             SYM_REGISTER_FACTORY = get_config("SYM_REGISTER_FACTORY", func)
         if not ID_COUNTER:
             ID_COUNTER = get_config("ID_COUNTER", func)
+        if DISABLE_Z3 is None:
+            DISABLE_Z3 = get_config("DISABLE_Z3", func)
         return func(*args, **kwargs)
 
     return wrapper
@@ -57,10 +59,8 @@ class _SymValue:
     def value(self, new_value):
         self._value = new_value
 
-
-    
     def __repr__(self):
-        # VERY VERY SLOW 
+        # VERY VERY SLOW
         value_str = str(self.value)
         value_str = ustring.reformat_expression(value_str)
         return value_str
@@ -148,6 +148,9 @@ class RealValue:
 
     def __raw_repr__(self) -> str:
         return self.v_wrapper.__repr__()
+
+    # even if the equations are disabled, we need to make the operation
+    # in order to have the taint propagation
 
     def __add__(self, other):
         other = other.clone()
@@ -290,7 +293,7 @@ class SymValue:
 
         if isinstance(target, (SymValue, RealValue)):
             self.id |= target.id
-            
+
         self.__cache_repr = None
 
     def clone(self):
@@ -306,77 +309,89 @@ class SymValue:
         return self.__cache_repr
 
     def __add__(self, other):
-        self.value += other.value
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            self.value += other.value
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def __sub__(self, other):
-        self.value = bitwise_math.binary_subtraction(self.value, other.value)
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            self.value = bitwise_math.binary_subtraction(self.value, other.value)
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def __xor__(self, other):
-        self.value ^= other.value
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            self.value ^= other.value
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def __and__(self, other):
-        self.value &= other.value
-        self.update_infos(other)
+        if not DISABLE_Z3:
+            self.value &= other.value
+            self.update_infos(other)
         return self
 
     def __mul__(self, other):
-        self.value *= other.value
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            self.value *= other.value
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def __or__(self, other):
-        self.value |= other.value
-        self.update_infos(other)
+        if not DISABLE_Z3:
+            self.value |= other.value
+            self.update_infos(other)
         return self
 
     def __div__(self, other):
-        self.value /= other.value
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            self.value /= other.value
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def __rshift__(self, other):
-        self.value >>= other.value
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            self.value >>= other.value
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def __lshift__(self, other):
-        self.value <<= other.value
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            self.value <<= other.value
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def ror(self, other):
-        if isinstance(self.value, int) and isinstance(other.value, int):
-            self.value = bitwise_math.RotateRight(self.value, other.value)
-        else:
-            self.value = RotateRight(self.value, other.value)
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            if isinstance(self.value, int) and isinstance(other.value, int):
+                self.value = bitwise_math.RotateRight(self.value, other.value)
+            else:
+                self.value = RotateRight(self.value, other.value)
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def rol(self, other):
-        if isinstance(self.value, int) and isinstance(other.value, int):
-            self.value = bitwise_math.RotateLeft(self.value, other.value)
-        else:
-            self.value = RotateLeft(self.value, other.value)
-        self.value &= self.binary_mask
+        if not DISABLE_Z3:
+            if isinstance(self.value, int) and isinstance(other.value, int):
+                self.value = bitwise_math.RotateLeft(self.value, other.value)
+            else:
+                self.value = RotateLeft(self.value, other.value)
+            self.value &= self.binary_mask
         self.update_infos(other)
         return self
 
     def _not(self):
-        self.value = ~self.value & self.binary_mask
+        if not DISABLE_Z3:
+            self.value = ~self.value & self.binary_mask
         return self
 
 

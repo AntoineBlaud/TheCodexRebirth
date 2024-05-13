@@ -2,6 +2,7 @@ class ArchARM64:
     """
     ARM CPU Architecture Definition.
     """
+
     MAGIC = 0x42424242
 
     POINTER_SIZE = 8
@@ -13,9 +14,8 @@ class ArchARM64:
     CALL_INSTRUCTION = "bl"
     JUMP_INSTRUCTION = "b"
     COND_JUMP_INSTRUCTION = "b"
-    
-    REGISTERS = \
-    [
+
+    REGISTERS = [
         "X0",
         "X1",
         "X2",
@@ -48,11 +48,10 @@ class ArchARM64:
         "FP",
         "SP",
         "LR",
-        "PC"
+        "PC",
     ]
-    
-    REGISTERS_MAIN = \
-    [
+
+    REGISTERS_MAIN = [
         "X0",
         "X1",
         "X2",
@@ -85,6 +84,5 @@ class ArchARM64:
         "FP",
         "SP",
         "LR",
-        "PC"
+        "PC",
     ]
-    

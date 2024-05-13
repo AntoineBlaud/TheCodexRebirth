@@ -85,4 +85,19 @@ def extract_part_of_str_list(input_list_str, max_len, idx):
         return ", ".join([str(x) for x in result]) + ", ..."
     except Exception as e:
         print(e)
+
         return input_list_str
+
+
+def center(s: str, width) -> str:
+    """
+    Center a string in the console.
+    """
+    return f"|{' '.join([s.center(width-2)])}|\n"
+
+
+def right(s: str, width) -> str:
+    """
+    Right-align a string in the console.
+    """
+    return f"| {' '.join([s.ljust(width-4)])} |\n"

@@ -1,5 +1,6 @@
 import re
 
+
 class OperationSet(list):
     def __init__(self, operation_list):
         super().__init__()

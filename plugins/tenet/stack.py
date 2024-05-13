@@ -4,18 +4,19 @@ from tenet.ui import *
 from tenet.hex import HexController
 from tenet.types import HexType, AuxType
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # stack.py -- Stack Dump Controller
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 #
 #    The purpose of this file is to house the 'headless' components of the
 #    stack dump window and its underlying functionality. This is split into
-#    a model and controller component, of a typical 'MVC' design pattern. 
+#    a model and controller component, of a typical 'MVC' design pattern.
 #
 #    The stack dump window abstracts from a simple hex dump. We use the code
 #    below to configure our underlying hex dump to appear more like a typical
 #    stack view might instead.
 #
+
 
 class StackController(HexController):
     """
@@ -34,7 +35,7 @@ class StackController(HexController):
         self.model.hex_format = HexType.DWORD if reader.arch.POINTER_SIZE == 4 else HexType.QWORD
         self.model.aux_format = AuxType.STACK
         super(StackController, self).attach_reader(reader)
-    
+
     def _idx_changed(self, idx):
         """
         Override the default hex view idx changed event handler.

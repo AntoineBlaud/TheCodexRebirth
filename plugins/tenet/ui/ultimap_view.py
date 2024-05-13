@@ -4,9 +4,9 @@ from PyQt5.QtCore import QDir
 from PyQt5.QtCore import Qt
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize
-import os 
+import os
 import tempfile
-import json 
+import json
 
 
 class UltimapView(QMainWindow):
@@ -22,7 +22,7 @@ class UltimapView(QMainWindow):
         self.setFixedSize(900, 600)
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.WindowCloseButtonHint)
         self.move(QApplication.desktop().screenGeometry().width() - 930, 20)
-        
+
         self.create_layouts()
         self.create_configuration_options()
         self.create_files_options()
@@ -46,7 +46,7 @@ class UltimapView(QMainWindow):
         self.left_layout.addWidget(self.group_box)
         options = [
             ("Run Timeout (sec)", str(self.model.timeout)),
-            ("Module to Trace",  self.controller.dctx.get_root_filename() or "")
+            ("Module to Trace", self.controller.dctx.get_root_filename() or ""),
         ]
         for label_text, input_text in options:
             self.create_options_input(label_text, input_text)
@@ -54,40 +54,40 @@ class UltimapView(QMainWindow):
     def create_options_input(self, label_text, input_text):
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        label.setFont(QFont('Arial', 10))
+        label.setFont(QFont("Arial", 10))
         label.setMaximumHeight(40)
         label.setStyleSheet(
             "background-color: #edebeb;"
-            "color: black;"               # Set text color to white
-            "padding: 10px;"              # Add padding around the label
-            "border-radius: 5px;"         # Add rounded corners
+            "color: black;"  # Set text color to white
+            "padding: 10px;"  # Add padding around the label
+            "border-radius: 5px;"  # Add rounded corners
         )
         input_field = QLineEdit(input_text)
         input_field.setAlignment(Qt.AlignCenter)
-        input_field.setFont(QFont('Arial', 10))
+        input_field.setFont(QFont("Arial", 10))
         input_field.setMaximumHeight(40)
         input_field.setStyleSheet(
             "background-color: #edebeb;"
-            "color: red;"               # Set text color to white
-            "padding: 2px;"              # Add padding around the label
-            "border-radius: 5px;"         # Add rounded corners
+            "color: red;"  # Set text color to white
+            "padding: 2px;"  # Add padding around the label
+            "border-radius: 5px;"  # Add rounded corners
         )
         self.group_box_layout.addWidget(label)
         self.group_box_layout.addWidget(input_field)
-        
+
     def create_files_options(self):
         # Group Box for file options
         file_group_box = QGroupBox("File Options")
         file_group_layout = QVBoxLayout()
-        
+
         # File path label
         self.file_path_label = QLabel("Exported Functions File Path:")
         file_group_layout.addWidget(self.file_path_label)
-        
+
         # File path text box
         self.file_path_text_box = QLineEdit()
         file_group_layout.addWidget(self.file_path_text_box)
-        
+
         # File path selection button
         self.file_path_button = QPushButton("Select File")
         self.file_path_button.clicked.connect(self.select_file)
@@ -97,19 +97,18 @@ class UltimapView(QMainWindow):
         self.save_button = QPushButton("Save Ultimap")
         self.save_button.clicked.connect(self.save)
         file_group_layout.addWidget(self.save_button)
-        
+
         # Load button
         self.load_button = QPushButton("Load Ultimap")
         self.load_button.clicked.connect(self.load)
         file_group_layout.addWidget(self.load_button)
-        
+
         # Set group layout and add to main layout
         file_group_box.setLayout(file_group_layout)
         self.left_layout.addWidget(file_group_box)
 
-
     def create_record_buttons(self):
-      # create grid layout
+        # create grid layout
         self.grid_layout = QtWidgets.QGridLayout()
         for i in range(6):
             self.grid_layout.setColumnMinimumWidth(i, 80)
@@ -126,13 +125,13 @@ class UltimapView(QMainWindow):
     def button_record_context_menu(self, pos):
         button = self.sender()
         menu = QMenu()
-        action = QAction('Rename', self)
+        action = QAction("Rename", self)
         action.triggered.connect(lambda _, button=button: self.rename_record(button))
         menu.addAction(action)
         menu.exec_(button.mapToGlobal(pos))
 
     def rename_record(self, button):
-        text, ok = QLineEdit.getText(self, 'Rename Record', 'Enter new name:')
+        text, ok = QLineEdit.getText(self, "Rename Record", "Enter new name:")
         if ok:
             button.setText(text)
 
@@ -148,7 +147,7 @@ class UltimapView(QMainWindow):
 
     def create_button(self, text, on_click):
         button = QPushButton(text)
-        button.setFont(QFont('Arial', 10))
+        button.setFont(QFont("Arial", 10))
         button.clicked.connect(on_click)
         return button
 
@@ -159,11 +158,11 @@ class UltimapView(QMainWindow):
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFormat(" %p%")
         self.progress_bar.setAlignment(Qt.AlignBottom)
-        self.progress_bar.setStyleSheet("QProgressBar { color: black; border: 1px solid black; border-radius: 3px; height: 10px; }")
+        self.progress_bar.setStyleSheet(
+            "QProgressBar { color: black; border: 1px solid black; border-radius: 3px; height: 10px; }"
+        )
         self.left_layout.addWidget(self.progress_bar)
 
-        
-        
     def _get_root_filename(self):
         try:
             return self.controller.dctx.get_root_filename() or ""
@@ -184,7 +183,6 @@ class UltimapView(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
 
-    
     def _button_record_context_menu(self, pos):
         button = self.sender()
         menu = self._create_context_menu()
@@ -192,29 +190,29 @@ class UltimapView(QMainWindow):
 
     def _create_context_menu(self):
         menu = QMenu(self)
-        action = menu.addAction('Rename')
+        action = menu.addAction("Rename")
         action.triggered.connect(lambda checked, button=self.sender(): self.rename_record(button))
-        action = menu.addAction('Disable Breakpoints')
+        action = menu.addAction("Disable Breakpoints")
         action.triggered.connect(lambda checked, button=self.sender(): self.disable_breakpoint(button))
-        action = menu.addAction('Enable Breakpoints')
+        action = menu.addAction("Enable Breakpoints")
         action.triggered.connect(lambda checked, button=self.sender(): self.enable_breakpoint(button))
         return menu
 
     def rename_record(self, button):
-        text, ok = QInputDialog.getText(self, 'Rename Record', 'Enter new name:')
+        text, ok = QInputDialog.getText(self, "Rename Record", "Enter new name:")
         if ok:
             button.setText(text)
-            
+
     def disable_breakpoint(self, button):
         record_index = self.recording_buttons.index(button)
         self.controller.disable_breakpoints(record_index)
         self.log(f"Disabled breakpoints for record {record_index}")
-        
+
     def enable_breakpoint(self, button):
         record_index = self.recording_buttons.index(button)
         self.controller.enable_breakpoints(record_index)
         self.log(f"Enabled breakpoints for record {record_index}")
-            
+
     def log(self, msg):
         print(f"[Ultimap] {msg}")
 
@@ -247,7 +245,7 @@ class UltimapView(QMainWindow):
             self.record_text.append(f"{k}")
 
     def save(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, 'Save file', QDir.currentPath())
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save file", QDir.currentPath())
         if file_path:
             data_to_save = self._get_input()
             data_to_save["records"] = self.model.records
@@ -255,7 +253,7 @@ class UltimapView(QMainWindow):
                 json.dump(data_to_save, file)
 
     def load(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, 'Open file', QDir.currentPath())
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open file", QDir.currentPath())
         if file_path:
             with open(file_path, "r") as file:
                 data = json.load(file)
@@ -274,7 +272,7 @@ class UltimapView(QMainWindow):
             self.model.reset()
 
     def select_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, 'Open file', QDir.currentPath())
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open file", QDir.currentPath())
         if file_path:
             self.file_path_text_box.setText(file_path)
 
@@ -311,10 +309,6 @@ class UltimapView(QMainWindow):
     def _refresh(self):
         pass  # Placeholder for any refreshing operations
 
-    
-    
-   
-
 
 # class UltimapModel(object):
 #     """
@@ -330,7 +324,7 @@ class UltimapView(QMainWindow):
 #         self.timeout = 5
 #         self.importedFunctionsFilePath = ""
 #         self.reset()
-        
+
 #     def reset(self):
 #         """
 #         Reset the model.
@@ -341,9 +335,7 @@ class UltimapView(QMainWindow):
 #         self.moduleToTrace = ""
 #         self.records = []
 
-    
-        
-        
+
 # # # creat the main window
 # app = QApplication([])
 # # create the controller

@@ -6,9 +6,9 @@ import struct
 import ida_kernwin
 import idaapi
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # hex.py -- Hex Dump Controller
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 #
 #    The purpose of this file is to house the 'headless' components of a
 #    basic hex dump window and its underlying functionality. This is split
@@ -17,6 +17,7 @@ import idaapi
 #    This provides much of the core logic behind both the memory and stack
 #    views used by the plugin.
 #
+
 
 class HexController(object):
     """
@@ -47,7 +48,7 @@ class HexController(object):
             return
 
         # the UI has already been created, and is also visible. nothing to do
-        if (self.dockable and self.dockable.visible):
+        if self.dockable and self.dockable.visible:
             return
 
         #
@@ -66,7 +67,7 @@ class HexController(object):
 
         if self.dockable:
             new_dockable.copy_dock_position(self.dockable)
-        elif (target or position):
+        elif target or position:
             new_dockable.set_dock_position(target, position)
 
         # make the dockable/widget visible
@@ -79,7 +80,7 @@ class HexController(object):
         """
 
         # if there is no view/dockable, then there's nothing to try and hide
-        if not(self.view and self.dockable):
+        if not (self.view and self.dockable):
             return
 
         # hide the dockable, and drop references to the widgets
@@ -125,12 +126,12 @@ class HexController(object):
 
         self.model.address = address
 
-        #self.reset_selection(0)
+        # self.reset_selection(0)
         self.refresh_memory()
         try:
-            ida_kernwin.activate_widget(idaapi.find_widget(self._title),True)
+            ida_kernwin.activate_widget(idaapi.find_widget(self._title), True)
         except:
-            print("Error focusing on window "+self._title)
+            print("Error focusing on window " + self._title)
 
     def set_data_size(self, num_bytes):
         """
@@ -142,7 +143,7 @@ class HexController(object):
     def get_selection(self, start_address, end_address, reverse=False):
         assert end_address > start_address
         if not self.reader:
-            return ''
+            return ""
 
         # fetch memory for the selected region
         num_bytes = end_address - start_address
@@ -151,16 +152,15 @@ class HexController(object):
         # dump bytes to hex
         output = []
         for j in range(num_bytes):
-            i = num_bytes-1-j if reverse else j
+            i = num_bytes - 1 - j if reverse else j
 
             if memory.mask[i] == 0xFF:
                 output.append("%02X" % memory.data[i])
             else:
                 output.append("??")
-                
-        byte_string = ''.join(output)
-        return byte_string
 
+        byte_string = "".join(output)
+        return byte_string
 
     def copy_selection(self, start_address, end_address, reverse=False):
         """
@@ -207,9 +207,9 @@ class HexController(object):
         """
         self.model.fade_address = address
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Callbacks
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _idx_changed(self, idx):
         """
@@ -228,12 +228,12 @@ class HexController(object):
             return
 
         self.view.refresh()
-    
+
     def follow_in_dump(self, stack_address, idx):
         """
         Follow the pointer at a given stack address in the memory dump.
         """
-        POINTER_SIZE = self.pctx.reader.arch.POINTER_SIZE 
+        POINTER_SIZE = self.pctx.reader.arch.POINTER_SIZE
 
         # align the given stack address (which we will read..)
         stack_address &= ~(POINTER_SIZE - 1)
@@ -247,8 +247,8 @@ class HexController(object):
 
         # attempt to carve the data and validity mask from the stack model
         try:
-            data = self.model.data[relative_index:relative_index+POINTER_SIZE]
-            mask = self.model.mask[relative_index:relative_index+POINTER_SIZE]
+            data = self.model.data[relative_index : relative_index + POINTER_SIZE]
+            mask = self.model.mask[relative_index : relative_index + POINTER_SIZE]
         except:
             return False
 
@@ -258,9 +258,10 @@ class HexController(object):
 
         # unpack the carved data as a pointer
         parsed_address = struct.unpack("I" if POINTER_SIZE == 4 else "Q", data)[0]
-        
+
         # navigate the memory dump window to the 'pointer' we carved off the stack
         self.pctx.memories[idx].navigate(parsed_address)
+
 
 class HexModel(object):
     """
@@ -297,9 +298,9 @@ class HexModel(object):
         # pinned memory / breakpoint selections
         self._pinned_selections = []
 
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Properties
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
 
     @property
     def memory_breakpoints(self):
@@ -328,7 +329,7 @@ class HexModel(object):
             raise ValueError("Bytes per line must be a multiple of display format type")
 
         self._num_bytes_per_line = width
-        #self._refresh_view_settings()
+        # self._refresh_view_settings()
 
     @property
     def hex_format(self):
@@ -339,7 +340,7 @@ class HexModel(object):
         if value == self._hex_format:
             return
         self._hex_format = value
-        #self.refresh()
+        # self.refresh()
 
     @property
     def aux_format(self):
@@ -350,6 +351,4 @@ class HexModel(object):
         if value == self._aux_format:
             return
         self._aux_format = value
-        #self.refresh()
-
-    
+        # self.refresh()

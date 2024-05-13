@@ -1,11 +1,10 @@
 import bisect
 import collections
-import idaapi
 from tenet.util.log import pmsg
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # analysis.py -- Trace Analysis
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 #
 #    This file should contain logic to further process, augment, optimize or
 #    annotate Tenet traces when a binary analysis framework such as IDA /
@@ -19,6 +18,7 @@ from tenet.util.log import pmsg
 #    service pointer annotations, and much more.
 #
 
+
 class TraceAnalysis(object):
     """
     A high level, debugger-like interface for querying Tenet traces.
@@ -31,23 +31,26 @@ class TraceAnalysis(object):
         self._unmapped_entry_points = []
         self.slide = None
         self.base = None
-        self._analyze()
+        try:
+            self._analyze()
+        except AttributeError as e:
+            pass
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Public
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def rebase_pointer(self, address):
         """
         Return a rebased version of the given address, if one exists.
         """
         for m1, m2 in self._remapped_regions:
-            #print(f"m1 start: {m1[0]:08X} address: {address:08X} m1 end: {m1[1]:08X}")
-            #print(f"m2 start: {m2[0]:08X} address: {address:08X} m2 end: {m2[1]:08X}")
+            # print(f"m1 start: {m1[0]:08X} address: {address:08X} m1 end: {m1[1]:08X}")
+            # print(f"m2 start: {m2[0]:08X} address: {address:08X} m2 end: {m2[1]:08X}")
             if m1[0] <= address <= m1[1]:
-               return address + (m2[0] - m1[0])
+                return address + (m2[0] - m1[0])
             if m2[0] <= address <= m2[1]:
-               return address - (m2[0] - m1[0])
+                return address - (m2[0] - m1[0])
         return address
 
     def get_prev_mapped_idx(self, idx):
@@ -60,9 +63,9 @@ class TraceAnalysis(object):
         except IndexError:
             return -1
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Analysis
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _analyze(self):
         """
@@ -80,7 +83,8 @@ class TraceAnalysis(object):
         # get *all* of the instruction addresses from disassembler
         instruction_addresses = dctx.get_instruction_addresses()
 
-        if len(instruction_addresses) == 0:return
+        if len(instruction_addresses) == 0:
+            return
 
         #
         # bucket the instruction addresses from the disassembler
@@ -129,7 +133,7 @@ class TraceAnalysis(object):
 
         # convert to set for O(1) lookup in following loop
         instruction_addresses = set(instruction_addresses)
-        
+
         if self._trace.slide is not None:
             slide = self._trace.slide
             print(f"ASLR Slide: {slide:#x} from trace")
@@ -201,7 +205,6 @@ class TraceAnalysis(object):
 
         m1 = [disas_low_address, disas_high_address]
 
-      
         m2 = [m1[0], m1[1]]
         self.slide = slide
         self._remapped_regions.append((m1, m2))
@@ -253,5 +256,5 @@ class TraceAnalysis(object):
                 else:
                     last_good_idx = seg_base + relative_idx
 
-        #print(f" - Unmapped Entry Points: {len(unmapped_entries)}")
+        # print(f" - Unmapped Entry Points: {len(unmapped_entries)}")
         self._unmapped_entry_points = unmapped_entries

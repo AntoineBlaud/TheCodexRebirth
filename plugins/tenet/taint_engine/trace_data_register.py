@@ -41,9 +41,9 @@ class Trace(dict):
     def __repr__(self):
         repr_str = ""
         for addr in self:
-            repr_str += (f"{hex(addr)}:")
+            repr_str += f"{hex(addr)}:"
             for idx in self[addr]:
-                repr_str +=(f"\t{idx}:\n{self[addr][idx]}\n")
+                repr_str += f"\t{idx}:\n{self[addr][idx]}\n"
         return repr_str
 
     def clone(self):
