@@ -9,11 +9,15 @@ import zipfile
 import binascii
 import itertools
 import collections
-import idaapi
+import logging
 
-#-----------------------------------------------------------------------------
+try:
+    import idaapi
+except ImportError:
+    pass
+# -----------------------------------------------------------------------------
 # file.py -- Trace File
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 #
 #    NOTE/PREFACE: Please be aware, this is a 100% prototype implementation
 #    of a basic trace log file specification. It has not been designed with
@@ -21,7 +25,7 @@ import idaapi
 #    exceed the recommended 'maximum' of 10,000,000 (10m) instructions.
 #
 #    There are no dependencies. There is no multiprocessing. This is will
-#    be a nightmare to maintain or scale further. It is 100% meant to be 
+#    be a nightmare to maintain or scale further. It is 100% meant to be
 #    thrown away in favor of a native backend.
 #
 #    --------------
@@ -38,16 +42,16 @@ import idaapi
 #    Upon completion, the indexed+compressed trace file is saved to disk
 #    alongside the original trace, with the '.tt' (Tenet Trace) file
 #    extension. This original trace can be discarded by the user.
-# 
+#
 #    The processed trace can be loaded and used in a fraction of the time
 #    versus the raw text trace. The trace file implementation will also seek
 #    out a matching file name with the '.tt' file extension, and prioritize
 #    loading that over a raw text trace.
 #
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Imports
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 #
 # attempt plugin imports, assuming this file is being run / loaded in
@@ -67,152 +71,163 @@ try:
 
 except ImportError:
     from arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
-    from .types import TraceMemory 
+    from .types import TraceMemory
+
     pmsg = print
 
-#-----------------------------------------------------------------------------
-# Definitions
-#-----------------------------------------------------------------------------
 
-BYTE_MAX   = (1 << 8) - 1
-USHRT_MAX  = (1 << 16) - 1
-UINT_MAX   = (1 << 32) - 1
+logger = logging.getLogger("Tenet.file")
+# -----------------------------------------------------------------------------
+# Definitions
+# -----------------------------------------------------------------------------
+
+BYTE_MAX = (1 << 8) - 1
+USHRT_MAX = (1 << 16) - 1
+UINT_MAX = (1 << 32) - 1
 ULLONG_MAX = (1 << 64) - 1
 
 TRACE_MEM_READ = 0
 TRACE_MEM_WRITE = 1
 
 #
-# NOTE: some of this stuff is probably broken / cannot be easily toggled 
+# NOTE: some of this stuff is probably broken / cannot be easily toggled
 # anymore, so I wouldn't actually suggest playing around with them as things
 # will probably break or behave erratically
 #
 
 TRACE_STATS = False
 
-#DEFAULT_COMPRESSION = zipfile.ZIP_BZIP2
-#DEFAULT_COMPRESSION = zipfile.ZIP_LZMA
+# DEFAULT_COMPRESSION = zipfile.ZIP_BZIP2
+# DEFAULT_COMPRESSION = zipfile.ZIP_LZMA
 DEFAULT_COMPRESSION = zipfile.ZIP_DEFLATED
 
-#DEFAULT_SEGMENT_LENGTH = 250_000
-#DEFAULT_SEGMENT_LENGTH = 1_000_000
-DEFAULT_SEGMENT_LENGTH = USHRT_MAX
+# DEFAULT_SEGMENT_LENGTH = 250_000
+# DEFAULT_SEGMENT_LENGTH = 1_000_000
+
+# Don't go below 65k, otherwrise you will have grave performances issues while loading the trace due to cache 
+# associated with the segment and other stuff. read_reg use fast_cache, but if segment is too short, the reg
+# will not be cached and it will be slow to fetch the reg value.
+DEFAULT_SEGMENT_LENGTH = 1000000
 REG_OFFSET_CACHE_SIZE = 16
 REG_OFFSET_CACHE_INTERVAL = 4096
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Utils
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 def hash_file(filepath):
     """
     Return a CRC32 of the file at the given path.
     """
     crc = 0
-    with open(filepath, 'rb', 65536) as ins:
+    with open(filepath, "rb", 65536) as ins:
         for x in range(int((os.stat(filepath).st_size / 65536)) + 1):
             crc = zlib.crc32(ins.read(65536), crc)
-    return (crc & 0xFFFFFFFF)
+    return crc & 0xFFFFFFFF
+
 
 def number_of_bits_set(n):
     """
     Count the number of bits set
     """
     count = 0
-    while (n):
+    while n:
         count += n & 1
         n >>= 1
     return count
+
 
 def width_from_type(t):
     """
     Return the byte width of a python 'struct' type definition.
     """
-    if t == 'B':
+    if t == "B":
         return 1
-    elif t == 'H':
+    elif t == "H":
         return 2
-    elif t == 'I':
+    elif t == "I":
         return 4
-    elif t == 'Q':
+    elif t == "Q":
         return 8
     raise ValueError(f"Invalid type '{t}'")
+
 
 def type_from_width(width):
     """
     Return an appropriate integer type for the given byte width.
     """
     if width == 1:
-        return 'B'
+        return "B"
     elif width == 2:
-        return 'H'
+        return "H"
     elif width == 4:
-        return 'I'
+        return "I"
     elif width == 8:
-        return 'Q'
+        return "Q"
     raise ValueError(f"Invalid type width {width}")
+
 
 def type_from_limit(limit):
     """
     Return an appropriate integer type for the maximum given value.
     """
     if limit <= BYTE_MAX:
-        return 'B'
+        return "B"
     elif limit <= USHRT_MAX:
-        return 'H'
+        return "H"
     elif limit <= UINT_MAX:
-        return 'I'
+        return "I"
     elif limit <= ULLONG_MAX:
-        return 'Q'
+        return "Q"
     raise ValueError(f"Limit {limit:,} exceeds maximum type")
 
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # Serialization Structures
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 class TraceInfo(ctypes.Structure):
-    _pack_   = 1
+    _pack_ = 1
     _fields_ = [
-        ('arch_magic',      ctypes.c_uint32),
-        ('ip_num',          ctypes.c_uint32),
-        ('mem_addrs_num',   ctypes.c_uint32),
-        ('mask_num',        ctypes.c_uint32),
-        ('mem_idx_width',   ctypes.c_uint8),
-        ('mem_addr_width',  ctypes.c_uint8),
-        ('original_hash',   ctypes.c_uint32),
+        ("arch_magic", ctypes.c_uint32),
+        ("ip_num", ctypes.c_uint32),
+        ("mem_addrs_num", ctypes.c_uint32),
+        ("mask_num", ctypes.c_uint32),
+        ("mem_idx_width", ctypes.c_uint8),
+        ("mem_addr_width", ctypes.c_uint8),
+        ("original_hash", ctypes.c_uint32),
     ]
+
 
 class SegmentInfo(ctypes.Structure):
-    _pack_   = 1
+    _pack_ = 1
     _fields_ = [
-        ('id',                     ctypes.c_uint32),
-        ('base_idx',               ctypes.c_uint32),
-        ('length',                 ctypes.c_uint32),
-
-        ('ip_num',                 ctypes.c_uint32),
-        ('ip_length',              ctypes.c_uint32),
-
-        ('reg_mask_num',           ctypes.c_uint32),
-        ('reg_mask_length',        ctypes.c_uint32),
-        ('reg_data_length',        ctypes.c_uint32),
-
-        ('mem_read_num',           ctypes.c_uint32),
-        ('mem_read_data_length',   ctypes.c_uint32),
-
-        ('mem_write_num',          ctypes.c_uint32),
-        ('mem_write_data_length',  ctypes.c_uint32),
+        ("id", ctypes.c_uint32),
+        ("base_idx", ctypes.c_uint32),
+        ("length", ctypes.c_uint32),
+        ("ip_num", ctypes.c_uint32),
+        ("ip_length", ctypes.c_uint32),
+        ("reg_mask_num", ctypes.c_uint32),
+        ("reg_mask_length", ctypes.c_uint32),
+        ("reg_data_length", ctypes.c_uint32),
+        ("mem_read_num", ctypes.c_uint32),
+        ("mem_read_data_length", ctypes.c_uint32),
+        ("mem_write_num", ctypes.c_uint32),
+        ("mem_write_data_length", ctypes.c_uint32),
     ]
+
 
 class MemValue(ctypes.Structure):
     _pack_ = 1
-    _fields_ = [
-        ('mask', ctypes.c_uint8),
-        ('value', ctypes.c_uint8 * 8)
-    ]
+    _fields_ = [("mask", ctypes.c_uint8), ("value", ctypes.c_uint8 * 8)]
 
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # Trace File
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 class TraceFile(object):
     """
@@ -233,7 +248,6 @@ class TraceFile(object):
 
         # ASLR slide if present in file
         self.slide = None
-        
 
         # a sorted array of all unique PC / IP (eg, EIP, or RIP) that appear in the trace
         self.ip_addrs = None
@@ -247,15 +261,15 @@ class TraceFile(object):
         # where each bit specifies if that memory address was accessed over the
         # course of the entire trace
         #
-        #   e.g: 
+        #   e.g:
         #           mem_addrs[924] = 0x401448 (an 8-byte aligned memory address)
         #           mem_masks[924] = 0x0F     (a 'mask' of what bytes exist in the trace)
         #                             |
         #                             |_ a bit mask of 00001111
-        #   
+        #
         # In this example, we know that 0x401448 --> 0x40144C were either read
         # or written at some point in this trace.
-        # 
+        #
         # The alignment of pointers helps with basic id-based compression as
         # these pointer id / 'mapped addresses' are used across the segments.
         #
@@ -282,8 +296,8 @@ class TraceFile(object):
         # into this table of unique register masks (self.masks)
         #
 
-        self.masks = [] # TODO: rename to register_masks or something...
-        
+        self.masks = []  # TODO: rename to register_masks or something...
+
         # an O(1) lookup table for the 'byte size' of each register mask
         self.mask_sizes = []
 
@@ -292,7 +306,7 @@ class TraceFile(object):
         # theses segments will have small indexes / summaries embedded in
         # them to make them easier to search or ignore as applicable
         #
-        # for more information, look at the TraceSegments class 
+        # for more information, look at the TraceSegments class
         #
 
         self.segments = []
@@ -313,11 +327,12 @@ class TraceFile(object):
 
         self._load_trace()
 
-        
+        # Finalize the searchable memory
+        self.searchable_memory.finalize()
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Properties
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     @property
     def name(self):
@@ -351,10 +366,10 @@ class TraceFile(object):
             return 0
         return self.segments[-1].base_idx + self.segments[-1].length
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Public
-    #-------------------------------------------------------------------------
-    
+    # -------------------------------------------------------------------------
+
     #
     # I should really define this somewhere more notable... but throughout
     # this project you will see the term 'idx', this is a simple abbreviation
@@ -410,24 +425,24 @@ class TraceFile(object):
         """
         reg_id = self.arch.REGISTERS.index(reg_name.upper())
         reg_mask = 1 << reg_id
-        
+
         found = set()
         for i, current_mask in enumerate(self.masks):
             if current_mask & reg_mask:
                 found.add(i)
-        
+
         return found
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Save / Serialization
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _save(self):
         """
         Save the packed trace to disk.
         """
 
-        with zipfile.ZipFile(self.packed_filepath, 'w', compression=DEFAULT_COMPRESSION) as zip_archive:
+        with zipfile.ZipFile(self.packed_filepath, "w", compression=DEFAULT_COMPRESSION) as zip_archive:
             self._save_header(zip_archive)
             self._save_segments(zip_archive)
 
@@ -439,7 +454,7 @@ class TraceFile(object):
         """
 
         # populate the trace header
-        header = TraceInfo() 
+        header = TraceInfo()
         header.arch_magic = self.arch.MAGIC
         header.ip_num = len(self.ip_addrs)
         header.mem_addrs_num = len(self.mem_addrs)
@@ -450,7 +465,7 @@ class TraceFile(object):
         mask_data = (ctypes.c_uint64 * len(self.masks))(*self.masks)
 
         # save the global trace data / header to the zip
-        with zip_archive.open('header', 'w') as f:
+        with zip_archive.open("header", "w") as f:
             f.write(bytearray(header))
             f.write(bytearray(self.ip_addrs))
             f.write(bytearray(self.mem_addrs))
@@ -462,12 +477,12 @@ class TraceFile(object):
         Save the trace segments to the packed trace.
         """
         for segment in self.segments:
-            with zip_archive.open(f'segments/{segment.id}', 'w') as f:
+            with zip_archive.open(f"segments/{segment.id}", "w") as f:
                 segment.dump(f)
-    
-    #-------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
     # Load / Deserialization
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _load_trace(self):
         """
@@ -477,7 +492,7 @@ class TraceFile(object):
         SELECTED RAW TEXT TRACE IF IT FINDS ONE AVAILABLE!!!
         """
 
-        '''Remove packed trace support for now
+        """Remove packed trace support for now
         
         # the user probably selected a '.tt' trace
         if zipfile.is_zipfile(self.filepath):
@@ -501,7 +516,7 @@ class TraceFile(object):
             if packed_crc == text_crc:
                 self._load_packed_trace(self.packed_filepath)
                 return
-        '''
+        """
         #
         # no luck loading / side-loading packed traces, so simply try to
         # load the user selected trace as a normal text Tenet trace
@@ -514,7 +529,7 @@ class TraceFile(object):
         Load a packed trace from disk.
         """
 
-        with zipfile.ZipFile(filepath, 'r') as zip_archive:
+        with zipfile.ZipFile(filepath, "r") as zip_archive:
             self._load_header(zip_archive)
             self._load_segments(zip_archive)
 
@@ -538,8 +553,8 @@ class TraceFile(object):
         Return the original file hash (CRC32) from the given packed trace filepath.
         """
         header = TraceInfo()
-        with zipfile.ZipFile(filepath, 'r') as zip_archive:
-            with zip_archive.open('header', 'r') as f:
+        with zipfile.ZipFile(filepath, "r") as zip_archive:
+            with zip_archive.open("header", "r") as f:
                 f.readinto(header)
                 return header.original_hash
 
@@ -547,15 +562,15 @@ class TraceFile(object):
         """
         Load the trace header from a packed trace.
         """
-        header = TraceInfo() 
+        header = TraceInfo()
 
-        with zip_archive.open('header', 'r') as f:
+        with zip_archive.open("header", "r") as f:
 
             # read the main trace info from the packed trace header
             f.readinto(header)
 
             # select the cpu / arch for this trace
-            #print(f"Loading magic 0x{header.arch_magic:08X}")
+            # print(f"Loading magic 0x{header.arch_magic:08X}")
             self._select_arch(header.arch_magic)
 
             # load the (sorted) ip address table from disk
@@ -566,16 +581,16 @@ class TraceFile(object):
             # ('mem_addr_width',  ctypes.c_uint8),
             self.mem_idx_type = type_from_width(header.mem_idx_width)
             self.mem_addr_type = type_from_width(header.mem_addr_width)
-            #self.mem_mask_width = type_from_width(header.mem_mask_width)
+            # self.mem_mask_width = type_from_width(header.mem_mask_width)
 
             # load the (sorted, aligned) mem table from disk
             self.mem_addrs = array.array(type_from_width(self.arch.POINTER_SIZE))
             self.mem_addrs.fromfile(f, header.mem_addrs_num)
-            self.mem_masks = array.array('B')
+            self.mem_masks = array.array("B")
             self.mem_masks.fromfile(f, header.mem_addrs_num)
 
             # ('mask_num',   ctypes.c_uint32),
-            self.masks = array.array('Q')
+            self.masks = array.array("Q")
             self.masks.fromfile(f, header.mask_num)
             self.mask_sizes = [number_of_bits_set(mask) * self.arch.POINTER_SIZE for mask in self.masks]
 
@@ -590,11 +605,11 @@ class TraceFile(object):
         for path in zip_archive.namelist():
 
             # skip anything that is not a trace segment
-            if not (path.startswith('segments/') and path[-1] != '/'):
+            if not (path.startswith("segments/") and path[-1] != "/"):
                 continue
 
             # load a trace segment from the packed trace file
-            with zip_archive.open(path, 'r') as f:
+            with zip_archive.open(path, "r") as f:
                 segment = TraceSegment(self)
                 segment.from_file(f)
 
@@ -609,7 +624,7 @@ class TraceFile(object):
         Load a text trace from disk.
         """
         idx = 0
-        
+
         # mappings of address/mask and their mapped (compressed) id
         # - NOTE: these are only used when converting traces from text to binary
         self.ip_map = collections.OrderedDict()
@@ -618,25 +633,30 @@ class TraceFile(object):
         self.masks = []
 
         # TODO: detect arch based on reg / lines in file
-        #if not self.arch:
+        # if not self.arch:
         #   self._select_arch(0)
 
         # hash (CRC32) the source / text filepath before loading it
         self.original_hash = hash_file(filepath)
 
         # load / parse a text trace into trace segments
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
 
             firstline = f.readline()
             for info in firstline.split(","):
                 name, value = info.split("=")
-                if name == 'slide':
-                    current_base = idaapi.get_imagebase() 
+                if name == "base":
+                    current_base = 0
+                    try:
+                        current_base = idaapi.get_imagebase()
+                    except:
+                        current_base = int(value, 16)
                     self.slide = current_base - int(value, 16)
+                if name == "slide":
+                    self.slide = int(value, 16)
                 else:
                     f.seek(0)
                     break
-                
 
             # loop until all of the lines in the file have been processed
             while True:
@@ -656,7 +676,7 @@ class TraceFile(object):
 
                 # save the segment
                 self.segments.append(segment)
-                #break # for debugging...
+                # break # for debugging...
 
         self._finalize()
 
@@ -688,7 +708,7 @@ class TraceFile(object):
     #
     # TODO: note, uh.. these should all be refactored... gross
     #
-    
+
     def get_aligned_address(self, address):
         return (address >> 3) << 3
 
@@ -698,11 +718,11 @@ class TraceFile(object):
         """
 
         #
-        # TODO: use pointer size/alignment?? eg, this might make mem lookups faster 
+        # TODO: use pointer size/alignment?? eg, this might make mem lookups faster
         # if we tune it to 32bit vs 64bit (at the cost of possible trace size inflation)
         #
 
-        aligned_address = (address >> 3) << 3 
+        aligned_address = (address >> 3) << 3
         index = bisect.bisect_left(self.mem_addrs, aligned_address)
 
         if index == len(self.mem_addrs):
@@ -719,7 +739,7 @@ class TraceFile(object):
         and write a comment to describe the mess we're in
         """
         mask_offset = address % 8
-        aligned_address = ((address >> 3) << 3)
+        aligned_address = (address >> 3) << 3
         aligned_mask = (((1 << length) - 1) << mask_offset) & 0xFF
         return aligned_mask
 
@@ -739,21 +759,16 @@ class TraceFile(object):
         ip_addrs = sorted(list(self.ip_map.keys()))
         self.ip_addrs = array.array(pointer_type, ip_addrs)
 
-        remapped_ip = {
-            ip_map[address]: i for i, address in enumerate(ip_addrs)
-        }
-
+        remapped_ip = {ip_map[address]: i for i, address in enumerate(ip_addrs)}
         # bake the master (aligned) memory address table
         mem_map = self.mem_map
         mem_map_len = len(mem_map)
         mem_addrs = sorted(list(mem_map.keys()))
         self.mem_addrs = array.array(pointer_type, mem_addrs)
-        self.mem_masks = array.array('B', [0] * len(mem_addrs))
+        self.mem_masks = array.array("B", [0] * len(mem_addrs))
 
         # generate a temporary mem re-mapping map...
-        remapped_mem = {
-            mem_map[address]: i for i, address in enumerate(mem_addrs)
-        }
+        remapped_mem = {mem_map[address]: i for i, address in enumerate(mem_addrs)}
 
         # pre-compute the 'size' of the data represented by a register mask
         self.mask_sizes = [number_of_bits_set(mask) * self.arch.POINTER_SIZE for mask in self.masks]
@@ -778,15 +793,15 @@ class TraceFile(object):
 
         if TRACE_STATS:
             self._finalize_stats()
-        
-    #-------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
     # Trace Statistics
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _init_stats(self):
         self.unique_mem_addr = set()
         self.avg_unique_mem_addr = 0
-        self.min_unique_mem_addr = 999999999 
+        self.min_unique_mem_addr = 999999999
         self.max_unique_mem_addr = -1
 
         self.avg_unique_ip = 0
@@ -797,7 +812,7 @@ class TraceFile(object):
         self.num_bytes_written = 0
         self.num_bytes_read_info = 0
         self.num_bytes_written_info = 0
-        
+
         self.num_bytes_ips = 0
         self.num_bytes_reg_data = 0
         self.num_bytes_reg_masks = 0
@@ -828,13 +843,13 @@ class TraceFile(object):
         self.num_bytes_written += seg.num_bytes_written
         self.num_bytes_read_info += seg.num_bytes_read_info
         self.num_bytes_written_info += seg.num_bytes_written_info
-        
+
         self.num_bytes_ips += seg.num_bytes_ips
         self.num_bytes_reg_data += seg.num_bytes_reg_data
         self.num_bytes_reg_masks += seg.num_bytes_reg_masks
 
         self.raw_size += seg.raw_size_bytes
-        #self.length += seg.length
+        # self.length += seg.length
 
     def _finalize_stats(self):
         self.avg_unique_ip = self.avg_unique_ip // len(self.segments)
@@ -871,29 +886,48 @@ class TraceFile(object):
         output.append("")
         output.append(f" -- {self.raw_size/(1024*1024):0.2f}mb - raw size")
         output.append("")
-        output.append(f" ---- {self.num_bytes_unique_ip / (1024*1024):0.2f}mb ({(self.num_bytes_unique_ip / self.raw_size) * 100 :3.2f}%) - ip addrs")
-        output.append(f" ---- {self.num_bytes_unique_mem / (1024*1024):0.2f}mb ({(self.num_bytes_unique_mem / self.raw_size) * 100 :3.2f}%) - mem addrs")
-        output.append(f" ---- {self.num_bytes_ips / (1024*1024):0.2f}mb ({(self.num_bytes_ips / self.raw_size) * 100 :3.2f}%) - ip trace")
-        output.append(f" ---- {self.num_bytes_reg_data / (1024*1024):0.2f}mb ({(self.num_bytes_reg_data / self.raw_size) * 100 :3.2f}%) - reg data")
-        output.append(f" ---- {self.num_bytes_reg_masks / (1024*1024):0.2f}mb ({(self.num_bytes_reg_masks / self.raw_size) * 100 :3.2f}%) - reg masks")
+        output.append(
+            f" ---- {self.num_bytes_unique_ip / (1024*1024):0.2f}mb ({(self.num_bytes_unique_ip / self.raw_size) * 100 :3.2f}%) - ip addrs"
+        )
+        output.append(
+            f" ---- {self.num_bytes_unique_mem / (1024*1024):0.2f}mb ({(self.num_bytes_unique_mem / self.raw_size) * 100 :3.2f}%) - mem addrs"
+        )
+        output.append(
+            f" ---- {self.num_bytes_ips / (1024*1024):0.2f}mb ({(self.num_bytes_ips / self.raw_size) * 100 :3.2f}%) - ip trace"
+        )
+        output.append(
+            f" ---- {self.num_bytes_reg_data / (1024*1024):0.2f}mb ({(self.num_bytes_reg_data / self.raw_size) * 100 :3.2f}%) - reg data"
+        )
+        output.append(
+            f" ---- {self.num_bytes_reg_masks / (1024*1024):0.2f}mb ({(self.num_bytes_reg_masks / self.raw_size) * 100 :3.2f}%) - reg masks"
+        )
         output.append("")
-        output.append(f" ---- {self.num_bytes_read / (1024*1024):0.2f}mb ({(self.num_bytes_read / self.raw_size) * 100 :3.2f}%) - bytes read")
-        output.append(f" ---- {self.num_bytes_written / (1024*1024):0.2f}mb ({(self.num_bytes_written / self.raw_size) * 100 :3.2f}%) - bytes written")
-        output.append(f" ---- {self.num_bytes_read_info / (1024*1024):0.2f}mb ({(self.num_bytes_read_info / self.raw_size) * 100 :3.2f}%) - read pointers")
-        output.append(f" ---- {self.num_bytes_written_info / (1024*1024):0.2f}mb ({(self.num_bytes_written_info / self.raw_size) * 100 :3.2f}%) - write pointers")
-        print(''.join(output))
-
-
+        output.append(
+            f" ---- {self.num_bytes_read / (1024*1024):0.2f}mb ({(self.num_bytes_read / self.raw_size) * 100 :3.2f}%) - bytes read"
+        )
+        output.append(
+            f" ---- {self.num_bytes_written / (1024*1024):0.2f}mb ({(self.num_bytes_written / self.raw_size) * 100 :3.2f}%) - bytes written"
+        )
+        output.append(
+            f" ---- {self.num_bytes_read_info / (1024*1024):0.2f}mb ({(self.num_bytes_read_info / self.raw_size) * 100 :3.2f}%) - read pointers"
+        )
+        output.append(
+            f" ---- {self.num_bytes_written_info / (1024*1024):0.2f}mb ({(self.num_bytes_written_info / self.raw_size) * 100 :3.2f}%) - write pointers"
+        )
+        print("".join(output))
 
 
 max_int = 2**80
 
+
 class Interval(object):
     def __init__(self, bounds):
         self.bounds = bounds
-        self.bitmap = [[] for i in range(bounds[1]-bounds[0])]
+        self.bitmap = [[] for i in range(bounds[1] - bounds[0])]
+
+
 class SearchableMemory(object):
-    
+
     def __init__(self):
         self.data = []
         self.intervals = []
@@ -909,22 +943,22 @@ class SearchableMemory(object):
         n = len(arr1)
         m = len(arr2)
         ret = []
-    
-        # Loop through all intervals unless one 
+
+        # Loop through all intervals unless one
         # of the interval gets exhausted
         while i < n and j < m:
-            
+
             # Left bound for intersecting segment
             l = max(arr1[i][0], arr2[j][0])
-            
+
             # Right bound for intersecting segment
             r = min(arr1[i][1], arr2[j][1])
-            
+
             # If segment is valid print it
-            if l < r: 
-                ret.append([l,r])
-    
-            # If i-th interval's right bound is 
+            if l < r:
+                ret.append([l, r])
+
+            # If i-th interval's right bound is
             # smaller increment i else increment j
             if arr1[i][1] < arr2[j][1]:
                 i += 1
@@ -936,7 +970,7 @@ class SearchableMemory(object):
         result = []
         if len(temp_intervals) > 0:
 
-            temp_intervals.sort(key=lambda x:x[0])
+            temp_intervals.sort(key=lambda x: x[0])
             result = [list(temp_intervals[0])]
             for interval in temp_intervals[1:]:
                 interval = list(interval)
@@ -946,122 +980,149 @@ class SearchableMemory(object):
                     result.append(interval)
         return result
 
-        
     def process_data(self):
-        for (idx, addr, dat) in self.data:
+        for idx, addr, dat in self.data:
             interval = self.addr_to_interval(addr)
             rel_addr = addr - interval.bounds[0]
-            assert addr>=0
-            
-            for i,e in enumerate(dat):
+            assert addr >= 0
 
-                offset = rel_addr+i
+            for i, e in enumerate(dat):
+
+                offset = rel_addr + i
                 if len(interval.bitmap[offset]):
-                    if interval.bitmap[offset][-1][1] == e: #skip if same data
+                    if interval.bitmap[offset][-1][1] == e:  # skip if same data
                         continue
-                    interval.bitmap[offset][-1][0][1]=idx
-                    if interval.bitmap[offset][-1][0][0] == idx: #never actually lived during one full step, delete
+                    interval.bitmap[offset][-1][0][1] = idx
+                    if interval.bitmap[offset][-1][0][0] == idx:  # never actually lived during one full step, delete
                         interval.bitmap[offset].pop()
 
-                interval.bitmap[offset].append(([idx,max_int],e)) #start_idx, end_idx, value
+                interval.bitmap[offset].append(([idx, max_int], e))  # start_idx, end_idx, value
 
-    
     def finalize(self):
         self.finalized = True
 
         temp_intervals = []
         for idx, addr, dat in self.data:
-            temp_intervals.append((addr,addr+len(dat)))
+            temp_intervals.append((addr, addr + len(dat)))
 
         result = self.merge_intervals(temp_intervals)
         for inte in result:
             self.intervals.append(Interval(inte))
 
         self.process_data()
-        self.enum_all_strings()
+        self.fast_string_enum()
         del self.data
-        
-    def is_good_string(self, s):
-        vowels = "aeiouAEIOU"
-        consonants = "bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ"
+
+    def is_valid_string(self, s):
+        vowels = "aeiouyAEIOUY"
+        consonants = "bcdfghjklmnpqrstvwxzBCDFGHJKLMNPQRSTVWXZ"
         digits = "0123456789"
 
         vowel_count = sum(1 for char in s if char in vowels)
         consonant_count = sum(1 for char in s if char in consonants)
         digit_count = sum(1 for char in s if char in digits)
 
-        # Ajoutez d'autres critères de filtrage si nécessaire
-        # Par exemple, la longueur de la chaîne, la présence de caractères spéciaux, etc.
-
-        # Dans cet exemple, on suppose que la chaîne est "bonne" si elle a au moins 3 voyelles,
-        # au moins 3 consonnes et au moins 2 chiffres.
-        if vowel_count >= 3 and consonant_count >= 3 and digit_count < 6:
+        if vowel_count >= 1 and consonant_count >= 1 and len(s) >= 6:
             return True
         else:
             return False
 
-
-
-    def enum_all_strings(self):
-        self.strings = set()
+    def fast_string_enum(self):
+        PS_LENGTH = 1000  # number of max change for a single address
+        self.strings = []
         for inte in self.intervals:
-            possible_strings = [""]*1000 # max 1000 idx for one address
-            for data_ptr in range(len(inte.bitmap)):
-                for i, e in enumerate(inte.bitmap[data_ptr]):
+            possible_strings = [""] * PS_LENGTH
+            possible_strings_idxs = [0] * PS_LENGTH
+
+            for offset in range(len(inte.bitmap)):
+                # for each timestamp where this particular address is modified
+                for i in range(PS_LENGTH):
+                    if i > len(inte.bitmap[offset]) - 1:
+                        break
+                    e = inte.bitmap[offset][i]
+                    curr_str_idx = e[0][0]
+                    char = e[1]
                     curr_str = possible_strings[i]
-                    c = e[1]
-                    # check c is printable
-                    if c>=32 and c<=126:
-                        possible_strings[i] += chr(c)
-                    else:
-                        if self.is_good_string(curr_str):
-                            self.strings.add(curr_str)
+                    possible_strings_idxs[i] = curr_str_idx
+
+                    # append the string to the final list if is valid
+                    def _add():
+                        curr_str_rep = curr_str.replace("\x00", "")
+                        if self.is_valid_string(curr_str_rep):
+                            self.strings.append((curr_str_rep, curr_str_idx))
                         possible_strings[i] = ""
-                        
-            if self.is_good_string(curr_str):
-                self.strings.add(curr_str)
-                
-                
-          
+
+                    # address is not continuous
+                    if len(possible_strings[i]) > 80:
+                        _add()
+
+                    # check char validity
+                    elif char >= 32 and char <= 126:
+                        possible_strings[i] += chr(char)
+
+                    # UTF-16
+                    elif char == 0 and len(possible_strings[i]) > 0 and possible_strings[i][-1] != "\x00":
+                        possible_strings[i] += chr(char)
+
+                    # end of string
+                    else:
+                        _add()
+
+            # add the end of the interval exploration , we append the remaining strings
+            for i in range(PS_LENGTH):
+                p = possible_strings[i].replace("\x00", "")
+                if self.is_valid_string(p):
+                    self.strings.append((p, possible_strings_idxs[i]))
+
+        # sort strings by idx
+        self.strings.sort(key=lambda x: x[1])
+        logger.info(f"Found {len(self.strings)} strings")
+
+    def get_strings_inside_idx_range(self, start_idx, end_idx):
+        results = []
+        for s in self.strings:
+            if s[1] >= start_idx and s[1] <= end_idx:
+                results.append(s[0])
+        return results
+
     def search(self, pattern):
         results = []
         for inte in self.intervals:
             data_ptr = 0
             pattern_ptr = 0
-            for data_ptr in range(len(inte.bitmap)-len(pattern)+1):
-                
-                candidate_intervals = [[0,max_int]]
+            for data_ptr in range(len(inte.bitmap) - len(pattern) + 1):
+
+                candidate_intervals = [[0, max_int]]
                 for i, char in enumerate(pattern):
-                    if char==-1:
+                    if char == -1:
                         continue
                     next_candidate_intervals = []
-                    for e in inte.bitmap[data_ptr+i]:
+                    for e in inte.bitmap[data_ptr + i]:
                         if e[1] == char:
                             intersect_inter = self.intesect_intervals([e[0]], candidate_intervals)
-                            if len(intersect_inter)>0:
+                            if len(intersect_inter) > 0:
                                 next_candidate_intervals.extend(intersect_inter)
 
                     next_candidate_intervals = self.merge_intervals(next_candidate_intervals)
 
-                    if not next_candidate_intervals:break
+                    if not next_candidate_intervals:
+                        break
                     candidate_intervals = next_candidate_intervals
-                    if i==len(pattern)-1:
-                        results.append((candidate_intervals[0][0], data_ptr+inte.bounds[0]))
-                        if len(results)>=1000:
+                    if i == len(pattern) - 1:
+                        results.append((candidate_intervals[0][0], data_ptr + inte.bounds[0]))
+                        if len(results) >= 1000:
                             return results
         return results
 
     def get_strings(self):
-        return list(self.strings)
-        
+        return self.strings
+
     def addr_to_interval(self, addr):
         keys = [i.bounds[1] for i in self.intervals]
         idx = bisect.bisect_left(keys, addr)
         return self.intervals[idx]
 
-    
 
-    
 class TraceSegment(object):
     """
     A segment of trace data.
@@ -1091,16 +1152,18 @@ class TraceSegment(object):
         self.write_masks = None
         self.write_offsets = []
 
+        self.fast_cache_reg_data = {}
+
         self.mem_delta = collections.defaultdict(MemValue)
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Properties
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     @property
     def read_set(self):
         return set(self.read_addrs)
-    
+
     @property
     def write_set(self):
         return set(self.write_addrs)
@@ -1108,7 +1171,7 @@ class TraceSegment(object):
     @property
     def num_unique_ip(self):
         return len(set(self.ips))
-    
+
     @property
     def num_unique_mem_addresses(self):
         return len(self.read_set | self.write_set)
@@ -1121,12 +1184,12 @@ class TraceSegment(object):
     def num_bytes_written(self):
         return len(self.write_data)
 
-    #@property
-    #def num_bytes_read_info(self):
+    # @property
+    # def num_bytes_read_info(self):
     #    return ctypes.sizeof(self._mem_read_info)
-    
-    #@property
-    #def num_bytes_written_info(self):
+
+    # @property
+    # def num_bytes_written_info(self):
     #    return ctypes.sizeof(self._mem_write_info)
 
     @property
@@ -1136,14 +1199,14 @@ class TraceSegment(object):
     @property
     def num_bytes_ips(self):
         return ctypes.sizeof(self.ips)
-    
+
     @property
     def num_bytes_reg_masks(self):
         return ctypes.sizeof(self.reg_masks)
 
     @property
     def raw_size_bytes(self):
-        size  = 0
+        size = 0
 
         # reg data storage costs
         size += self.num_bytes_ips
@@ -1160,7 +1223,10 @@ class TraceSegment(object):
 
     @property
     def raw_size_mb(self):
-        return self.raw_size_bytes / (1024*1024)
+        return self.raw_size_bytes / (1024 * 1024)
+    
+    def convert_to_relative_index(self, idx):
+        return idx - self.base_idx
 
     def __str__(self):
         output = []
@@ -1168,11 +1234,11 @@ class TraceSegment(object):
         output.append(f" -- Reg Data {len(self.reg_data)} bytes ({len(self.reg_data) / (1024*1024):0.2f}mb)")
         output.append(f" -- Unique IP {len(set(self.ips))}")
         output.append(f" -- Raw Size {self.raw_size_mb:0.2f}mb")
-        return ''.join(output)
+        return "".join(output)
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Public
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def from_lines(self, lines):
         """
@@ -1198,7 +1264,7 @@ class TraceSegment(object):
         self._max_write_size = 0
 
         self._process_lines(lines)
-        #print(f"Snapshot entries: {len(self.mem_delta)}")
+        # print(f"Snapshot entries: {len(self.mem_delta)}")
 
     def from_file(self, f):
         """
@@ -1212,7 +1278,7 @@ class TraceSegment(object):
         """
         relative_idx = idx - self.base_idx
         return self.trace.ip_addrs[self.ips[relative_idx]]
-    
+
     def get_reg_delta(self, idx):
         """
         Return the register delta for the given timestamp.
@@ -1228,8 +1294,8 @@ class TraceSegment(object):
         # if no registers changed, nothing to do but return IP
         if not mask:
             return {self.trace.arch.IP: ip_address}
-        
-        # 
+
+        #
         # fetch the closest cached register data offset that we can start from
         # for computing precisely where we should be working backwards from
         #
@@ -1244,16 +1310,16 @@ class TraceSegment(object):
         offset = cache_offset + sum([sizes[mask_id] for mask_id in offset_masks])
 
         # compute the location of the packed register delta data
-        #offset_slow = sum([sizes[mask_id] for mask_id in self.reg_masks[:relative_idx]])
-        #assert offset == offset_slow
+        # offset_slow = sum([sizes[mask_id] for mask_id in self.reg_masks[:relative_idx]])
+        # assert offset == offset_slow
 
         # fetch the register data
         reg_names = self._mask2regs(mask)
         num_regs = len(reg_names)
-        reg_data = self.reg_data[offset:offset + (num_regs * self.arch.POINTER_SIZE)]
+        reg_data = self.reg_data[offset : offset + (num_regs * self.arch.POINTER_SIZE)]
 
         # unpack the register data
-        pack_fmt = 'Q' if self.arch.POINTER_SIZE == 8 else 'I'
+        pack_fmt = "Q" if self.arch.POINTER_SIZE == 8 else "I"
         reg_values = struct.unpack(pack_fmt * num_regs, reg_data)
 
         # pack all the registers into a dict that will be returned to the user
@@ -1287,9 +1353,21 @@ class TraceSegment(object):
         found, offset = [], 0
 
         if mem_type == TRACE_MEM_WRITE:
-            idxs, addrs, masks, offsets, data = self.write_idxs, self.write_addrs, self.write_masks, self.write_offsets, self.write_data
+            idxs, addrs, masks, offsets, data = (
+                self.write_idxs,
+                self.write_addrs,
+                self.write_masks,
+                self.write_offsets,
+                self.write_data,
+            )
         else:
-            idxs, addrs, masks, offsets, data = self.read_idxs, self.read_addrs, self.read_masks, self.read_offsets, self.read_data
+            idxs, addrs, masks, offsets, data = (
+                self.read_idxs,
+                self.read_addrs,
+                self.read_masks,
+                self.read_offsets,
+                self.read_data,
+            )
 
         try:
             i = idxs.index(relative_idx)
@@ -1297,7 +1375,7 @@ class TraceSegment(object):
             return []
 
         while i < len(idxs) and idxs[i] == relative_idx:
-            
+
             #
             # fetch the 'aligned' address for this memory access, and the
             # mask which specifes which bytes were touched starting from
@@ -1310,10 +1388,10 @@ class TraceSegment(object):
             # extract the raw data for this memory access
             offset = offsets[i]
             length = number_of_bits_set(masks[i])
-            raw_data = data[offset:offset+length]
+            raw_data = data[offset : offset + length]
 
             address = aligned_address
-            seen_byte = False # TODO KLUDGE
+            seen_byte = False  # TODO KLUDGE
             while access_mask:
                 if access_mask & 1 == 0:
                     address += 1
@@ -1331,12 +1409,13 @@ class TraceSegment(object):
     def get_reg_info(self, idx, reg_names):
         """
         Given a starting timestamp and a list of register names, return
-            
+
             { reg_name: (value, idx) }
 
         ... for each discoverable register in this segment.
 
         """
+
         relative_idx = idx - self.base_idx
         start_idx = relative_idx + 1
         if not (0 <= relative_idx < self.length):
@@ -1345,7 +1424,7 @@ class TraceSegment(object):
         # compute a 32bit mask of the registers we need to find
         target_mask = self._regs2mask(reg_names)
 
-        # 
+        #
         # fetch the closest cached register data offset that we can start from
         # for computing precisely where we should be working backwards from
         #
@@ -1353,7 +1432,7 @@ class TraceSegment(object):
         cache_index = int(start_idx / REG_OFFSET_CACHE_INTERVAL)
         cache_offset = self.reg_offsets[cache_index]
         cache_idx = cache_index * REG_OFFSET_CACHE_INTERVAL
-        
+
         # alias for faster access / readability
         sizes = self.trace.mask_sizes
         masks = self.trace.masks
@@ -1367,8 +1446,8 @@ class TraceSegment(object):
 
         # loop backwards through the segment, starting from the given idx
         search_masks = self.reg_masks[:start_idx][::-1]
-        #offset_slow = sum([sizes[mask_id] for mask_id in search_masks])
-        #assert offset == offset_slow
+        # offset_slow = sum([sizes[mask_id] for mask_id in search_masks])
+        # assert offset == offset_slow
         for i, mask_id in enumerate(search_masks):
 
             # translate the mask id for this step into its register bitfield
@@ -1393,7 +1472,7 @@ class TraceSegment(object):
             # fetch the registers for this delta / timestamp
             registers = self._unpack_registers(current_mask, offset)
 
-            # add the found register names and the current (global) idx 
+            # add the found register names and the current (global) idx
             for reg_name in found_names:
                 found_registers[reg_name] = (registers[reg_name], (self.base_idx + (start_idx - i)))
 
@@ -1416,10 +1495,10 @@ class TraceSegment(object):
         else:
             addrs, masks, offsets, data = self.read_addrs, self.read_masks, self.read_offsets, self.read_data
 
-        offset = offsets[mem_id] #sum([number_of_bits_set(mask) for mask in masks[:mem_id]])
-        #offset = sum([number_of_bits_set(mask) for mask in masks[:mem_id]])
+        offset = offsets[mem_id]  # sum([number_of_bits_set(mask) for mask in masks[:mem_id]])
+        # offset = sum([number_of_bits_set(mask) for mask in masks[:mem_id]])
         length = number_of_bits_set(masks[mem_id])
-        raw_data = data[offset:offset+length]
+        raw_data = data[offset : offset + length]
 
         address = self.trace.mem_addrs[addrs[mem_id]]
         output = TraceMemory(address, 8)
@@ -1437,13 +1516,13 @@ class TraceSegment(object):
             real_mask >>= 1
             data_mask >>= 1
 
-        #assert byte == length
+        # assert byte == length
 
         return output
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Finalization
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def load(self, f):
         """
@@ -1462,7 +1541,7 @@ class TraceSegment(object):
         ip_itemsize = info.ip_length // info.ip_num
         ip_type = type_from_width(ip_itemsize)
 
-        # load the ip trace 
+        # load the ip trace
         self.ips = array.array(ip_type)
         self.ips.fromfile(f, info.ip_num)
 
@@ -1482,7 +1561,7 @@ class TraceSegment(object):
         #
         # memory
         #
-        
+
         idx_type = self.trace.mem_idx_type
         addr_type = self.trace.mem_addr_type
 
@@ -1491,7 +1570,7 @@ class TraceSegment(object):
         self.read_idxs.fromfile(f, info.mem_read_num)
         self.read_addrs = array.array(addr_type)
         self.read_addrs.fromfile(f, info.mem_read_num)
-        self.read_masks = array.array('B')
+        self.read_masks = array.array("B")
         self.read_masks.fromfile(f, info.mem_read_num)
 
         # load the raw memory read data
@@ -1503,7 +1582,7 @@ class TraceSegment(object):
         self.write_idxs.fromfile(f, info.mem_write_num)
         self.write_addrs = array.array(addr_type)
         self.write_addrs.fromfile(f, info.mem_write_num)
-        self.write_masks = array.array('B')
+        self.write_masks = array.array("B")
         self.write_masks.fromfile(f, info.mem_write_num)
 
         # load the raw memory write data
@@ -1528,13 +1607,13 @@ class TraceSegment(object):
         info.id = self.id
         info.base_idx = self.base_idx
         info.length = self.length
-        
+
         info.ip_num = self.length
         info.ip_length = info.ip_num * self.ips.itemsize
 
         info.reg_mask_num = len(self.reg_masks)
         info.reg_mask_length = info.reg_mask_num * self.reg_masks.itemsize
-        info.reg_data_length = len(self.reg_data) # bytearray
+        info.reg_data_length = len(self.reg_data)  # bytearray
 
         info.mem_read_num = len(self.read_idxs)
         info.mem_read_data_length = len(self.read_data)
@@ -1562,9 +1641,9 @@ class TraceSegment(object):
         for mapped_address in sorted(set(self.read_addrs + self.write_addrs)):
             f.write(bytearray(self.mem_delta[mapped_address]))
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Finalization
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def finalize(self, remapped_ip, remapped_mem):
         """
@@ -1592,7 +1671,7 @@ class TraceSegment(object):
 
         del self.ips
         self.ips = new_ips
-        
+
         #
         # pack register masks
         #
@@ -1602,7 +1681,7 @@ class TraceSegment(object):
 
         del self.reg_masks
         self.reg_masks = new_masks
-        
+
     def _finalize_memory(self, remapped_mem):
         """
         Bake memory into ctype structures.
@@ -1617,7 +1696,7 @@ class TraceSegment(object):
         # allocate fast, compact python arrays to hold our mem read info
         read_idxs = array.array(idx_type)
         read_addrs = array.array(addr_type)
-        read_masks = array.array('B')
+        read_masks = array.array("B")
 
         # transfer read metadata into compact / searchable arrays
         for entry in self._mem_read_info:
@@ -1643,7 +1722,7 @@ class TraceSegment(object):
         # allocate fast, compact python arrays to hold our mem write info
         write_idxs = array.array(idx_type)
         write_addrs = array.array(addr_type)
-        write_masks = array.array('B')
+        write_masks = array.array("B")
 
         # transfer write metadata into compact / searchable arrays
         for entry in self._mem_write_info:
@@ -1656,7 +1735,7 @@ class TraceSegment(object):
             write_idxs.append(idx)
             write_addrs.append(mapped_address)
             write_masks.append(mask)
-        
+
         del self._mem_write_info
         self.write_idxs = write_idxs
         self.write_addrs = write_addrs
@@ -1676,7 +1755,7 @@ class TraceSegment(object):
 
         del self.mem_delta
         self.mem_delta = new_delta
-        
+
         self._compute_mem_offsets()
 
     def _compute_mem_offsets(self):
@@ -1685,13 +1764,10 @@ class TraceSegment(object):
         """
         temp_sizes = {}
 
-        self.read_offsets = array.array('I', [0] * len(self.read_masks))
-        self.write_offsets = array.array('I', [0] * len(self.write_masks))
+        self.read_offsets = array.array("I", [0] * len(self.read_masks))
+        self.write_offsets = array.array("I", [0] * len(self.write_masks))
 
-        mem_sets = [
-            (self.read_offsets, self.read_masks),
-            (self.write_offsets, self.write_masks)
-        ]
+        mem_sets = [(self.read_offsets, self.read_masks), (self.write_offsets, self.write_masks)]
 
         for offsets, masks in mem_sets:
             offset = 0
@@ -1700,9 +1776,9 @@ class TraceSegment(object):
                 length = temp_sizes.setdefault(mask, number_of_bits_set(mask))
                 offset += length
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Processing / Logic
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _process_lines(self, lines):
         """
@@ -1726,7 +1802,7 @@ class TraceSegment(object):
             pmsg(str(REGISTERS))
             pmsg(str(e))
 
-        self.reg_data = bytearray(self.reg_data[:self._reg_offset])
+        self.reg_data = bytearray(self.reg_data[: self._reg_offset])
         self.ips = self.ips[:relative_idx]
         self.length = relative_idx
 
@@ -1736,8 +1812,13 @@ class TraceSegment(object):
         """
         IP = self.trace.arch.IP
         REGISTERS = self.trace.arch.REGISTERS
-        
-        delta = line.split(",")
+
+        try:
+            # split the line into individual register/memory deltas
+            delta = line.split(",")
+        except ValueError:
+            # FAIL: invalid line
+            return False
         registers = {}
 
         # split the state info (registers, memory) into individual items to process
@@ -1747,7 +1828,7 @@ class TraceSegment(object):
 
             # special compression of IP
             if name == IP:
-                ip = int(value, 16) +  + self.slide
+                ip = int(value, 16) + self.slide
 
                 try:
                     mapped_ip = self.trace.ip_map[ip]
@@ -1767,15 +1848,15 @@ class TraceSegment(object):
 
                 address, hex_data = value.split(":")
                 address = int(address, 16)
-                hex_data = bytes(hex_data.strip(), 'utf-8')
+                hex_data = bytes(hex_data.strip(), "utf-8")
                 data = binascii.unhexlify(hex_data)
-
-                self.trace.searchable_memory.record_data_for_search(relative_idx+self.base_idx, address, data)
-                self._process_mem_entry(address, data, name, relative_idx)
+                if address < self.arch.MAX_INT_VALUE:
+                    self.trace.searchable_memory.record_data_for_search(relative_idx + self.base_idx, address, data)
+                    self._process_mem_entry(address, data, name, relative_idx)
 
             else:
                 pass
-        
+
         self._pack_registers(registers, relative_idx)
 
         return True
@@ -1787,50 +1868,50 @@ class TraceSegment(object):
 
         byte = 0
         for mapped_address, access_mask, access_data in self._map_mem_access(address, data):
-            
+
             # read
-            if access_type == 'MR':
+            if access_type == "MR":
 
                 self._mem_read_info.append((relative_idx, mapped_address, access_mask))
                 self.read_data += access_data
-                #self._max_read_size = max(self._max_read_size, data_len)
+                # self._max_read_size = max(self._max_read_size, data_len)
 
             # write
-            elif access_type == 'MW':
+            elif access_type == "MW":
                 self._mem_write_info.append((relative_idx, mapped_address, access_mask))
                 self.write_data += access_data
-                #print(self._mem_write_info[-1], hexdump(data), "REAL OFFSET", len(self.write_data)-len(data))
-                #self._max_write_size = max(self._max_write_size, data_len)
+                # print(self._mem_write_info[-1], hexdump(data), "REAL OFFSET", len(self.write_data)-len(data))
+                # self._max_write_size = max(self._max_write_size, data_len)
 
             # read AND write (eg, inc [rax])
-            elif access_type == 'MRW':
+            elif access_type == "MRW":
 
                 # read
                 self._mem_read_info.append((relative_idx, mapped_address, access_mask))
                 self.read_data += access_data
-                #self._max_read_size = max(self._max_read_size, data_len)
+                # self._max_read_size = max(self._max_read_size, data_len)
 
                 # write
                 self._mem_write_info.append((relative_idx, mapped_address, access_mask))
                 self.write_data += access_data
-                #self._max_write_size = max(self._max_write_size, data_len)
+                # self._max_write_size = max(self._max_write_size, data_len)
 
             else:
                 raise ValueError("Unknown field in trace: '%s=...'" % access_type)
 
             mv = self.mem_delta[mapped_address]
             mv.mask |= access_mask
-            #print(f"ADDRESS: 0x{address:08X} MASK: {access_mask:02X}")
+            # print(f"ADDRESS: 0x{address:08X} MASK: {access_mask:02X}")
 
             # snapshot stuff
             bit, byte = 0, 0
             while access_mask:
                 if access_mask & 1:
-                    #print(bit, byte)
+                    # print(bit, byte)
                     mv.value[bit] = access_data[byte]
-                    #byte_shift = (bit * 8)
-                    #byte_mask = 0xFF << byte_shift
-                    #value[0] = (value[0] & ~byte_mask) | (data[byte] << byte_shift)
+                    # byte_shift = (bit * 8)
+                    # byte_mask = 0xFF << byte_shift
+                    # value[0] = (value[0] & ~byte_mask) | (data[byte] << byte_shift)
                     byte += 1
                 access_mask >>= 1
                 bit += 1
@@ -1845,7 +1926,7 @@ class TraceSegment(object):
 
         mask_offset = address % 8
         remaining_mask = ((1 << data_len) - 1) << mask_offset
-        aligned_address = ((address >> 3) << 3)
+        aligned_address = (address >> 3) << 3
         access_length = min(len(access_data), (8 - mask_offset))
 
         while remaining_mask:
@@ -1869,24 +1950,31 @@ class TraceSegment(object):
         """
         num_regs = len(registers)
 
+        fst_cache = self.fast_cache_reg_data
+        # append  re_info to the fast cache
+        fst_cache[relative_idx] = dict(registers)
+        for reg_name, reg_value in fst_cache.get(relative_idx - 1, {}).items():
+            if reg_name not in fst_cache[relative_idx]:
+                fst_cache[relative_idx][reg_name] = reg_value
+
         #
         # to help improve the speed of looking up register values in the data
         # blob, we cache pre-computed offsets at finxed intervals throughout
         # the segment.
-        # 
+        #
         # at query time, we can pick the closest cached interval prior to the
         # target idx and only re-compute a fraction of the offsets needed to
         # find the correct offset into the data blob to fetch our reg delta
         #
 
-        if not(relative_idx % REG_OFFSET_CACHE_INTERVAL):
+        if not (relative_idx % REG_OFFSET_CACHE_INTERVAL):
             cache_index = int(relative_idx / REG_OFFSET_CACHE_INTERVAL)
-            #print(f"rIDX: {relative_idx:,} CACHE: {cache_index} LEN: {len(self.reg_offsets)}")
+            # print(f"rIDX: {relative_idx:,} CACHE: {cache_index} LEN: {len(self.reg_offsets)}")
             self.reg_offsets[cache_index] = self._reg_offset
 
         #
         # XXX/TODO: BODGE FOR WHEN PEOPLE DON'T DUMP A FULL REGISTER STATE
-        # 
+        #
 
         if self.base_idx == 0 and self._reg_offset == 0:
             if num_regs != len(self.arch.REGISTERS):
@@ -1894,7 +1982,6 @@ class TraceSegment(object):
                     if reg_name not in registers:
                         if reg_name == self.arch.IP:
                             continue
-                        pmsg(f"MISSING INITIAL REGISTER VALUE FOR {reg_name}")
                         registers[reg_name] = 0
                         num_regs += 1
 
@@ -1911,7 +1998,7 @@ class TraceSegment(object):
 
         value_pairs = sorted([(self.arch.REGISTERS.index(name), value) for name, value in registers.items()])
         values = [x[1] for x in value_pairs]
-        pack_fmt = 'Q' if self.arch.POINTER_SIZE == 8 else 'I'
+        pack_fmt = "Q" if self.arch.POINTER_SIZE == 8 else "I"
         struct.pack_into(pack_fmt * num_regs, self.reg_data, self._reg_offset, *values)
         self._reg_offset += num_regs * self.arch.POINTER_SIZE
 
@@ -1923,10 +2010,10 @@ class TraceSegment(object):
 
         # fetch the register data
         num_regs = len(reg_names)
-        reg_data = self.reg_data[offset:offset + (num_regs * self.arch.POINTER_SIZE)]
+        reg_data = self.reg_data[offset : offset + (num_regs * self.arch.POINTER_SIZE)]
 
         # unpack the register data
-        pack_fmt = 'Q' if self.arch.POINTER_SIZE == 8 else 'I'
+        pack_fmt = "Q" if self.arch.POINTER_SIZE == 8 else "I"
         reg_values = struct.unpack(pack_fmt * num_regs, reg_data)
 
         # pack all the registers into a dict that will be returned to the user
@@ -1935,9 +2022,9 @@ class TraceSegment(object):
         # return the completed register delta
         return registers
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Util
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def _regs2mask(self, regs):
         """
@@ -1960,4 +2047,3 @@ class TraceSegment(object):
             mask >>= 1
             bit_index += 1
         return regs
-

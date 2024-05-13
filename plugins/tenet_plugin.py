@@ -3,9 +3,9 @@ from tenet.integration.api import disassembler
 
 logger = start_logging()
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Disassembler Agnonstic Plugin Loader
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 logger.debug("Resolving disassembler platform for Tenet...")
 
@@ -19,4 +19,3 @@ elif disassembler.NAME == "IDA":
 
 else:
     raise NotImplementedError("DISASSEMBLER-SPECIFIC SHIM MISSING")
-

@@ -13,7 +13,7 @@ def compute_function_coverage(func, parent_func=set()):
     # get all sub calls
     sub_calls = set()
     for ea in idautils.FuncItems(func.start_ea):
-        mnem = idc.print_insn_mnem(ea)
+        mnem = idc.print_insn_mnemonic(ea)
         if mnem == "call":
             addr = idc.get_operand_value(ea, 0)
             # get function name

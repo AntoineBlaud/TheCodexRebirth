@@ -1,4 +1,4 @@
-# gdb-tools (without IDA)
+# gdb-tools Android (without IDA)
 
 This collection of tools is designed to facilitate debugging with GDB in scenarios where IDA may not be suitable or accessible. For instance, when dealing with debugging issues on Android or encountering mitigations that prevent traditional debugging approaches, these tools can be invaluable.
 
@@ -11,6 +11,11 @@ IDA, while powerful, may not always be the optimal solution. Certain debuggee pr
 Follow the step-by-step tutorial for android debugging provided in this [gist](https://gist.github.com/sekkr1/6adf2741ed3bc741b53ab276d35fd047).
 
 For users of Windows Subsystem for Linux (WSL), install the MSI from [this repository](https://github.com/dorssel/usbipd-win/actions/runs/7813976713), and refer to the Microsoft tutorial on connecting USB devices in WSL [here](https://learn.microsoft.com/en-us/windows/wsl/connect-usb).
+
+### Configuration
+
+Edit the `step-tracer.py` file to customize the settings and set the path of the `plugins` directory.
+
 
 ### Execution Commands
 
@@ -32,7 +37,7 @@ gdb-multiarch
 ### Additional Tools
 
 - **Ultimap:** Execute `source .ultimap.py` and `ultimap` to activate the Ultimap feature.
-- **GDB Tracer:** Run `source gbd-tracer.py` and `tracer` to utilize the GDB Tracer tool. You can adjust settings within the `gbd-tracer.py` file as needed.
+- **GDB Tracer:** Run `source step-tracer.py` and `tracer` to utilize the GDB Tracer tool. You can adjust settings within the `step-tracer.py` file as needed.
 
 ### Performance Tip
 

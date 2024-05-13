@@ -1,9 +1,8 @@
-capstone==4.0.2  
+capstone==5.0.0.post1
 unicorn
 keystone-engine
 z3-solver
 superglobals
-easygui
 jsonschema
 line_profiler
 treelib

@@ -54,12 +54,61 @@ python -m pip install -r requirements.txt
 Then copy the content of the 'plugin' folder into the IDA plugin folder.(ex: *C:\Program Files\IDA 7.6\plugins*)
 
 
-## Basic Usage
+## Basic Usage For Program Analysis
 
 - Open the IDA database of the program to analyze.
 - Use step tracing to register the instructions and their results.
 - Import the trace file into CodexRebirth.
 - Explore by using mouse wheel while hovering the timeline, or by using previous/next buttons or shortcuts.
+
+## Basic Usage For Shellcode Analysis
+- Open the IDA database of the program to analyze.
+- Use step tracing to register the instructions and their results.
+- Export the shellcode region to a file.
+    ```python
+    import idc 
+    segm_start = 0xD487000
+    segm_end = 0xE86E000
+    size = end - start
+    filename = "D:\shellcode.bin"
+    idc.savefile(filename, 0, segm_start, segm_end)
+    ```
+- Start a new IDA instance and open the shellcode file.
+- Run this script to help IDA discover the code, you may adjust the result after running the script.
+    ```python
+    import idautils
+    shellcode_start = 0x0D759C54
+    def get_segm(seg_ea):
+        for seg in idautils.Segments():
+            seg_start = idc.get_segm_start(seg)
+            seg_end = idc.get_segm_end(seg)
+            if seg_start <= seg_ea <= seg_end:
+                return seg
+        raise Exception("Segment not found")
+
+    def reset_code_segment(seg_ea, hard=True):
+        seg = get_segm(seg_ea)
+        seg_start = idc.get_segm_start(seg)
+        seg_end = idc.get_segm_end(seg)
+        seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
+        for addr in range(seg_start, seg_end):
+            # undefined data DELIT_EXPAND del_items
+            idc.del_items(addr, idc.DELIT_EXPAND)
+        #print(f"Reset segment {seg_name} {hex(seg_start)}, {hex(seg_end)}")        
+        # do not convert directly
+        if not hard:
+            return
+        curr_addr = seg_start
+        while curr_addr < seg_end:
+            idc.create_insn(curr_addr)  
+            curr_addr += idaapi.get_item_size(curr_addr)  
+            
+            
+    print(reset_code_segment(shellcode_start hard=True))
+    ```
+- At the start of the tenet trace file, replace base=<0x..> by slide=<0x...>. The slide is the difference between the base address of the shellcode in IDA database and the base address of the shellcode in the original program.
+- Finally Load the Trace file into CodexRebirth and start the analysis.
+
 
 
 ## Key Usage Considerations
@@ -74,13 +123,10 @@ Then copy the content of the 'plugin' folder into the IDA plugin folder.(ex: *C:
 
 - While the analysis of operations is robust, it may not be flawless. For debugging and verification purposes, CodexRebirth provides a valuable parameter: **symbolic_check**. When enabled (set to True), this feature cross-checks the results produced by the Symbolic Engine.
 
-## Performance Insights
+## Performance Insights (IDA Step Tracer)
 
-The execution speed of The Step tracer is about 100 instructions per second on a local machine, and about 35 instructions per second for a remote machine via adb. However, the particularity of the step tracer is to exit code loops, so the number of instructions per second is not representative of the real performance of the tracer. 
+The execution speed of The Step tracer is about 100 instructions per second on a local machine, about 35 instructions per second for a remote machine via adb, and 25 for a remote machine via windbg. However, the particularity of the step tracer is to exit code loops, so the number of instructions per second is not representative of the real performance of the tracer. 
 
-After registering a trace, the performance of the plugin is highly dependent on the number of instructions and the complexity of the program. The plugin is capable of handling a trace of 16,500 instructions in less than 20 seconds, and a trace of 50,000 instructions in less than 2.5 minute. However, the performance will degrade as the number of instructions increases. The main cause is the bad performance of z3 when transforming into string the equations of the variables. The other causes is a slow performances of the tenet plugin when reading memory and registers values, because it highlights the size of the data as a factor influencing the performance of reading.
-
-*These performance metrics were obtained using Python 3.8 on a CPU Ryzen 5900HX with a clock speed ranging from 3.3GHz to 4.6GHz.*
 
 ## Tree View
 **The tree representation has been removed from the plugin because generating it was too slow.** Previously it worked like this:
@@ -88,12 +134,16 @@ After registering a trace, the performance of the plugin is highly dependent on 
 - Operation between SymValues are tree merged. 
 - Even by limiting the number of tree copy, the performance was too slow.
 
-## Maybe Future Work
+## Future Work
 
+- Show Thread ID with function call in the Tree view 
+- Extend tenet format to include syscalls, Api calls and threads metadata while importing the trace file.
+- See functions parameters in the Tree view
+- Refactor file loader and create fast cache for both registers and memory
+- Read children and parent reg from engines. Ex W8 -> X8 & 0xFFFFFFFF
+- Refactor everything and improve taint engines instructions coverage and implementation + add more register (like Xmm)
 - Switch to a more efficient ast and re-enable the equation 
 - Print the equation of the current instruction in the output window.
-- Read children and parent reg from engines. Ex W8 -> X8 & 0xFFFFFFFF
-- refactor everything and imrprove taint engines instructions coverage and implementation.
 
 
 

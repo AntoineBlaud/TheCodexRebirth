@@ -21,9 +21,10 @@ logger = logging.getLogger("Tenet.IDA.Integration")
 
 IDA_GLOBAL_CTX = "blah this value doesn't matter"
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # IDA UI Integration
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class TenetIDA(TenetCore):
     """
@@ -45,7 +46,7 @@ class TenetIDA(TenetCore):
         #
 
         self._hooked = False
-        
+
         self._ui_hooks = UIHooks()
         self._ui_hooks.get_lines_rendering_info = self._render_lines
         self._ui_hooks.finish_populating_widget_popup = self._popup_hook
@@ -115,19 +116,19 @@ class TenetIDA(TenetCore):
         # return the plugin context object for this IDB
         return self.contexts[dctx]
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # IDA Actions
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
-    ACTION_LOAD_TRACE      = "tenet:load_trace"
+    ACTION_LOAD_TRACE = "tenet:load_trace"
     ACTION_FIRST_EXECUTION = "tenet:first_execution"
     ACTION_FINAL_EXECUTION = "tenet:final_execution"
-    ACTION_NEXT_EXECUTION  = "tenet:next_execution"
-    ACTION_PREV_EXECUTION  = "tenet:prev_execution"
+    ACTION_NEXT_EXECUTION = "tenet:next_execution"
+    ACTION_PREV_EXECUTION = "tenet:prev_execution"
     ACTION_EXPORT_FUNCTION_MAP = "tenet:export_function_map"
     ACTION_STEP_TRACER = "tenet:step_tracer"
     ACTION_ULTIMAP = "tenet:ultimap"
-    
+
     def _install_action_to_widget(
         self,
         widget,
@@ -171,19 +172,19 @@ class TenetIDA(TenetCore):
 
     def _install_load_trace(self):
 
-        # TODO: create a custom IDA icon 
-        #icon_path = plugin_resource(os.path.join("icons", "load.png"))
-        #icon_data = open(icon_path, "rb").read()
-        #self._icon_id_file = ida_kernwin.load_custom_icon(data=icon_data)
+        # TODO: create a custom IDA icon
+        # icon_path = plugin_resource(os.path.join("icons", "load.png"))
+        # icon_data = open(icon_path, "rb").read()
+        # self._icon_id_file = ida_kernwin.load_custom_icon(data=icon_data)
 
         # describe a custom IDA UI action
         action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_LOAD_TRACE,                    # The action name
-            "~Tenet trace file...",                   # The action text
-            IDACtxEntry(self._interactive_load_trace), # The action handler
-            None,                                      # Optional: action shortcut
-            "Load a Tenet trace file",                 # Optional: tooltip
-            -1                                         # Optional: the action icon
+            self.ACTION_LOAD_TRACE,  # The action name
+            "~Tenet trace file...",  # The action text
+            IDACtxEntry(self._interactive_load_trace),  # The action handler
+            None,  # Optional: action shortcut
+            "Load a Tenet trace file",  # Optional: tooltip
+            -1,  # Optional: the action icon
         )
 
         # register the action with IDA
@@ -192,9 +193,9 @@ class TenetIDA(TenetCore):
 
         # attach the action to the File-> dropdown menu
         result = ida_kernwin.attach_action_to_menu(
-            "File/Load file/",       # Relative path of where to add the action
+            "File/Load file/",  # Relative path of where to add the action
             self.ACTION_LOAD_TRACE,  # The action ID (see above)
-            ida_kernwin.SETMENU_APP  # We want to append the action after ^
+            ida_kernwin.SETMENU_APP,  # We want to append the action after ^
         )
         assert result, f"Failed action attach {action_desc.name}"
 
@@ -207,12 +208,12 @@ class TenetIDA(TenetCore):
 
         # describe a custom IDA UI action
         action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_NEXT_EXECUTION,                        # The action name
-            "Go to next execution",                            # The action text
-            IDACtxEntry(self._interactive_next_execution),     # The action handler
-            "Shift+n",                                          # Optional: action shortcut
-            "Go to the next execution of the current address (Shift+n)", # Optional: tooltip
-            self._icon_id_next_execution                       # Optional: the action icon
+            self.ACTION_NEXT_EXECUTION,  # The action name
+            "Go to next execution",  # The action text
+            IDACtxEntry(self._interactive_next_execution),  # The action handler
+            "Shift+n",  # Optional: action shortcut
+            "Go to the next execution of the current address (Shift+n)",  # Optional: tooltip
+            self._icon_id_next_execution,  # Optional: the action icon
         )
 
         # register the action with IDA
@@ -227,12 +228,12 @@ class TenetIDA(TenetCore):
 
         # describe a custom IDA UI action
         action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_PREV_EXECUTION,                            # The action name
-            "Go to previous execution",                            # The action text
-            IDACtxEntry(self._interactive_prev_execution),         # The action handler
-            "Shift+p",                                                  # Optional: action shortcut
-            "Go to the previous execution of the current address (Shift+p)", # Optional: tooltip
-            self._icon_id_prev_execution                           # Optional: the action icon
+            self.ACTION_PREV_EXECUTION,  # The action name
+            "Go to previous execution",  # The action text
+            IDACtxEntry(self._interactive_prev_execution),  # The action handler
+            "Shift+p",  # Optional: action shortcut
+            "Go to the previous execution of the current address (Shift+p)",  # Optional: tooltip
+            self._icon_id_prev_execution,  # Optional: the action icon
         )
 
         # register the action with IDA
@@ -244,12 +245,12 @@ class TenetIDA(TenetCore):
 
         # describe a custom IDA UI action
         action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_FIRST_EXECUTION,                        # The action name
-            "Go to first execution",                            # The action text
-            IDACtxEntry(self._interactive_first_execution),     # The action handler
-            None,                                               # Optional: action shortcut
-            "Go to the first execution of the current address", # Optional: tooltip
-            -1                                                  # Optional: the action icon
+            self.ACTION_FIRST_EXECUTION,  # The action name
+            "Go to first execution",  # The action text
+            IDACtxEntry(self._interactive_first_execution),  # The action handler
+            None,  # Optional: action shortcut
+            "Go to the first execution of the current address",  # Optional: tooltip
+            -1,  # Optional: the action icon
         )
 
         # register the action with IDA
@@ -261,56 +262,38 @@ class TenetIDA(TenetCore):
 
         # describe a custom IDA UI action
         action_desc = ida_kernwin.action_desc_t(
-            self.ACTION_FINAL_EXECUTION,                        # The action name
-            "Go to final execution",                            # The action text
-            IDACtxEntry(self._interactive_final_execution),     # The action handler
-            None,                                               # Optional: action shortcut
-            "Go to the final execution of the current address", # Optional: tooltip
-            -1                                                  # Optional: the action icon
+            self.ACTION_FINAL_EXECUTION,  # The action name
+            "Go to final execution",  # The action text
+            IDACtxEntry(self._interactive_final_execution),  # The action handler
+            None,  # Optional: action shortcut
+            "Go to the final execution of the current address",  # Optional: tooltip
+            -1,  # Optional: the action icon
         )
 
         # register the action with IDA
         result = ida_kernwin.register_action(action_desc)
         assert result, f"Failed to register '{action_desc.name}' action with IDA"
         logger.info(f"Installed the '{action_desc.name}' menu entry")
-        
-        
+
     def _install_export_function_map(self, widget, popup):
         self._install_action_to_widget(
-            widget,
-            popup,
-            self.ACTION_EXPORT_FUNCTION_MAP,
-            "Export function map",
-            self._interactive_export_function_map
+            widget, popup, self.ACTION_EXPORT_FUNCTION_MAP, "Export function map", self._interactive_export_function_map
         )
 
     def _install_step_tracer(self, widget, popup):
         self._install_action_to_widget(
-            widget,
-            popup,
-            self.ACTION_STEP_TRACER,
-            "Use step tracer",
-            self._interactive_step_tracer
+            widget, popup, self.ACTION_STEP_TRACER, "Use step tracer", self._interactive_step_tracer
         )
-        
+
     def _install_ultimap(self, widget, popup):
-        self._install_action_to_widget(
-            widget,
-            popup,
-            self.ACTION_ULTIMAP,
-            "Use Ultimap",
-            self._interactive_ultimap
-        )
-    
+        self._install_action_to_widget(widget, popup, self.ACTION_ULTIMAP, "Use Ultimap", self._interactive_ultimap)
+
     def _uninstall_load_trace(self):
 
         logger.info("Removing the 'Tenet trace file...' menu entry...")
 
         # remove the entry from the File-> menu
-        result = ida_kernwin.detach_action_from_menu(
-            "File/Load file/",
-            self.ACTION_LOAD_TRACE
-        )
+        result = ida_kernwin.detach_action_from_menu("File/Load file/", self.ACTION_LOAD_TRACE)
         if not result:
             logger.warning("Failed to detach action from menu...")
             return False
@@ -322,7 +305,7 @@ class TenetIDA(TenetCore):
             return False
 
         # delete the entry's icon
-        #ida_kernwin.free_custom_icon(self._icon_id_file) # TODO
+        # ida_kernwin.free_custom_icon(self._icon_id_file) # TODO
         self._icon_id_file = ida_idaapi.BADADDR
 
         logger.info("Successfully removed the menu entry!")
@@ -332,15 +315,15 @@ class TenetIDA(TenetCore):
         result = self._uninstall_action(self.ACTION_NEXT_EXECUTION, self._icon_id_next_execution)
         self._icon_id_next_execution = ida_idaapi.BADADDR
         return result
-        
+
     def _uninstall_prev_execution(self):
         result = self._uninstall_action(self.ACTION_PREV_EXECUTION, self._icon_id_prev_execution)
         self._icon_id_prev_execution = ida_idaapi.BADADDR
         return result
-        
+
     def _uninstall_first_execution(self):
         return self._uninstall_action(self.ACTION_FIRST_EXECUTION)
-        
+
     def _uninstall_final_execution(self):
         return self._uninstall_action(self.ACTION_FINAL_EXECUTION)
 
@@ -357,9 +340,9 @@ class TenetIDA(TenetCore):
         logger.info(f"Uninstalled the {action} menu entry")
         return True
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # UI Event Handlers
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def _breakpoint_changed_hook(self, code, bpt):
         """
@@ -406,8 +389,8 @@ class TenetIDA(TenetCore):
                 widget,
                 popup,
                 self.ACTION_NEXT_EXECUTION,  # The action ID (see above)
-                "Rename",                    # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP      # We want to append the action after ^
+                "Rename",  # Relative path of where to add the action
+                ida_kernwin.SETMENU_APP,  # We want to append the action after ^
             )
 
             #
@@ -430,27 +413,27 @@ class TenetIDA(TenetCore):
             ida_kernwin.attach_action_to_popup(
                 widget,
                 popup,
-                self.ACTION_FIRST_EXECUTION,     # The action ID (see above)
-                "Go to.../",                     # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP          # We want to append the action after ^
+                self.ACTION_FIRST_EXECUTION,  # The action ID (see above)
+                "Go to.../",  # Relative path of where to add the action
+                ida_kernwin.SETMENU_APP,  # We want to append the action after ^
             )
 
             ida_kernwin.attach_action_to_popup(
                 widget,
                 popup,
-                self.ACTION_FINAL_EXECUTION,     # The action ID (see above)
-                "Go to.../",                     # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP          # We want to append the action after ^
+                self.ACTION_FINAL_EXECUTION,  # The action ID (see above)
+                "Go to.../",  # Relative path of where to add the action
+                ida_kernwin.SETMENU_APP,  # We want to append the action after ^
             )
 
             ida_kernwin.attach_action_to_popup(
                 widget,
                 popup,
                 self.ACTION_PREV_EXECUTION,  # The action ID (see above)
-                "Rename",                    # Relative path of where to add the action
-                ida_kernwin.SETMENU_APP      # We want to append the action after ^
+                "Rename",  # Relative path of where to add the action
+                ida_kernwin.SETMENU_APP,  # We want to append the action after ^
             )
-            
+
             self._install_export_function_map(widget, popup)
             self._install_step_tracer(widget, popup)
             self._install_ultimap(widget, popup)
@@ -482,7 +465,7 @@ class TenetIDA(TenetCore):
         ctx = self.get_context(IDA_GLOBAL_CTX)
         if not ctx.reader:
             return
-        
+
         trail_length = 0x20
 
         forward_color = self.palette.trail_forward
@@ -491,7 +474,7 @@ class TenetIDA(TenetCore):
 
         r, g, b, _ = current_color.getRgb()
         current_color = 0xFF << 24 | b << 16 | g << 8 | r
-        
+
         step_over = False
         modifiers = QtGui.QGuiApplication.keyboardModifiers()
         step_over = bool(modifiers & QtCore.Qt.ShiftModifier)
@@ -501,10 +484,7 @@ class TenetIDA(TenetCore):
 
         backward_trail, forward_trail = {}, {}
 
-        trails = [
-            (backward_ips, backward_trail, backward_color), 
-            (forward_ips, forward_trail, forward_color)
-        ]
+        trails = [(backward_ips, backward_trail, backward_color), (forward_ips, forward_trail, forward_color)]
 
         for addresses, trail, color in trails:
             for i, address in enumerate(addresses):
@@ -512,7 +492,7 @@ class TenetIDA(TenetCore):
                 # convert to bgr
                 r, g, b, _ = color.getRgb()
                 ida_color = b << 16 | g << 8 | r
-                ida_color |= (0xFF ) << 24
+                ida_color |= (0xFF) << 24
 
                 # save the trail color
                 rebased_address = ctx.reader.analysis.rebase_pointer(address)
@@ -532,7 +512,7 @@ class TenetIDA(TenetCore):
         for section in lines_in.sections_lines:
             for line in section:
                 address = line.at.toea()
-                
+
                 if address in backward_trail:
                     color = backward_trail[address]
                 elif address in forward_trail:
@@ -544,12 +524,10 @@ class TenetIDA(TenetCore):
 
                 entry = ida_kernwin.line_rendering_output_entry_t(line, ida_kernwin.LROEF_FULL_LINE, color)
                 lines_out.entries.push_back(entry)
-                
-   
 
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Callbacks
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
 
     def ui_breakpoint_changed(self, callback):
         register_callback(self._ui_breakpoint_changed_callbacks, callback)
@@ -557,9 +535,11 @@ class TenetIDA(TenetCore):
     def _notify_ui_breakpoint_changed(self, address, code):
         notify_callback(self._ui_breakpoint_changed_callbacks, address, code)
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # IDA UI Helpers
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class IDACtxEntry(ida_kernwin.action_handler_t):
     """
@@ -585,18 +565,23 @@ class IDACtxEntry(ida_kernwin.action_handler_t):
         """
         return ida_kernwin.AST_ENABLE_ALWAYS
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # IDA UI Event Hooks
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class DbgHooks(ida_dbg.DBG_Hooks):
     def dbg_bpt_changed(self, code, bpt):
         pass
 
+
 class UIHooks(ida_kernwin.UI_Hooks):
     def get_lines_rendering_info(self, lines_out, widget, lines_in):
         pass
+
     def ready_to_run(self):
         pass
+
     def finish_populating_widget_popup(self, widget, popup):
         pass

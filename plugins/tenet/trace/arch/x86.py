@@ -2,6 +2,7 @@ class ArchX86:
     """
     x86 CPU Architecture Definition.
     """
+
     MAGIC = 0x386
 
     POINTER_SIZE = 4
@@ -9,13 +10,12 @@ class ArchX86:
 
     IP = "EIP"
     SP = "ESP"
-    
+
     CALL_INSTRUCTION = "call"
     JUMP_INSTRUCTION = "jmp"
     COND_JUMP_INSTRUCTION = "j"
 
-    REGISTERS = \
-    [
+    REGISTERS = [
         "EAX",
         "EBX",
         "ECX",
@@ -24,8 +24,7 @@ class ArchX86:
         "ESP",
         "ESI",
         "EDI",
-        "EIP"
-        "R8D",
+        "EIP" "R8D",
         "R9D",
         "R10D",
         "R11D",
@@ -63,19 +62,7 @@ class ArchX86:
         "AH",
         "BH",
         "CH",
-        "DH"
+        "DH",
     ]
-    
-    REGISTERS_MAIN = \
-    [
-        "EAX",
-        "EBX",
-        "ECX",
-        "EDX",
-        "EBP",
-        "ESP",
-        "ESI",
-        "EDI",
-        "EIP"
-    ]
-    
+
+    REGISTERS_MAIN = ["EAX", "EBX", "ECX", "EDX", "EBP", "ESP", "ESI", "EDI", "EIP"]

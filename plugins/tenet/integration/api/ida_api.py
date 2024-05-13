@@ -1,8 +1,7 @@
 import logging
 import functools
-from capstone import *
-from keystone import *
-import os 
+import os
+
 #
 # TODO: should probably cleanup / document this file a bit better.
 #
@@ -25,12 +24,11 @@ import ida_idd
 import ida_diskio
 import ida_kernwin
 import ida_segment
-import idc 
+import idc
 import idaapi
 from .api import DisassemblerCoreAPI, DisassemblerContextAPI
 from ...util.qt import *
 from ...util.misc import is_mainthread
-from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 
 logger = logging.getLogger("Tenet.API.IDA")
 
@@ -41,10 +39,12 @@ class calling_convention:
     usercall = 240
     cdecl = 48
     noreturn = 64
-    
-#------------------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------------------
 # Utils
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def execute_sync(function, sync_type):
     """
@@ -74,11 +74,14 @@ def execute_sync(function, sync_type):
 
         # return the output of the synchronized execution
         return output[0]
+
     return wrapper
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # Disassembler Core API (universal)
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class IDACoreAPI(DisassemblerCoreAPI):
     NAME = "IDA"
@@ -99,17 +102,17 @@ class IDACoreAPI(DisassemblerCoreAPI):
         self._version_minor = minor
         self._version_patch = 0
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Properties
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     @property
     def headless(self):
         return ida_kernwin.cvar.batch
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Synchronization Decorators
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     @staticmethod
     def execute_read(function):
@@ -123,9 +126,9 @@ class IDACoreAPI(DisassemblerCoreAPI):
     def execute_ui(function):
         return execute_sync(function, ida_kernwin.MFF_FAST)
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # API Shims
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def get_disassembler_user_directory(self):
         return ida_diskio.get_user_idadir()
@@ -147,11 +150,11 @@ class IDACoreAPI(DisassemblerCoreAPI):
         viewer_widget = ida_kernwin.PluginForm.TWidgetToPyQtWidget(viewer_twidget)
 
         # fetch the background color property
-        #viewer.Show() # TODO: re-enable!
+        # viewer.Show() # TODO: re-enable!
         color = viewer_widget.property("line_bg_default")
 
         # destroy the view as we no longer need it
-        #viewer.Close()
+        # viewer.Close()
 
         # return the color
         return color
@@ -167,9 +170,9 @@ class IDACoreAPI(DisassemblerCoreAPI):
     def message(self, message):
         print(message)
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # UI API Shims
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def create_dockable(self, window_title, widget):
 
@@ -184,9 +187,17 @@ class IDACoreAPI(DisassemblerCoreAPI):
         # return the dockable QtWidget / container
         return dockable
 
-#------------------------------------------------------------------------------
+    def get_root_filename(self):
+        return ida_nalt.get_root_filename()
+
+    def get_root_filename_dir(self):
+        return os.path.dirname(self.get_root_filename())
+
+
+# ------------------------------------------------------------------------------
 # Disassembler Context API (database-specific)
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class IDAContextAPI(DisassemblerContextAPI):
 
@@ -195,11 +206,11 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     @property
     def busy(self):
-        return not(ida_auto.auto_is_ok())
+        return not (ida_auto.auto_is_ok())
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # API Shims
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     @IDACoreAPI.execute_read
     def get_current_address(self):
@@ -207,12 +218,12 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_processor_type(self):
         ## get the target arch, PLFM_386, PLFM_ARM, etc # TODO
-        #arch = idaapi.ph_get_id()
+        # arch = idaapi.ph_get_id()
         pass
 
     def is_64bit(self):
         inf = ida_idaapi.get_inf_structure()
-        #target_filetype = inf.filetype
+        # target_filetype = inf.filetype
         return inf.is_64bit()
 
     def is_call_insn(self, address):
@@ -232,7 +243,7 @@ class IDAContextAPI(DisassemblerContextAPI):
             # fetch code segments
             seg = ida_segment.getseg(seg_address)
             # IDA bug
-            #if seg.sclass != ida_segment.SEG_CODE:
+            # if seg.sclass != ida_segment.SEG_CODE:
             #    continue
 
             current_address = seg_address
@@ -245,7 +256,7 @@ class IDAContextAPI(DisassemblerContextAPI):
                     instruction_addresses.append(current_address)
 
         #    print(f"Seg {seg.start_ea:08X} --> {seg.end_ea:08X} CODE")
-        #print(f" -- {len(instruction_addresses):,} instructions found")
+        # print(f" -- {len(instruction_addresses):,} instructions found")
 
         return instruction_addresses
 
@@ -286,7 +297,15 @@ class IDAContextAPI(DisassemblerContextAPI):
         return list(idautils.Functions())
 
     def get_function_name_at(self, address):
-        return ida_name.get_short_name(address)
+        # test 1
+        fn = idaapi.get_func(address)
+        if fn:
+            return idaapi.get_func_name(fn.start_ea)
+        # test 2
+        name  = ida_name.get_name(address)
+        if name:
+            return name
+        return "unknown"
 
     def get_function_raw_name_at(self, function_address):
         return ida_name.get_name(function_address)
@@ -296,6 +315,9 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_root_filename(self):
         return ida_nalt.get_root_filename()
+
+    def get_root_filename_dir(self):
+        return os.path.dirname(self.get_root_filename())
 
     def navigate(self, address):
 
@@ -326,14 +348,14 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def set_function_name_at(self, function_address, new_name):
         ida_name.set_name(function_address, new_name, ida_name.SN_NOWARN)
-    
+
     def set_breakpoint(self, address):
         ida_dbg.add_bpt(address)
         ida_dbg.enable_bpt(address, True)
 
     def delete_breakpoint(self, address):
         ida_dbg.del_bpt(address)
-        
+
     def get_sections(self):
         sections = []
         for seg_address in idautils.Segments():
@@ -341,7 +363,8 @@ class IDAContextAPI(DisassemblerContextAPI):
             section_name = ida_segment.get_segm_name(seg)
             sections.append({"name": section_name, "range": f"{seg.start_ea:08X}-{seg.end_ea:08X}"})
         return sections
-    
+
+    # TODO: move outside of this class
     def get_functions_in_section(self, section_name):
         functions = []
         for f_addr in idautils.Functions():
@@ -351,73 +374,84 @@ class IDAContextAPI(DisassemblerContextAPI):
             if function_section_name == section_name and ":" not in f_name:
                 functions.append((f_name, f_addr))
         return functions
-    
+
+    # TODO: move outside of this class
     def compute_function_coverage(self, func, section=".text", f_cache_coverages={}, depth=0):
-            """Compute the coverage of a function in the binary."""
-            # get all sub calls
-            if depth > 20:
-                return set()
-            if func is None:
-                return set()
-            f_sub_calls = set()
-            for ea in idautils.FuncItems(func.start_ea):
-                mnem = idc.print_insn_mnem(ea).lower()
-                if mnem == "call" or mnem == "bl":
-                    addr = idc.get_operand_value(ea, 0)
-                    # get function name
-                    name = idc.get_func_name(addr)
-                    # check addr is in code section
-                    if idc.get_segm_name(addr) == section:
-                        f_sub_calls.add((name, addr))
-                        
-            for sub_call_name, sub_call_addr in f_sub_calls.copy():
-                
-                # if already explored get the result
-                if sub_call_addr in f_cache_coverages:
-                    # merge coverage
-                    f_sub_calls |= f_cache_coverages[sub_call_addr]
-                    continue
-                    
-                # else explore the function
-                elif sub_call_name != idc.get_func_name(func.start_ea):
-                    sub_func = idaapi.get_func(sub_call_addr)
-                    f_sub_sub_calls  = self.compute_function_coverage(sub_func, section, f_cache_coverages, depth + 1)
-                    # merge coverage
-                    f_sub_calls |= f_sub_sub_calls
-                    
-            f_cache_coverages[func.start_ea] = f_sub_calls
-            return f_sub_calls
+        """Compute the coverage of a function in the binary."""
+        # get all sub calls
+        if depth > 15:
+            return set()
+        if func is None:
+            return set()
+        f_sub_calls = set()
         
+        for ea in idautils.FuncItems(func.start_ea):
+            mnem = self.print_insn_mnemonic(ea)
+            if mnem == "call" or mnem == "bl":
+                addr = idc.get_operand_value(ea, 0)
+                # get function name
+                name = idc.get_func_name(addr)
+                # check addr is in code section
+                if idc.get_segm_name(addr) == section:
+                    f_sub_calls.add((name, addr))
+
+        for sub_call_name, sub_call_addr in f_sub_calls.copy():
+
+            # if already explored get the result
+            if sub_call_addr in f_cache_coverages:
+                # merge coverage
+                f_sub_calls |= f_cache_coverages[sub_call_addr]
+                continue
+            # show percentage
+            # else explore the function
+            elif sub_call_name != idc.get_func_name(func.start_ea):
+                sub_func = idaapi.get_func(sub_call_addr)
+                f_sub_sub_calls = self.compute_function_coverage(sub_func, section, f_cache_coverages, depth + 1)
+                # merge coverage
+                f_sub_calls |= f_sub_sub_calls
+
+        f_cache_coverages[func.start_ea] = f_sub_calls
+        return f_sub_calls
+
     def to_ida_color(self, color):
         r, g, b, _ = color.getRgb()
         return 0xFF << 24 | b << 16 | g << 8 | r
-    
+
     def here(self):
         return idc.here()
-    
-    def get_module_name(self, ea):
-        modinfo = ida_idd.modinfo_t()
-        ida_dbg.get_module_info(ea, modinfo)
-        return os.path.basename(modinfo.name).lower()
-    
-    def get_module_text_base(self, name):
+
+    def get_segm_name(self, ea):
+        for seg in idautils.Segments():
+            seg_start = idc.get_segm_start(seg)
+            seg_end = idc.get_segm_end(seg)
+            seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
+            if seg_start <= ea <= seg_end:
+                return seg_name
+
+    def get_module_base(self):
+        root_filename = idc.get_root_filename()
         for seg_address in idautils.Segments():
-            modinfo = ida_idd.modinfo_t()
-            ida_dbg.get_module_info(seg_address, modinfo)
-            basename = os.path.basename(modinfo.name)
             # get seg permissions
             seg = ida_segment.getseg(seg_address)
-            # check is section executable
-            if name.lower() in basename.lower() and seg.perm & ida_segment.SEGPERM_EXEC:
-                return modinfo.base
+            seg_name = ida_segment.get_segm_name(seg)
+            if root_filename in seg_name:
+                return seg_address
         return None
-        
+
+    def get_module_end(self, ea):
+        for seg in idautils.Segments():
+            seg_start = idc.get_segm_start(seg)
+            seg_end = idc.get_segm_end(seg)
+            if seg_start <= ea <= seg_end:
+                return seg_end
+        return None
+
     def set_color(self, address, color):
         idc.set_color(address, idc.CIC_ITEM, color)
-        
+
     def set_cmt(self, address, comment):
         idc.set_cmt(address, comment, 0)
-        
+
     def get_fn_blocks(self, ea):
         func = idaapi.get_func(ea)
         if not func:
@@ -425,105 +459,48 @@ class IDAContextAPI(DisassemblerContextAPI):
         flow_chart = idaapi.FlowChart(func)
         return [(block.start_ea, block.end_ea) for block in flow_chart]
 
-    def get_capstone_md(self, arch):
-        md = None
-        if isinstance(arch, ArchAMD64):
-            md = Cs(CS_ARCH_X86, CS_MODE_64)
-        elif isinstance(arch, ArchX86):
-            md = Cs(CS_ARCH_X86, CS_MODE_32)
-        elif isinstance(arch, ArchARM):
-            md = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
-        elif isinstance(arch, ArchARM64):
-            md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
-            
-        if md is None:
-            return None
-        md.detail = True
-        return md
-    
-    def get_keystone_md(self, arch):
-        ks = None
-        if isinstance(arch, ArchAMD64):
-            ks = Ks(KS_ARCH_X86, KS_MODE_64)
-        elif isinstance(arch, ArchX86):
-            ks = Ks(KS_ARCH_X86, KS_MODE_32)
-        elif isinstance(arch, ArchARM):
-            ks = Ks(KS_ARCH_ARM, KS_MODE_THUMB)
-        elif isinstance(arch, ArchARM64):
-            ks = Ks(KS_ARCH_ARM64, KS_MODE_LITTLE_ENDIAN)
-        if ks is None:
-            return None
-        ks.detail = True
-        return ks
-    
-    def get_pc(self, arch):
-        if isinstance(arch, ArchAMD64):
-            return idc.get_reg_value("RIP")
-        elif isinstance(arch, ArchX86):
-            return idc.get_reg_value("EIP")
-        elif isinstance(arch, ArchARM):
-            return idc.get_reg_value("PC")
-        elif isinstance(arch, ArchARM64):
-            return idc.get_reg_value("PC")
-        return None
-    
     def get_reg_value(self, reg):
         try:
             return idc.get_reg_value(reg)
         except:
             return 0
-        
-    def disasm(self, address, arch):
-        md = self.get_capstone_md(arch)
-        raw_insn = bytes(self.read_memory(address, 16))
-        try:
-            insn = next(md.disasm(raw_insn, address))
-        except StopIteration:
-            return None
-        return insn
-    
-    def get_register_name(self, register, arch):
-        # capstone register
-        md = self.get_capstone_md(arch)
-        return md.reg_name(register).upper()
 
-    
     def read_memory(self, address, size):
         return ida_bytes.get_bytes(address, size)
-    
+
     def get_root_filename(self):
         return idc.get_root_filename()
-        
+
     def is_mapped(self, address):
         try:
             return ida_bytes.is_mapped(address)
         except:
             return False
-    
+
     def rebase_0(self):
         offset = idaapi.get_imagebase()
         idaapi.rebase_program(-offset, idaapi.MSF_NOFIX)
         # wait for rebase
         while idaapi.get_imagebase() != 0:
             time.sleep(0.1)
-            
+
     def get_imagebase(self):
         return idaapi.get_imagebase()
-    
+
     def rebase_plus(self, offset):
         idaapi.rebase_program(offset, idaapi.MSF_NOFIX)
         # wait for rebase
         while idaapi.get_imagebase() != offset:
             time.sleep(0.1)
-            
+
     def rebase_to(self, target_base):
         current_base = idaapi.get_imagebase()
         offset = target_base - current_base
         self.rebase_plus(offset)
-        
+
     def take_memory_snapshot(self):
         idaapi.take_memory_snapshot(0)
-        
+
     def get_segm(self, seg_ea):
         for seg in idautils.Segments():
             seg_start = idc.get_segm_start(seg)
@@ -531,10 +508,10 @@ class IDAContextAPI(DisassemblerContextAPI):
             if seg_start <= seg_ea <= seg_end:
                 return seg
         raise Exception("Segment not found")
-    
+
     def get_segm_name(self, seg):
         return idaapi.get_segm_name(idaapi.getseg(seg))
-        
+
     def reset_code_segment(self, seg_ea, hard=True):
         seg = self.get_segm(seg_ea)
         seg_start = idc.get_segm_start(seg)
@@ -543,96 +520,123 @@ class IDAContextAPI(DisassemblerContextAPI):
         for addr in range(seg_start, seg_end):
             # undefined data DELIT_EXPAND del_items
             idc.del_items(addr, idc.DELIT_EXPAND)
-        #print(f"Reset segment {seg_name} {hex(seg_start)}, {hex(seg_end)}")        
+        # print(f"Reset segment {seg_name} {hex(seg_start)}, {hex(seg_end)}")
         # do not convert directly
         if not hard:
             return
         curr_addr = seg_start
         while curr_addr < seg_end:
-            idc.create_insn(curr_addr)  
-            curr_addr += idaapi.get_item_size(curr_addr)  
-            
+            idc.create_insn(curr_addr)
+            curr_addr += idaapi.get_item_size(curr_addr)
+
     def get_segm(self, ea):
         for seg in idautils.Segments():
             seg_start = idc.get_segm_start(seg)
             seg_end = idc.get_segm_end(seg)
             if seg_start <= ea <= seg_end:
                 return seg
-            
+
     def get_segm_start(self, seg):
         return idc.get_segm_start(seg)
-    
-    
+
     def get_segm_end(self, seg):
         return idc.get_segm_end(seg)
-    
-    
+
     def create_insn(self, ea):
         idc.create_insn(ea)
-        
-    def print_insn_mnem(self, ea):
+
+    def print_insn_mnemonic(self, ea):
         return idc.print_insn_mnem(ea).lower()
-    
+
     def get_operand_value(self, ea, op):
         return idc.get_operand_value(ea, op)
-    
+
     def continue_process(self, timeout=15):
         idaapi.continue_process()
         idaapi.wait_for_next_event(idaapi.WFNE_SUSP, timeout)
         if self.is_process_running():
             print("Process still running after", timeout, "seconds")
             raise Exception(f"Process still running after {timeout} seconds")
-        
+
     def is_process_running(self):
         # check idaapi.WFNE_SUSP is false
         if idaapi.get_process_state() == idaapi.DSTATE_RUN:
             return True
         return False
-        
+
     def get_bpt_qty(self):
         return ida_dbg.get_bpt_qty()
-    
+
     def get_func_name(self, ea):
         return idc.get_func_name(ea)
-    
+
     def list_functions(self):
         return idautils.Functions()
-    
+
     def user_cancelled(self):
         return idaapi.user_cancelled()
-    
+
     def get_item_size(self, ea):
         return idaapi.get_item_size(ea)
-    
+
     def step_into(self):
         idaapi.step_into()
         idaapi.wait_for_next_event(idc.WFNE_SUSP, -1)
-        
+
     def step_until_ret(self):
         idaapi.step_until_ret()
         idaapi.wait_for_next_event(idc.WFNE_SUSP, -1)
-        
+
     def generate_disasm_line(self, ea):
         return idc.generate_disasm_line(ea, idc.GENDSM_FORCE_CODE)
-    
+
     def get_root_filename(self):
         return idc.get_root_filename()
-    
+
     def is_debugger_on(self):
         return ida_dbg.is_debugger_on()
-    
+
     def update_ui(self):
         idaapi.refresh_idaview_anyway()
-        
+
     def enable_breakpoint(self, ea, enable):
         ida_dbg.enable_bpt(ea, enable)
-        
+
     def disable_breakpoint(self, ea):
         ida_dbg.enable_bpt(ea, False)
 
-#------------------------------------------------------------------------------
+    def get_pc(self, arch):
+        return self.get_reg_value(arch.IP)
+    
+    def suspend_other_threads(self):
+        # Get the total number of threads
+        thread_qty = ida_dbg.get_thread_qty()
+
+        # Get the ID of the current thread
+        current_thread_id = ida_dbg.get_current_thread()
+
+        # Iterate through each thread
+        for i in range(thread_qty):
+            tid = ida_dbg.getn_thread(i)
+            # Skip the current thread
+            if tid == current_thread_id:
+                continue
+
+            # Suspend the thread
+            ida_dbg.select_thread(tid)
+            ida_dbg.suspend_thread(tid)
+
+        # Restore the current thread selection
+        ida_dbg.select_thread(current_thread_id)
+        
+    def get_current_thread(self):
+        return ida_dbg.get_current_thread()
+
+
+# ------------------------------------------------------------------------------
 # HexRays Util
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def hexrays_available():
     """
@@ -640,9 +644,11 @@ def hexrays_available():
     """
     try:
         import ida_hexrays
+
         return ida_hexrays.init_hexrays_plugin()
     except ImportError:
         return False
+
 
 def map_line2citem(decompilation_text):
     """
@@ -675,6 +681,7 @@ def map_line2citem(decompilation_text):
         line2citem[line_number] = lex_citem_indexes(line_text)
 
     return line2citem
+
 
 def map_line2node(cfunc, metadata, line2citem):
     """
@@ -729,7 +736,7 @@ def map_line2node(cfunc, metadata, line2citem):
 
             # address not mapped to a node... weird. continue to the next citem
             if not node:
-                #logger.warning("Failed to map node to basic block")
+                # logger.warning("Failed to map node to basic block")
                 continue
 
             #
@@ -749,6 +756,7 @@ def map_line2node(cfunc, metadata, line2citem):
 
     # all done, return the computed map
     return line2node
+
 
 def lex_citem_indexes(line):
     """
@@ -786,7 +794,7 @@ def lex_citem_indexes(line):
                 # in this context, it is actually the index number of a citem
                 #
 
-                citem_index = int(line[i:i+idaapi.COLOR_ADDR_SIZE], 16)
+                citem_index = int(line[i : i + idaapi.COLOR_ADDR_SIZE], 16)
                 i += idaapi.COLOR_ADDR_SIZE
 
                 # save the extracted citem index
@@ -800,6 +808,7 @@ def lex_citem_indexes(line):
 
     # return all the citem indexes extracted from this line of text
     return indexes
+
 
 class DockableWindow(ida_kernwin.PluginForm):
 
@@ -816,7 +825,7 @@ class DockableWindow(ida_kernwin.PluginForm):
             self.__dock_filter = IDADockSizeHack()
 
     def OnCreate(self, form):
-        #print("Creating", self.title)
+        # print("Creating", self.title)
         self.parent = self.FormToPyQtWidget(form)
 
         layout = QtWidgets.QVBoxLayout()
@@ -826,10 +835,10 @@ class DockableWindow(ida_kernwin.PluginForm):
 
         if ida_pro.IDA_SDK_VERSION < 760:
             self.__dock_size_hack()
-    
+
     def OnClose(self, foo):
         self.visible = False
-        #print("Closing", self.title)
+        # print("Closing", self.title)
 
     def __dock_size_hack(self):
         if self.widget.minimumWidth() == 0:
@@ -845,7 +854,7 @@ class DockableWindow(ida_kernwin.PluginForm):
 
         if ida_pro.IDA_SDK_VERSION < 760:
             WOPN_SZHINT = 0x200
-        
+
             # create the dockable widget, without actually showing it
             self.Show(self.title, options=ida_kernwin.PluginForm.WOPN_CREATE_ONLY | ida_kernwin.WOPN_NOT_CLOSED_BY_ESC)
 
@@ -879,6 +888,7 @@ class DockableWindow(ida_kernwin.PluginForm):
     def copy_dock_position(self, other):
         self._dock_target = other._dock_target
         self._dock_position = other._dock_position
+
 
 class IDADockSizeHack(QtCore.QObject):
     def eventFilter(self, obj, event):

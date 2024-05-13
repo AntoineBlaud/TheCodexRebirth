@@ -1,8 +1,27 @@
 import random
 import sys
 
+
 def rbg_ida_color(r, g, b):
     return 0xFF << 24 | b << 16 | g << 8 | r
+
+
+def name_color(self, string):
+    # Initialize RGB values
+    r = 0
+    g = 0
+    b = 0
+
+    # Sum up the ASCII values of all characters in the string
+    total_ascii = sum(ord(char) for char in string)
+
+    # Use modulo to distribute the total ASCII value into RGB channels
+    r = (total_ascii * 17) % 200 + 55
+    g = (total_ascii * 19) % 200 + 55
+    b = (total_ascii * 23) % 200 + 55
+
+    return (r, g, b)
+
 
 class Color:
     ANSI_COLOR_FORMAT = "\033[38;5;{}m"

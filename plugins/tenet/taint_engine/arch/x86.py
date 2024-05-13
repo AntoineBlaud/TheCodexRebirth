@@ -1,4 +1,5 @@
-from tenet.taint_engine.values_container import SymRegister
+from tenet.taint_engine.values_taint import SymRegister
+
 
 def create_sym_register_factory():
     """
