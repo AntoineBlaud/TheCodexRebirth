@@ -1,9 +1,9 @@
-# CodexRebirth : A Taint Analysis Approach to Reverse Engineering
+# CodexRebirth : Taint Analysis + Trace Exploration Approach to Reverse Engineering
 
 
 ## Introduction
 
-The CodexRebirth project seeks to revolutionize the process of reverse engineering by introducing a Taint Analysis approach specifically designed to simplify the unraveling of **obfuscated methods**. This method involves a comprehensive examination of all assembly instructions, tainting every memory address and register in the process. Subsequently, when an instruction relies on a tainted register, memory, or a result derived from these tainted elements, it will execute the operation and update the associated equations. This approach enables the user to easily trace the progression of equations and values, pinpointing the instruction responsible for any value change. Furthermore, the ability to color-code instructions based on their 'taint_id' or 'block similarity' adds an additional layer of clarity to the analysis.
+The CodexRebirth project seeks to revolutionize the process of reverse engineering by introducing a Taint Analysis approach specifically designed to simplify the unraveling of **obfuscated code**. This method involves a comprehensive examination of all assembly instructions, tainting every memory address and register in the process. Subsequently, when an instruction relies on a tainted register, memory, or a result derived from these tainted elements, it will execute the operation and update the associated equations. This approach enables the user to easily trace the progression of equations and values, pinpointing the instruction responsible for any value change. Furthermore, the ability to color-code instructions based on their 'taint_id' or 'block similarity' adds an additional layer of clarity to the analysis.
 
 *Big Thanks to Markus Gaasedelen (@gaasedelen) because I used his Tenet IDA plugin as a base for mine,  I also took a part of the code from the frinet project.*
 
