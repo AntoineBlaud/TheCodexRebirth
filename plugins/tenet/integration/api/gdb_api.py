@@ -135,6 +135,9 @@ class GDBContextAPI:
                 if not page.execute:
                     self.log("[WARNING] Page is not executable")
                 return page.start
+            
+    def get_segm_start(self, ea):
+        return self.get_module_base(ea)
 
     def get_module_base_by_name(self, name):
         pages = self.cache_pages
