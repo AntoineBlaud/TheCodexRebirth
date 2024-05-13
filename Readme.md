@@ -9,6 +9,14 @@ The CodexRebirth project seeks to revolutionize the process of reverse engineeri
 
 !["IDA plugin"](./doc/imgs/plugin.gif)
 
+The plugin also includes additional features, some of which have been adapted from the Tenet plugin and Frinet project, with further enhancements
+
+![Features](doc/imgs/features.png)
+
+Library calls are also dumped during the step tracing:
+
+!["Library Calls"](./doc/imgs/library_calls.png)
+
 
 ## How the tainted analysis works
 
@@ -27,9 +35,9 @@ Then backward propagation can be represented as a tree. On same line are represe
 
 ![Alt text](doc/imgs/backward.png)
 
-## Features
+## More Features
 
-- **Step Tracer**: The step tracer is a standalone tool that can be used to trace the execution of a program. It can be used to any program that can be debugged with IDA. The step tracer is able to trace the execution of a program and generate a trace file that can be imported into CodexRebirth. While, we can think that step tracing is to slow and not efficient, it has the advantage to be able to exit code loops, so even a very large program can be traced. When investigating on a trace, displaying the all the hits of a loop is not necessary, so the step tracer is a good compromise between performance and efficiency.
+- **Step Tracer**: The step tracer is a standalone tool that can be used to trace the execution of a program. It can be used to any program that can be debugged with IDA. The step tracer is able to trace the execution of a program and generate a trace file that can be imported into CodexRebirth. `While, we can think that step tracing is to slow and not efficient, it has the advantage to be able to !! EXIT CODE LOOPS !!, so even a very large program can be traced.` When investigating on a trace, displaying the all the hits of a loop is not necessary, so the step tracer is a good compromise between performance and efficiency.
 
 ![Alt text](doc/imgs/step_tracer.png)
 
@@ -43,7 +51,7 @@ Then backward propagation can be represented as a tree. On same line are represe
 **Note: For IDA plugin, you need to have at least python 3.8 installed and IDA must be configured to use it.**
 
 - After python 3.8 is installed, you need run idapyswitch to python 3.8.10, then install setuptools and wheel.
-- After that, you can install the CodexRebirth plugin by using python 3.8.10 binary full path (*ex: C:\Users\antoi\AppData\Local\Programs\Python\Python38\python.exe*)
+- Select the IDA python 3.8.10 binary full path (*ex: C:\Users\antoi\AppData\Local\Programs\Python\Python38\python.exe*)
 
 - Install required python packages by running the following command:
 ```bash
@@ -51,7 +59,7 @@ python -m pip install -r requirements.txt
 ```
 
 
-Then copy the content of the 'plugin' folder into the IDA plugin folder.(ex: *C:\Program Files\IDA 7.6\plugins*)
+**Then copy the content of the 'plugin' folder into the IDA plugin folder.(ex: *C:\Program Files\IDA 7.6\plugins*)**
 
 
 ## Basic Usage For Program Analysis
