@@ -1,5 +1,3 @@
-Here's an improved version of the markdown documentation:
-
 # gbd-tools Windows Kernel (without IDA)
 
 ## How to Use
