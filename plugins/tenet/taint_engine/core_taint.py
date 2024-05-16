@@ -10,8 +10,6 @@ from capstone.x86_const import X86_OP_MEM, X86_OP_REG, X86_OP_IMM
 from capstone.arm_const import ARM_OP_MEM, ARM_OP_REG, ARM_OP_IMM
 from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 from capstone import *
-from unicorn import unicorn
-from qiling.const import QL_ARCH
 from keystone import *
 from superglobals import *
 from tenet.util.log import logging_started, start_logging

@@ -13,3 +13,4 @@ tracer-win64-kernel/WinDbgStalker/x64
 tracer-win64-kernel/.vs
 .*pyc
 tracer-gdb/inactivity_alert.py
+install.sh

@@ -29,6 +29,7 @@ class StepTracerModel:
         self.dump_size = 0
         self.max_step_inside_loop = 1
         self.counter = alt_count()
+        self.root_filename = None
         self.module_name = None
         self.module_base = None
         self.watchdog_max_hits = 2
@@ -50,6 +51,7 @@ class StepTracerController(object):
         self.start = time.time()
         self.skip_logic = None
         self.model = StepTracerModel()
+        self.model.root_filename = self.dctx.get_root_filename()
 
     @property
     def ea(self):

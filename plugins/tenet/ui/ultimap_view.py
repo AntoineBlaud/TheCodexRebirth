@@ -4,8 +4,6 @@ from PyQt5.QtCore import QDir
 from PyQt5.QtCore import Qt
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QSize
-import os
-import tempfile
 import json
 
 
@@ -19,7 +17,6 @@ class UltimapView(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("Ultimap")
-        self.setFixedSize(900, 600)
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.WindowCloseButtonHint)
         self.move(QApplication.desktop().screenGeometry().width() - 930, 20)
 
@@ -46,26 +43,24 @@ class UltimapView(QMainWindow):
         self.left_layout.addWidget(self.group_box)
         options = [
             ("Run Timeout (sec)", str(self.model.timeout)),
-            ("Module to Trace", self.controller.dctx.get_root_filename() or ""),
+            ("Module to Trace", self.model.root_filename or ""),
         ]
         for label_text, input_text in options:
             self.create_options_input(label_text, input_text)
 
     def create_options_input(self, label_text, input_text):
         label = QLabel(label_text)
-        label.setAlignment(Qt.AlignCenter)
+        label.setAlignment(Qt.AlignLeft)
         label.setFont(QFont("Arial", 10))
-        label.setMaximumHeight(40)
         label.setStyleSheet(
-            "background-color: #edebeb;"
+            "background-color: rgba(0, 0, 0,255)"
+            "padding: 0px;"  # Add padding around the label
             "color: black;"  # Set text color to white
-            "padding: 10px;"  # Add padding around the label
             "border-radius: 5px;"  # Add rounded corners
         )
         input_field = QLineEdit(input_text)
         input_field.setAlignment(Qt.AlignCenter)
         input_field.setFont(QFont("Arial", 10))
-        input_field.setMaximumHeight(40)
         input_field.setStyleSheet(
             "background-color: #edebeb;"
             "color: red;"  # Set text color to white
@@ -114,7 +109,6 @@ class UltimapView(QMainWindow):
             self.grid_layout.setColumnMinimumWidth(i, 80)
         for i in range(70):
             button = QPushButton(f"Record {i}")
-            button.setFixedSize(80, 40)
             button.clicked.connect(lambda _, i=i: self.open_record(i))
             button.setContextMenuPolicy(Qt.CustomContextMenu)
             button.customContextMenuRequested.connect(self.button_record_context_menu)

@@ -8,9 +8,6 @@ import os
 import tempfile
 import time
 
-WIDTH = 900
-HEIGHT = 600
-
 
 class WatcherWidget(QWidget):
     def __init__(self, parent=None, index=0):
@@ -45,10 +42,6 @@ class WatcherWidget(QWidget):
         watcher_name_input.setStyleSheet("border: 1px solid black;")
 
     def _init_ui(self):
-        self.setMinimumWidth(WIDTH - 300)
-        self.setMinimumHeight(HEIGHT / 15)
-        self.setMaximumHeight(HEIGHT / 15)
-        self.setMaximumWidth(WIDTH - 300)
         self.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.horizontalLayout = QtWidgets.QHBoxLayout(self)
         self.horizontalLayout.setObjectName("horizontalLayout")
@@ -70,10 +63,8 @@ class WatcherWidget(QWidget):
         self.saved_value_label = QtWidgets.QLabel(self)
         self.saved_value_label.setText("")
         self.saved_value_label.setAlignment(Qt.AlignCenter)
-        self.saved_value_label.setMaximumWidth(int(WIDTH * 0.43))
-        self.saved_value_label.setMinimumWidth(int(WIDTH * 0.43))
         self.saved_value_label.setFont(QFont("Arial", 8))
-        self.saved_value_label.setMaximumHeight(30)
+        self.saved_value_label.setMinimumWidth(200)
         self.saved_value_label.setMinimumHeight(30)
 
         self.horizontalLayout.addWidget(self.saved_value_label)
@@ -129,17 +120,17 @@ class StepTracerView(QMainWindow):
         # get screen size
         height = QApplication.desktop().screenGeometry().height()
         width = QApplication.desktop().screenGeometry().width()
-        self.move(width - WIDTH - 30, 20)
+        self.move(width - 900 - 30, 20)
 
     def create_options_input(self, label_text, input_text):
         label = QtWidgets.QLabel(self)
-        label.setText(label_text)
-        label.setAlignment(Qt.AlignCenter)
+        label.setText(label_text + " : ")
+        label.setAlignment(Qt.AlignLeft)
         label.setFont(QFont("Arial", 10))
         label.setStyleSheet(
-            "background-color: #edebeb;"
+            "background-color: rgba(0, 0, 0,255)"
+            "padding: 0px;"  # Add padding around the label
             "color: black;"  # Set text color to white
-            "padding: 10px;"  # Add padding around the label
             "border-radius: 5px;"  # Add rounded corners
         )
         inputa = QtWidgets.QLineEdit(self)
@@ -179,10 +170,6 @@ class StepTracerView(QMainWindow):
         # add the right layout to the splitter
         splitter.addWidget(right_widget)
 
-        # add windows max size
-        self.setFixedHeight(HEIGHT)
-        self.setFixedWidth(WIDTH)
-
         self.label2 = QtWidgets.QLabel(self)
         self.label2.setText("Configuration Options")
         self.label2.setAlignment(Qt.AlignCenter)
@@ -207,9 +194,6 @@ class StepTracerView(QMainWindow):
         self.group_box.setLayout(self.group_box_layout)
         # add the group box to the left layout
         self.left_layout.addWidget(self.group_box)
-        # set max height for the group box
-        self.group_box.setMaximumHeight(450)
-        self.group_box.setMinimumWidth(270)
         # group option attached to the top absolute position
         self.group_box_layout.setAlignment(Qt.AlignTop)
         # add the run timeout, dump size and max step inside loop to the group box
@@ -217,7 +201,7 @@ class StepTracerView(QMainWindow):
         self.create_options_input("Run Timeout", str(self.model.run_timeout))
         self.create_options_input("Dump Size", str(self.model.dump_size))
         self.create_options_input("Max Step Inside Loop", str(self.model.max_step_inside_loop))
-        self.create_options_input("Module to Trace", self.controller.dctx.get_root_filename())
+        self.create_options_input("Module to Trace", self.model.root_filename)
         self.create_options_input("Watchdog Max Hits", str(self.model.watchdog_max_hits))
 
         bLayout = QHBoxLayout()
@@ -261,8 +245,6 @@ class StepTracerView(QMainWindow):
         self.extendable_list_view_layout = QVBoxLayout()
         self.right_layout.addWidget(self.extendable_list_view)
         self.extendable_list_view.setLayout(self.extendable_list_view_layout)
-        # set max height for the extendable list view
-        self.extendable_list_view.setFixedHeight(HEIGHT - 100)
         # item start at the top left corner
         self.extendable_list_view_layout.setAlignment(Qt.AlignTop)
         # set the background color for the extendable list view

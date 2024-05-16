@@ -3,6 +3,8 @@ unicorn
 keystone-engine
 z3-solver
 superglobals
+setuptools
 jsonschema
 line_profiler
 treelib
+PyQt5

@@ -5,8 +5,10 @@ from tenet.types import *
 from tenet.util.qt import *
 from tenet.trace.arch import *
 import re
-import ida_kernwin, ida_idaapi
-
+try:
+    import ida_kernwin, ida_idaapi
+except ImportError:
+    pass
 INVALID_ADDRESS = -1
 
 

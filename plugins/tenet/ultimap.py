@@ -21,6 +21,7 @@ class UltimapModel(object):
         self.maxHits = 1
         self.timeout = 30
         self.importedFunctionsFilePath = ""
+        self.root_filename = ""
         self.moduleToTrace = ""
         self.reset()
 
@@ -43,6 +44,7 @@ class UltimapController(object):
         self.pctx = pctx
         self.dctx = disassembler[self.pctx]
         self.model = UltimapModel(self.pctx)
+        self.model.root_filename = self.dctx.get_root_filename()
         self.view = UltimapView(self, self.model)
         self.arch = self.pctx.arch
         self.cs = get_capstone_md(self.arch)
