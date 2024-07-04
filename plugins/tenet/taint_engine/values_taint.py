@@ -293,6 +293,7 @@ class SymValue:
 
         if isinstance(target, (SymValue, RealValue)):
             self.id |= target.id
+            self.id = set(sorted(self.id)[:-100])
 
         self.__cache_repr = None
 

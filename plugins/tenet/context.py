@@ -282,7 +282,6 @@ class TenetContext(object):
         """
         import ida_kernwin
 
-        self.registers.show(position=ida_kernwin.DP_RIGHT)
         self.tree.show("Functions", ida_kernwin.DP_TAB | ida_kernwin.DP_INSIDE)
         # self.breakpoints.dockable.set_dock_position("CPU Registers", ida_kernwin.DP_BOTTOM)
         # self.breakpoints.dockable.show()
@@ -299,6 +298,7 @@ class TenetContext(object):
         self.memories[2].show("Output window", ida_kernwin.DP_TAB | ida_kernwin.DP_INSIDE)
 
         self.stack.show("Memory View 1", ida_kernwin.DP_RIGHT)
+        self.registers.show("Stack View", position=ida_kernwin.DP_TOP)
 
         mw = get_qmainwindow()
         mw.addToolBar(QtCore.Qt.RightToolBarArea, self.trace)

@@ -1008,7 +1008,7 @@ class TraceBar(QtWidgets.QWidget):
                     # slight tweak of y because we are only drawing a highlighted
                     # draw cell body
                     y = self._idx2pos(idx) + self._cell_border
-                    painter.drawRect(viz_x, y, viz_w, self._cell_height - self._cell_border)
+                    painter.drawRect(int(viz_x), int(y), int(viz_w), int(self._cell_height - self._cell_border))
 
                 else:
                     y = self._idx2pos(idx)
