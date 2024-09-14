@@ -59,7 +59,7 @@ class IDAStepTracerController(StepTracerController):
         self.model.module_name = self.dctx.get_segm_name(self.ea)
         base = self.dctx.get_module_base()
         if not base:
-            logger.error(f"Module {self.model.module_name} not found")
+            logger.error(f"Module base not found. Filename must be equal to module base name. Check filename has not space")
             return False
         self.model.tenet_trace.append([f"base={tohex(base, self.arch.POINTER_SIZE)}"])
         if self.dctx.is_process_running():
@@ -123,3 +123,4 @@ class IDAStepTracerController(StepTracerController):
             logger.error(f"Error: {e}")
         finally:
             self.stop()
+        self.dctx.resume_threads()

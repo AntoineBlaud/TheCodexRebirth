@@ -231,6 +231,50 @@ class IDAContextAPI(DisassemblerContextAPI):
         if ida_ua.decode_insn(insn, address) and ida_idp.is_call_insn(insn):
             return True
         return False
+    
+    def set_conditional_breakpoint(self, ea, condition, reg):
+        """
+        Set a conditional breakpoint at a given address with a specific condition.
+
+        :param ea: The address where the breakpoint should be set.
+        :param condition: A string that represents the condition for the breakpoint.
+        :return: None
+        """
+        # Set a breakpoint at the given address
+        idc.add_bpt(ea)
+        
+        # Attach the condition to the breakpoint
+        idc.set_bpt_cond(ea, condition)
+    
+    def get_operand_reg_name(self, ea, op_off):
+        """
+        Get the register name of an operand if it is a register, otherwise return None.
+        
+        :param ea: The address of the instruction.
+        :param op_off: The operand offset (0 for first operand, 1 for second operand, etc.).
+        :return: Register name if the operand is a register, None otherwise.
+        """
+        # Decode the instruction at the provided address
+        insn = idautils.DecodeInstruction(ea)
+        
+        PTR_SIZE = 8 if self.is_64bit() else 4
+        
+        # Check if instruction exists
+        if not insn:
+            print(f"No valid instruction found at {hex(ea)}")
+            return None
+        
+        # Get the operand at the provided offset
+        operand = insn.ops[op_off]
+        
+        # Check if the operand is a register
+        if operand.type == idaapi.o_reg:
+            # Get the register name using get_reg_name
+            reg_name = idaapi.get_reg_name(operand.reg, PTR_SIZE)
+            return reg_name
+        else:
+            return None
+    
 
     def get_instruction_addresses(self):
         """
@@ -625,6 +669,24 @@ class IDAContextAPI(DisassemblerContextAPI):
             # Suspend the thread
             ida_dbg.select_thread(tid)
             ida_dbg.suspend_thread(tid)
+
+        # Restore the current thread selection
+        ida_dbg.select_thread(current_thread_id)
+        
+    def resume_threads(self):
+            # Get the total number of threads
+        thread_qty = ida_dbg.get_thread_qty()
+
+        # Get the ID of the current thread
+        current_thread_id = ida_dbg.get_current_thread()
+
+        # Iterate through each thread
+        for i in range(thread_qty):
+            tid = ida_dbg.getn_thread(i)
+
+            # Suspend the thread
+            ida_dbg.select_thread(tid)
+            ida_dbg.resume_thread(tid)
 
         # Restore the current thread selection
         ida_dbg.select_thread(current_thread_id)

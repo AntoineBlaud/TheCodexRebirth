@@ -48,6 +48,7 @@ class SkipLoopLogic:
         self.callback_get_ea = None
         self.library_calls = []
         self.breakpoints_set = {}
+        self.check_loop_next = False
 
     def set_callback_get_ea(self, callback: callable):
         """Set the callback for getting the current ea."""
@@ -181,7 +182,7 @@ class SkipLoopLogic:
         # We did a call, we have a max number of hits for the function
         # if reached, we need to set a breakpoint to the return address
         # Code handling max hits for function
-        if self.must_check_max_call:
+        if self.must_check_max_call and len(self.call_stack) > 0:
             self.must_check_max_call = False
             if self.model.seen_instructions_count.get(self.ea, 0) > self.model.watchdog_max_hits:
                 self.flog(f"Max hits reached for function {self.tohex(self.ea)}")
@@ -279,28 +280,31 @@ class SkipLoopLogic:
 
             else:
                 self.flog("Previous node:")
-                self.flog(self.node_current.fstr(self.model.seen_instructions_count))
-                self.flog("Current node:")
                 self.flog(self.node_previous.fstr(self.model.seen_instructions_count))
+                self.flog("Current node:")
+                self.flog(self.node_current.fstr(self.model.seen_instructions_count))
                 raise Exception("Invalid block loop_initiator")
 
         # Code Handling loop detection part 1
         if (
-            self.node_current
+            (self.node_current
             and self.node_previous
             and self.node_previous not in self.node_current.predecessors
-            and not self.node_current.disable_successor
+            and not self.node_current.disable_successor) or self.check_loop_next
         ):
-
+            self.check_loop_next = False
             if len(self.node_current.predecessors) > 0:
 
                 # check the node has a jump target and a next jump
                 node = self.node_previous if self.block_changed else self.node_current
                 if node.j_next and node.j_target:
                     must_find_loop = True
+                else:
+                    self.check_loop_next = True
 
-            self.node_current.predecessors.append(self.node_previous)
-            self.node_previous.successors.append(self.node_current)
+            if self.node_previous not in self.node_current.predecessors:
+                self.node_current.predecessors.append(self.node_previous)
+                self.node_previous.successors.append(self.node_current)
 
         assert self.node_current is not None
 
@@ -335,6 +339,7 @@ class SkipLoopLogic:
             )
 
         if show_previous_node:
+            self.flog("Previous Node :")
             self.flog(self.node_previous.fstr(self.model.seen_instructions_count))
 
         # Code Handling max hits for loop
@@ -380,9 +385,16 @@ class SkipLoopLogic:
                     # test the next block
                     if path:
                         self.flog(f"Exit target is not the right one, path is {path}")
+                        # invert the exit target (because we swith loop initiator we must do it now)
+                        self.flog(f"Changing current node exit target")
+                        if self.node_current.exit_target == self.node_current.j_next:
+                            self.node_current.exit_target = self.node_current.j_target
+                        else:
+                            self.node_current.exit_target = self.node_current.j_next
+
                         for next_node in reversed(path):
                             if next_node.j_next and next_node.j_target:
-                                self.flog(f"Set new exit target to {self.tohex(next_node.address)}")
+                                self.flog(f"Set new node loop initiator to {self.tohex(next_node.address)}")
                                 self.node_current.is_loop_initiator = False
                                 next_node.is_loop_initiator = True
                                 break

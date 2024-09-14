@@ -77,6 +77,38 @@ class GDBContextAPI:
 
         else:
             return 0
+        
+    def get_operand_reg_name(self, ea, op_off):
+        """
+        Get the register name of an operand if it is a register, otherwise return None.
+        
+        :param self: Object that has access to self.cs (Capstone disassembler).
+        :param ea: The address of the instruction.
+        :param op_off: The operand offset (0 for first operand, 1 for second operand, etc.).
+        :return: Register name if the operand is a register, None otherwise.
+        """
+        try:
+            # Get the instruction using the Capstone disassembler
+            insn = self.get_instruction(ea)
+            
+            # Check if the operand offset is valid
+            if op_off >= len(insn.operands):
+                print(f"Operand offset {op_off} is out of range for instruction at {hex(ea)}")
+                return None
+            
+            # Get the specified operand
+            op = insn.operands[op_off]
+            
+            # Check if the operand is a register
+            if op.type == X86_OP_REG:
+                # Get the register name from Capstone
+                reg_name = self.cs.reg_name(op.reg)
+                return reg_name
+            else:
+                return None
+        except StopIteration:
+            print(f"Failed to disassemble instruction at {hex(ea)}")
+            return None
 
     def delete_breakpoint(self, ea):
         try:
@@ -115,6 +147,20 @@ class GDBContextAPI:
 
     def get_function_name_at(self, ea):
         return gdb.execute(f"info symbol {tohex(ea, self.ptr_size)}", to_string=True).split(" ")[0]
+    
+    def set_conditional_breakpoint(self, ea, condition, reg):
+        """
+        Set a conditional breakpoint at a given address with a specific condition.
+
+        :param ea: The address where the breakpoint should be set.
+        :param condition: A string that represents the condition for the breakpoint.
+        :return: None
+        """
+        condition = condition.replace(reg, f"${reg}")
+        # Set a breakpoint with the condition
+        gdb.execute(f"break *{ea} if {condition}")
+        
+        print(f"Conditional breakpoint set at {hex(ea)} with condition: {condition}")
 
     def is_process_running(self):
         try:
