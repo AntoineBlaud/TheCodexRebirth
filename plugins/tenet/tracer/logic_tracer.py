@@ -4,6 +4,7 @@ from collections import deque
 import logging
 import time
 
+
 def get_jump_target(dctx, arch, ea):
     mnemonic = dctx.print_insn_mnemonic(ea)
     if mnemonic.startswith(arch.COND_JUMP_INSTRUCTION) and not mnemonic.startswith("bic"):
@@ -13,6 +14,9 @@ def get_jump_target(dctx, arch, ea):
         except Exception as e:
             pass
     return None
+
+def get_jump_register(dctx, arch, ea):
+    pass
 
 
 class LibraryCall:
@@ -49,6 +53,8 @@ class SkipLoopLogic:
         self.library_calls = []
         self.breakpoints_set = {}
         self.check_loop_next = False
+        self.count_bad_exit = 0
+        self.skipall = False
 
     def set_callback_get_ea(self, callback: callable):
         """Set the callback for getting the current ea."""
@@ -59,6 +65,13 @@ class SkipLoopLogic:
             return
         self.flog(f"Set breakpoint at {hex(ea)}")
         self.dctx.set_breakpoint(ea)
+        self.breakpoints_set[ea] = True
+        
+    def set_cached_conditional_breakpoint(self, ea, condition, reg):
+        if ea in self.breakpoints_set:
+            return
+        self.flog(f"Set conditional breakpoint at {hex(ea)} {condition}")
+        self.dctx.set_conditional_breakpoint(ea, condition, reg)
         self.breakpoints_set[ea] = True
 
     def cleanup_bp(self):
@@ -211,6 +224,12 @@ class SkipLoopLogic:
             self.node_previous = self.node_current
             self.node_current = None
 
+        if self.model.seen_instructions_count.get(self.ea, 0) >= self.model.watchdog_max_hits:
+            self.skipall = True
+
+        if self.model.seen_instructions_count.get(self.ea, 0) < self.model.watchdog_max_hits:
+            self.skipall = False
+
         # Code handling return instruction
         if self.is_last_fn_return:
             if self.node_previous:
@@ -266,7 +285,7 @@ class SkipLoopLogic:
             self.cfg.node_mapping[self.ea] = self.node_current
 
         # Code Handling configuring exit target for loop initiator
-        if self.node_previous and self.node_current and self.node_previous.is_loop_initiator:
+        if self.node_previous and self.node_current:
 
             # loop on the same block, special case
             if self.node_previous.j_target == self.node_previous.address:
@@ -279,25 +298,26 @@ class SkipLoopLogic:
                 self.node_previous.exit_target = self.node_previous.j_next
 
             else:
-                self.flog("Previous node:")
-                self.flog(self.node_previous.fstr(self.model.seen_instructions_count))
-                self.flog("Current node:")
-                self.flog(self.node_current.fstr(self.model.seen_instructions_count))
-                raise Exception("Invalid block loop_initiator")
+                self.node_previous.exit_target = self.node_current.address
+                # self.flog("Previous node:")
+                # self.flog(self.node_previous.fstr(self.model.seen_instructions_count))
+                # self.flog("Current node:")
+                # self.flog(self.node_current.fstr(self.model.seen_instructions_count))
+                # raise Exception("Invalid block loop_initiator")
 
         # Code Handling loop detection part 1
         if (
             (self.node_current
             and self.node_previous
-            and self.node_previous not in self.node_current.predecessors
-            and not self.node_current.disable_successor) or self.check_loop_next
+            and (self.node_previous not in self.node_current.predecessors or self.check_loop_next)
+            and not self.node_current.disable_successor)
         ):
             self.check_loop_next = False
             if len(self.node_current.predecessors) > 0:
 
                 # check the node has a jump target and a next jump
                 node = self.node_previous if self.block_changed else self.node_current
-                if node.j_next and node.j_target:
+                if node.is_unconditional_jump:
                     must_find_loop = True
                 else:
                     self.check_loop_next = True
@@ -344,29 +364,39 @@ class SkipLoopLogic:
 
         # Code Handling max hits for loop
         if (
-            self.node_current.is_loop_initiator
+            (self.node_current.is_loop_initiator or self.skipall)
             and self.node_current.exit_target
             and self.node_current.hit_count >= self.model.max_step_inside_loop
         ):
-            self.set_cached_breakpoint(self.node_current.exit_target)
             self.flog(f"Loop hit count reach for {self.node_current}")
-            b_count = 0
-             # "Security" reason.
-            for call_target in reversed(self.call_stack):
-                self.set_cached_breakpoint(call_target)
-                if b_count > self.max_bp:
-                    break
-                b_count += 1
-            for call_target in reversed(self.jump_stack):
-                if b_count > self.max_bp:
-                    break
-                self.set_cached_breakpoint(call_target)
-                b_count += 1
+            
+            if not (self.node_current.is_unconditional_jump and self.node_current.op1_reg):
+                b_count = 0
+                self.set_cached_breakpoint(self.node_current.exit_target)
+                # "Security" reason.
+                for call_target in reversed(self.call_stack):
+                    self.set_cached_breakpoint(call_target)
+                    if b_count > self.max_bp:
+                        break
+                    b_count += 1
+                for call_target in reversed(self.jump_stack):
+                    if b_count > self.max_bp:
+                        break
+                    self.set_cached_breakpoint(call_target)
+                    b_count += 1
+                    
+                self.show_call_stack()
+                self.dctx.continue_process()
+                self.dctx.delete_breakpoint(self.ea)
+                self.block_changed = True
                 
-            self.show_call_stack()
-            self.dctx.continue_process()
-            self.dctx.delete_breakpoint(self.ea)
-            self.block_changed = True
+            else:
+                self.flog(f"Setting breakpoint to jump ea {self.tohex(self.node_current.jump_ea)} ")
+                self.set_cached_breakpoint(self.node_current.jump_ea)
+                self.dctx.continue_process()
+                self.dctx.delete_breakpoint(self.ea)
+                self.dctx.step_into()
+    
 
             # check if we hit the loop exit
             if self.node_current.exit_target != self.ea:
@@ -384,20 +414,11 @@ class SkipLoopLogic:
                     # oups, exit_target is the wrong one,
                     # test the next block
                     if path:
-                        self.flog(f"Exit target is not the right one, path is {path}")
-                        # invert the exit target (because we swith loop initiator we must do it now)
-                        self.flog(f"Changing current node exit target")
-                        if self.node_current.exit_target == self.node_current.j_next:
-                            self.node_current.exit_target = self.node_current.j_target
-                        else:
-                            self.node_current.exit_target = self.node_current.j_next
-
-                        for next_node in reversed(path):
-                            if next_node.j_next and next_node.j_target:
-                                self.flog(f"Set new node loop initiator to {self.tohex(next_node.address)}")
-                                self.node_current.is_loop_initiator = False
-                                next_node.is_loop_initiator = True
-                                break
+                        self.flog(f"Exit target is not the right one, found a path : {path}")
+                        # invert the exit target (because we swith loop initiator we must do it now)                       
+                        self.flog(f"Set new node loop initiator to {self.tohex(exit_target_node.address)}")
+                        self.node_current.is_loop_initiator = False
+                        exit_target_node.is_loop_initiator = True
 
             return
 
@@ -408,9 +429,16 @@ class SkipLoopLogic:
         if j_target_address is not None:
             self.block_changed = True
             j_next_address = self.ea + self.dctx.get_item_size(self.ea)
+            
+            self.node_current.j_target = j_target_address
             if nmemonic != self.arch.JUMP_INSTRUCTION:
                 self.node_current.j_next = j_next_address
-            self.node_current.j_target = j_target_address
+            else:
+                self.node_current.j_next = j_target_address
+                self.node_current.is_unconditional_jump = True
+                self.node_current.op1_reg = self.dctx.get_operand_reg_name(self.ea, 0)
+                self.node_current.jump_ea = self.ea
+                
 
             if nmemonic != self.arch.JUMP_INSTRUCTION:
                 self.jump_stack.append(j_next_address)

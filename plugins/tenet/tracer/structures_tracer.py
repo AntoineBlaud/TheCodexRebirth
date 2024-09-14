@@ -21,6 +21,9 @@ class Node:
         self.exit_target: int = None
         self.width: int = 65
         self.disable_successor: bool = False
+        self.is_unconditional_jump: bool = False
+        self.op1_reg : str = None
+        self.jmp_ea : int = None
 
     def __repr__(self):
         return f"Node {tohex(self.address, self.ptr_size)}"
@@ -41,6 +44,8 @@ class Node:
             str_box += right(f"Jump target: {tohex(self.j_target, self.ptr_size)}", self.width)
         if self.exit_target:
             str_box += right(f"Exit target: {tohex(self.exit_target, self.ptr_size)}", self.width)
+        if self.op1_reg:
+            str_box += right(f"op1_reg: {str(self.op1_reg)}", self.width)
 
         str_box += center("", self.width)
         for ea, instr in self.instructions:
