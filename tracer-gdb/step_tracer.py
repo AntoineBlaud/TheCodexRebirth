@@ -116,7 +116,7 @@ class GDBStepTracerController(StepTracerController):
                 return
 
             if (self.idx + 1) % 1000 == 0:
-                self.save_trace()
+                self.save_trace(backup=True)
                 self.save_library_calls(self.skip_logic.library_calls)
 
             self.skip_logic.step()

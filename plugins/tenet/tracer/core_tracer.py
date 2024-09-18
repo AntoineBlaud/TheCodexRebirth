@@ -12,6 +12,7 @@ from typing import List
 from capstone.x86_const import *
 from capstone.arm_const import *
 import time
+import datetime
 
 logger = logging.getLogger(f"Tenet.{__name__}")
 
@@ -26,13 +27,14 @@ class Watcher:
 class StepTracerModel:
     def __init__(self):
         self.run_timeout = 0
-        self.dump_size = 0
+        self.dump_size = 10
         self.max_step_inside_loop = 1
+        self.stop_at_idx = 10000000
         self.counter = alt_count()
         self.root_filename = None
         self.module_name = None
         self.module_base = None
-        self.watchdog_max_hits = 2
+        self.watchdog_max_hits = 50
         self.watcher = Watcher(0x0)
         self.counter_exec_outside_module = alt_count()
         self.reset()
@@ -138,21 +140,9 @@ class StepTracerController(object):
 
     def backup_files(self):
 
-        dir = self.log_dir
-        if not dir.exists():
-            dir.mkdir(parents=True)
-        root_filename = self.dctx.get_root_filename()
-        filename = f"ida_library_calls_{root_filename}.tenet"
-        backup_file(self.log_dir.joinpath(filename))
+        return
 
-        dir = self.log_dir
-        if not dir.exists():
-            dir.mkdir(parents=True)
-        root_filename = self.dctx.get_root_filename()
-        filename = f"ida_trace_{root_filename}.tenet"
-        backup_file(self.log_dir.joinpath(filename))
-
-    def save_trace(self):
+    def save_trace(self, backup=False):
         """
         Save a trace to a file in the log directory.
 
@@ -164,7 +154,12 @@ class StepTracerController(object):
         if not dir.exists():
             dir.mkdir(parents=True)
         root_filename = self.dctx.get_root_filename()
-        filename = f"ida_trace_{root_filename}.tenet"
+        date_timestamp = datetime.datetime.now().strftime("%m-%d-%Y-%H.%M.%S")
+        if not backup:
+            filename = f"ida_trace_{root_filename}_{date_timestamp}.tenet"
+        else:
+            filename = f"ida_trace_{root_filename}_backup.tenet"
+
         trace_file = dir.joinpath(filename)
         with open(trace_file, "w") as f:
             f.write("\n".join(trace))
@@ -183,7 +178,8 @@ class StepTracerController(object):
         if not dir.exists():
             dir.mkdir(parents=True)
         root_filename = self.dctx.get_root_filename()
-        filename = f"ida_library_calls_{root_filename}.txt"
+        date_timestamp = datetime.datetime.now().strftime("%m-%d-%Y-%H.%M.%S")
+        filename = f"ida_library_calls_{root_filename}_{date_timestamp}.txt"
         library_calls_file = dir.joinpath(filename)
         with open(library_calls_file, "w") as f:
             f.write("\n".join(library_calls))

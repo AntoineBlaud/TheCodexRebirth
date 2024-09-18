@@ -73,6 +73,12 @@ class SkipLoopLogic:
         self.flog(f"Set conditional breakpoint at {hex(ea)} {condition}")
         self.dctx.set_conditional_breakpoint(ea, condition, reg)
         self.breakpoints_set[ea] = True
+        
+    def delete_cache_breakpoint(self, ea):
+        if ea in self.breakpoints_set:
+            del self.breakpoints_set[ea]
+        self.dctx.delete_breakpoint(ea)
+        
 
     def cleanup_bp(self):
         for bp in self.breakpoints_set:
@@ -131,7 +137,7 @@ class SkipLoopLogic:
             bp_ea = self.call_stack.pop()
             self.set_cached_breakpoint(bp_ea)
             self.dctx.continue_process()
-            self.dctx.delete_breakpoint(ea)
+            self.delete_cache_breakpoint(bp_ea)
             self.block_changed = True
             self.is_last_fn_return = True
             return True
@@ -151,7 +157,7 @@ class SkipLoopLogic:
                 to_remove.append(dest)
         for dest in to_remove:
             stack.remove(dest)
-            self.dctx.delete_breakpoint(dest)
+            self.delete_cache_breakpoint(dest)
         # limit to 10
         return list(reversed(stack))[:10]
 
@@ -224,11 +230,14 @@ class SkipLoopLogic:
             self.node_previous = self.node_current
             self.node_current = None
 
-        if self.model.seen_instructions_count.get(self.ea, 0) >= self.model.watchdog_max_hits:
+        if self.model.seen_instructions_count.get(self.ea, 0) >= 3 * self.model.max_step_inside_loop:
             self.skipall = True
 
-        if self.model.seen_instructions_count.get(self.ea, 0) < self.model.watchdog_max_hits:
+        if self.model.seen_instructions_count.get(self.ea, 0) < 3 * self.model.max_step_inside_loop:
             self.skipall = False
+            
+        if self.model.seen_instructions_count.get(self.ea, 0) > self.model.watchdog_max_hits:
+            raise Exception("Watchdog max hits limit reached")
 
         # Code handling return instruction
         if self.is_last_fn_return:
@@ -368,7 +377,7 @@ class SkipLoopLogic:
             and self.node_current.exit_target
             and self.node_current.hit_count >= self.model.max_step_inside_loop
         ):
-            self.flog(f"Loop hit count reach for {self.node_current}")
+            self.flog(f"Loop hits count reach for {self.node_current}")
             
             if not (self.node_current.is_unconditional_jump and self.node_current.op1_reg):
                 b_count = 0
@@ -387,14 +396,14 @@ class SkipLoopLogic:
                     
                 self.show_call_stack()
                 self.dctx.continue_process()
-                self.dctx.delete_breakpoint(self.ea)
+                self.delete_cache_breakpoint(self.ea)
                 self.block_changed = True
                 
             else:
                 self.flog(f"Setting breakpoint to jump ea {self.tohex(self.node_current.jump_ea)} ")
                 self.set_cached_breakpoint(self.node_current.jump_ea)
                 self.dctx.continue_process()
-                self.dctx.delete_breakpoint(self.ea)
+                self.delete_cache_breakpoint(self.ea)
                 self.dctx.step_into()
     
 

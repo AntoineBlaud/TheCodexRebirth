@@ -84,9 +84,13 @@ class IDAStepTracerController(StepTracerController):
             if time.time() - self.start > self.model.run_timeout:
                 logger.info("Timeout")
                 return
+            
+            if self.idx > self.model.stop_at_idx:
+                logger.info("idx limit reached")
+                return
 
             if (self.idx + 1) % 1000 == 0:
-                self.save_trace()
+                self.save_trace(backup=True)
                 self.save_library_calls(self.skip_logic.library_calls)
 
             self.skip_logic.step()

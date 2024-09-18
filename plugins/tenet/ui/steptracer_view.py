@@ -202,6 +202,7 @@ class StepTracerView(QMainWindow):
         self.create_options_input("Dump Size", str(self.model.dump_size))
         self.create_options_input("Max Step Inside Loop", str(self.model.max_step_inside_loop))
         self.create_options_input("Module to Trace", self.model.root_filename)
+        self.create_options_input("Stop at Idx", str(self.model.stop_at_idx))
         self.create_options_input("Watchdog Max Hits", str(self.model.watchdog_max_hits))
 
         bLayout = QHBoxLayout()
@@ -326,7 +327,8 @@ class StepTracerView(QMainWindow):
         self.model.dump_size = int(self.group_box_layout.itemAt(3).widget().text())
         self.model.max_step_inside_loop = int(self.group_box_layout.itemAt(5).widget().text())
         self.model.moduleToTrace = self.group_box_layout.itemAt(7).widget().text()
-        self.model.watchdog_max_hits = int(self.group_box_layout.itemAt(9).widget().text())
+        self.model.stop_at_idx =  int(self.group_box_layout.itemAt(9).widget().text())
+        self.model.watchdog_max_hits = int(self.group_box_layout.itemAt(11).widget().text())
         self.controller.invoke()
 
     def update_progress(self, start_time, idx):

@@ -602,7 +602,7 @@ class IDAContextAPI(DisassemblerContextAPI):
             print("Process still running after", timeout, "seconds")
             raise Exception(f"Process still running after {timeout} seconds")
 
-    def is_process_running(self):
+    def  is_process_running(self):
         # check idaapi.WFNE_SUSP is false
         if idaapi.get_process_state() == idaapi.DSTATE_RUN:
             return True
