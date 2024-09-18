@@ -9,7 +9,7 @@ import time
 import struct
 from keystone import *
 from keystone.x86_const import *
-
+import time
 # Dictionnaire global pour stocker les adresses visitées
 visited_addresses = {}
 visited_addresses_extended = set()
@@ -17,7 +17,6 @@ visited_addresses_extended = set()
 PAGE_SIZE = 0x1000
 FIRST_RUN_INSTRUCTION_COUNT = 0x4000
 MAX_JUMP_RANGE = 0x80000000  # ±2 GB range for 32-bit or rel32 in 64-bit
-
 
 # Comprehensive mapping of IDA register names to Unicorn constants for both 32-bit and 64-bit registers
 REGISTER_MAP = {
@@ -53,15 +52,13 @@ is_32bit = not is_64bit
 if is_64bit:
     mu = Uc(UC_ARCH_X86, UC_MODE_64)
     md = Cs(CS_ARCH_X86, CS_MODE_64)
-    ks = Ks(KS_ARCH_X64, KS_MODE_64)
+    ks = Ks(KS_ARCH_X86, KS_MODE_64)
     print("Running in 64-bit mode.")
 else:
     mu = Uc(UC_ARCH_X86, UC_MODE_32)
     md = Cs(CS_ARCH_X86, CS_MODE_32)
     ks = Ks(KS_ARCH_X86, KS_MODE_32)
     print("Running in 32-bit mode.")
-
-
 
 def get_segment_data():
     """
@@ -71,8 +68,13 @@ def get_segment_data():
     for seg_ea in idautils.Segments():
         seg = idaapi.getseg(seg_ea)
         name = idaapi.get_segm_name(seg)
-        base = seg.start_ea
-        size = seg.end_ea - seg.start_ea
+        base = align_to_page(seg.start_ea)
+        end = align_to_page(seg.end_ea)
+        size = end - base
+
+        if size < PAGE_SIZE:
+            continue
+
         perm = seg.perm  # Permissions: (Read, Write, Execute)
         segments.append({
             'base': base,
@@ -96,7 +98,7 @@ def get_unicorn_segment_data():
             try:
                 data = mu.mem_read(base, size)
                 segments.append({
-                    'base': base,
+                    'base': align_to_page(base),
                     'size': size,
                     'data': data
                 })
@@ -248,8 +250,14 @@ def compare_segments(ida_segments, unicorn_segments):
             
 
 
+def is_inside(names, target_name):
+    for n in names:
+        if n in target_name:
+            return True
+    return False
+        
 
-def map_segments(mu, segments):
+def map_segments(mu, segments, names=None):
     """
     Map each segment in Unicorn's memory and copy the contents from IDA.
     """
@@ -259,6 +267,9 @@ def map_segments(mu, segments):
         perm = seg['perm']
         name = seg['name']
         
+        if names and not is_inside(names, name):
+            continue
+        
         # Translate IDA permissions to Unicorn permissions
         uc_perm = 0
         if perm & idaapi.SEGPERM_READ:
@@ -267,7 +278,7 @@ def map_segments(mu, segments):
             uc_perm |= UC_PROT_WRITE
         if perm & idaapi.SEGPERM_EXEC:
             uc_perm |= UC_PROT_EXEC
-
+            
         if size < 0xFFFFFFFF:
             # Map the memory segment in Unicorn
             print(f"Mapping segment {name} at 0x{base:x} with size 0x{size:x} and permissions {uc_perm}")
@@ -393,8 +404,13 @@ def emulate_code(mu, max_instructions, hook=False):
         # Attach the hook for the first emulation if requested
         if hook:
             mu.hook_add(UC_HOOK_CODE, hook_code)
+        else:
+            try:
+                mu.hook_del(UC_HOOK_CODE)
+            except Exception as e:
+                pass
 
-        mu.emu_start(start_eip, 0, timeout=1000 * UC_SECOND_SCALE, count=max_instructions)
+        mu.emu_start(start_eip, 0, timeout=100 * UC_SECOND_SCALE, count=max_instructions)
     except UcError as e:
         print(f"Unicorn error: {e}")
 
@@ -498,17 +514,24 @@ def find_free_space_near(target_addr, min_size=PAGE_SIZE, max_results=10):
         
         # If the gap is large enough and within the jump range of the target address
         gap_size = gap_end - gap_start
-        if gap_size >= min_size and is_address_within_jump_range(target_addr, gap_start):
-            free_spaces.append((gap_start, gap_size))
-            if len(free_spaces) >= max_results:
-                break
-    
+
+        # if the gap does not satisfise the min_size and the jump range condition
+        if gap_size < min_size or not is_address_within_jump_range(target_addr, gap_start):
+            continue
+
+        for location in range(gap_start, gap_end, min_size):
+
+            if is_address_within_jump_range(target_addr, location):
+                free_spaces.append(location)
+                if len(free_spaces) >= max_results:
+                    break
+        
     # Return only the addresses (start of free spaces)
-    return [space[0] for space in free_spaces]
+    return free_spaces
 
 
 
-def patch_and_run_shellcode(mu, address, shellcode, new_section_base):
+def hook_code_with_shellcode(mu, address, shellcode, shellcode_location, overwrite_instruction_at_address=True):
     """
     Patch the given address to jump to a new executable section with shellcode,
     execute the shellcode, and then jump back to the next instruction after the original instructions.
@@ -517,25 +540,53 @@ def patch_and_run_shellcode(mu, address, shellcode, new_section_base):
         mu (U)     : Unicorn Engine instance.
         address (int) : The address to hook (where to insert the initial jump).
         shellcode (bytes): The shellcode to execute.
+        overwrite_instruction_at_address (bool): If true, the target address instruction will be erased
+
     """
+
+    print(f'Shellcode parameters : \nHook address: 0x{address:X} \nShellcode : {shellcode} \nShellcode Location: {shellcode_location:X}')
 
     # Step 1: Disassemble the instruction at the target address
     instr_size = 0
     instructions_to_copy = []
     max_patch_size = 5  # Minimum size we need to write the JMP instruction
     
-    # Fetch a block of code to disassemble
-    code = mu.mem_read(address, 15)  # Read up to 15 bytes in case we need to copy multiple instructions
 
-    # Disassemble instructions until we have at least 5 bytes of code
-    for instr in md.disasm(code, address):
+
+    # Starting address of the code segment to be copied, used as the target destination for the jmp instruction.
+    copy_start_address = address
+
+    if overwrite_instruction_at_address:
+        # Fetch a block of code to disassemble
+        code = mu.mem_read(copy_start_address, 15)  # Read up to 15 bytes in case we need to copy multiple instructions
+
+        # Since the instruction at that specific address won't be copied, we bypass it and reduce maxpathsize 
+        # to accommodate one less instruction size
+        instruction_to_overwrite = next(md.disasm(code, address))
+        max_patch_size -= instruction_to_overwrite.size
+
+        copy_start_address = address + instruction_to_overwrite.size
+
+
+    # Fetch a block of code to disassemble
+    code = mu.mem_read(copy_start_address, 15)  # Read up to 15 bytes in case we need to copy multiple instructions
+    # Disassemble instructions until we have accumulated a total of 'maxpatchsize' bytes in our code buffer
+    for instr in md.disasm(code, copy_start_address):
         instructions_to_copy.append(instr)
         instr_size += instr.size
         if instr_size >= max_patch_size:
             break
+        
 
     # Step 2: Copy the instructions to be patched
     original_code = b''.join(instr.bytes for instr in instructions_to_copy)
+
+
+    # (copy_start_address - address) allows to fixe the gap when overwrite_instruction_at_address is set to True
+    instr_size += (copy_start_address - address)
+
+    print(f"Original code that will be moved {original_code}, size: 0x{instr_size:X}")
+
     jump_back_address = address + instr_size  # Address to jump back to after the shellcode
 
     # Step 3: Map a new executable section for the shellcode
@@ -544,7 +595,7 @@ def patch_and_run_shellcode(mu, address, shellcode, new_section_base):
     new_section_size = 0x1000    # Map at least one page (4096 bytes)
     
     # Align the base address
-    aligned_base = new_section_base & ~0xFFF
+    aligned_base = shellcode_location & ~0xFFF
 
     # Map the section as RWX (read, write, execute)
     mu.mem_map(aligned_base, new_section_size, UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC)
@@ -559,7 +610,10 @@ def patch_and_run_shellcode(mu, address, shellcode, new_section_base):
     # The relative jump is calculated as the difference between the end of the original instructions
     # and the address to jump back to (jump_back_address).
     total_shellcode_size = shellcode_size + len(original_code)
-    jump_back_offset = jump_back_address - (aligned_base + total_shellcode_size)
+
+    print(f'Total Shellcode Size {total_shellcode_size:X}, jump_back_address: {jump_back_address:X}')
+    
+    jump_back_offset = jump_back_address - (aligned_base + total_shellcode_size + 5)
 
     # x86/x64 unconditional jump opcode is 0xE9 followed by a 32-bit signed relative offset
     jmp_back_instruction = b'\xE9' + struct.pack('<i', jump_back_offset)
@@ -572,14 +626,15 @@ def patch_and_run_shellcode(mu, address, shellcode, new_section_base):
     jump_offset = aligned_base - (address + 5)  # 5 bytes is the length of a JMP instruction
     jmp_instruction = b'\xE9' + struct.pack('<i', jump_offset)
 
+    # Step 8: Fill jmp_instruction with nop until we reach the instr_size to avoid missing bytes corrupting program flow
+    for _ in range(5, instr_size):
+        jmp_instruction += b'\x90'
+
     # Patch the original address with this jump
     mu.mem_write(address, jmp_instruction)
 
     # Step 8: Execute the code starting from the original address
-    print(f"Jumping to shellcode at 0x{aligned_base:x} from 0x{address:x}")
-    mu.emu_start(address, jump_back_address)  # Continue execution until after the shellcode is executed
-
-    print("Shellcode execution finished. Returned to original flow.")
+    print(f"Shellcode created at 0x{aligned_base:x} from 0x{address:x}")
     
 
 def run_until_crash(mu):
@@ -607,20 +662,27 @@ def run_until_crash(mu):
 def assemble_shellcode(code):
 
     encoding, count = ks.asm(code)
-    instructions = ""
+    instructions = b''
     
     for dec in encoding:
-        instructions += "\\x{0:02x}".format(int(dec)).rstrip("\n")
+        instructions += int(dec).to_bytes(1, 'little')
 
-    print("Opcodes = (\"" + instructions + "\")")
+    print("Opcodes Hex = (\"" + instructions.hex() + "\")")
 
     return instructions
+    
 
 
-def emulate_and_find_loop_exit():
+
+
+def emulate_and_find_loop_exit_example():
+    global mu
+    
+    names = [".boot", ".text", "Stack", "ntdll", "debug"]
+    
     # Step 1: Get memory segments from IDA and map them into Unicorn
     ida_segments = get_segment_data()
-    map_segments(mu, ida_segments)
+    map_segments(mu, ida_segments, names)
 
     # Step 2: Copy register states from IDA to Unicorn
     copy_registers_from_ida(mu)
@@ -633,7 +695,19 @@ def emulate_and_find_loop_exit():
     # Step 4: Find the segment where the EIP/RIP is located
     ip = 'RIP' if is_64bit else 'EIP'
     eip_value = mu.reg_read(REGISTER_MAP[ip])
+    
+    
+    # Reset env
+    if is_64bit:
+        mu = Uc(UC_ARCH_X86, UC_MODE_64)
+    else:
+        mu = Uc(UC_ARCH_X86, UC_MODE_32)
+        
+    ida_segments = get_segment_data()
+    map_segments(mu, ida_segments, names)
 
+    copy_registers_from_ida(mu)
+        
     # Identify the segment where the current EIP/RIP is located
     current_segment = None
     for segment in ida_segments:
@@ -651,14 +725,6 @@ def emulate_and_find_loop_exit():
         print("Error: Could not find the segment where EIP/RIP is located.")
         return
 
-    # **NEW STEP: Resync writable segments and registers before second run**
-    # Resync writable memory segments from IDA to Unicorn
-    print("Resyncing writable memory segments before second run...")
-    restore_segments_writable(mu, ida_segments)
-
-    # Resync register states from IDA to Unicorn
-    print("Resyncing register states before second run...")
-    copy_registers_from_ida(mu)
 
     # Step 6: Second run until crash
     print("Starting second run to measure execution until crash...")
@@ -698,11 +764,56 @@ def emulate():
     disassemble_code(mu, start_eip, 0x20)  # Disassemble 0x20 bytes after EIP
 
 
+def emulate_with_shellcode_example():
+
+    next_pc = 0x00005555555575B6
+    _start = 0x00005555555575B0
+
+    # Step 1: Get memory segments from IDA and map them into Unicorn
+    ida_segments = get_segment_data()
+    map_segments(mu, ida_segments)
+
+    # Step 2: Copy register states from IDA to Unicorn
+    copy_registers_from_ida(mu)
+
+    # Step 3: Fetching opcodes using keystone
+    target_address = next_pc
+
+    shellcode = """
+    start:
+        mov rax, 0
+    """
+
+    opcodes = assemble_shellcode(shellcode)
+
+    # Step 4: Find a location for the shellcode
+    free_addresses = find_free_space_near(target_address)
+    if len(free_addresses) == 0:
+        raise("Enable to find a place for the shellcode within a range of +-GB")
+    
+    shellcode_location = free_addresses[0] + PAGE_SIZE
+
+    # Step 5: Trigger target_address hook with the specified parameters
+    hook_code_with_shellcode(mu, target_address, opcodes, shellcode_location, overwrite_instruction_at_address=False)
+
+    # Step 6: Check the results with your own eyes
+    print("\nDisassembly view at _start location")
+    disassemble_code(mu, _start, 0x20)  # Disassemble 0x20 bytes after EIP
+
+    print("\nDisassembly view at shellcode location")
+    disassemble_code(mu, shellcode_location, 0x20)  # Disassemble 0x20 bytes after EIP
+    
+    # Step 4: Start Unicorn emulation
+    emulate_code(mu, 4)
+    print("\nDisassembly view during shellcode execution")
+    ip = 'RIP' if is_64bit else 'EIP'
+    current_pc = mu.reg_read(REGISTER_MAP[ip])
+    disassemble_code(mu, current_pc, 0x20)  # Disassemble 0x20 bytes after EIP
+
+    
+
+
 if __name__ == '__main__':
-    free_addresses = find_free_space_near(0x0)
-    # Output the potential addresses for shellcode
-    for addr in free_addresses:
-        print(f"Free space at: 0x{addr:X}")
-
-    # emulate_and_find_loop_exit()
-
+    emulate_and_find_loop_exit_example()
+    
+  
