@@ -19,19 +19,29 @@ def execute_command(cmd):
 class GDBContextAPI:
 
     def __init__(self) -> None:
+        
+        # Architecture-related attributes
         self.arch = pwndbg.gdblib.arch.current
-        self.reg_sets = pwndbg.lib.regs.reg_sets[self.arch]
-        self.reg_pc = self.reg_sets.pc
-        self.cs = self.get_disassembler(self.get_reg_value(self.reg_pc))
         self.ptr_size = pwndbg.gdblib.arch.ptrsize
         self.max_int_value = 2 ** (self.ptr_size * 8)
-        self.cache_pages = list(pwndbg.gdblib.vmmap.get())
-        self.min_vaddr, self.max_vaddr = self.get_min_max_vaddr()
-        self._registers = self.reg_sets.gpr + (self.reg_sets.pc, self.reg_sets.stack)
+
+        # Register-related attributes
+        self.reg_sets = pwndbg.lib.regs.reg_sets[self.arch]
+        self.reg_pc = self.reg_sets.pc
+        self._registers = self.reg_sets.gpr + (self.reg_pc, self.reg_sets.stack)
         if self.reg_sets.frame:
             self._registers += (self.reg_sets.frame,)
 
+        # Disassembler setup
+        self.cs = self.get_disassembler(self.get_reg_value(self.reg_pc))
+
+        # Memory-related attributes
+        self.cache_pages = list(pwndbg.gdblib.vmmap.get())
+        self.min_vaddr, self.max_vaddr = self.get_min_max_vaddr()
+
+        # Statistics-related attributes
         self.total_mem_read = 0
+
 
     def get_min_max_vaddr(self):
         min_vaddr = 0xFFFFFFFFFFFFFFFF
@@ -78,7 +88,7 @@ class GDBContextAPI:
         else:
             return 0
         
-    def get_operand_reg_name(self, ea, op_off):
+    def get_operand_register_name(self, ea, op_off):
         """
         Get the register name of an operand if it is a register, otherwise return None.
         

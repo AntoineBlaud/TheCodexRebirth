@@ -81,7 +81,7 @@ class TraceAnalysis(object):
         dctx, trace = self._dctx, self._trace
 
         # get *all* of the instruction addresses from disassembler
-        instruction_addresses = dctx.get_instruction_addresses()
+        instruction_addresses = dctx.enumerate_instructions_in_base_segment()
 
         if len(instruction_addresses) == 0:
             return

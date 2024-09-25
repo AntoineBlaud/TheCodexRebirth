@@ -10,7 +10,7 @@ from tenet.stack import StackController
 from tenet.memory import MemoryController
 from tenet.registers import RegisterController
 from tenet.breakpoints import BreakpointController
-from tenet.menus import ExportFunctionsMenuController
+from tenet.export_function_menu import ExportFunctionsMenuController
 from tenet.step_tracer import IDAStepTracerController
 from tenet.ultimap import UltimapController
 from tenet.ui.trace_view import TraceDock

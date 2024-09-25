@@ -115,7 +115,8 @@ class StepTracerView(QMainWindow):
         self.model = model
         self._init_ui()
         # set windows always on top
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint | Qt.Window)
+
         # set position to the center
         # get screen size
         height = QApplication.desktop().screenGeometry().height()

@@ -27,12 +27,13 @@ class TaintAnalysisRunner:
         self.ks = get_keystone_md(self.arch)
         self._engine = TextEngine(self.arch, self.dctx, self.cs, self.ks, self.reader)
         self._runner = Runner(self._engine)
-        taint_trace_records = None
         try:
 
             logger.info("Processing Taint Analysis ...")
+
             taint_trace_records = self._runner.process_analysis()
             self.reader.construct_taint_trace(taint_trace_records)
+            
         except Exception as e:
             print(traceback.format_exc())
 

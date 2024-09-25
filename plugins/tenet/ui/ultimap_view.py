@@ -17,7 +17,7 @@ class UltimapView(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("Ultimap")
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint | Qt.Window)
         self.move(QApplication.desktop().screenGeometry().width() - 930, 20)
 
         self.create_layouts()
@@ -328,6 +328,7 @@ class UltimapView(QMainWindow):
 #         self.reverseImportedFunctions = {}
 #         self.moduleToTrace = ""
 #         self.records = []
+#         self.root_filename = ""
 
 
 # # # creat the main window

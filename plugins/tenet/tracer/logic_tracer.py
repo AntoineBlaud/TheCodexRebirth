@@ -1,4 +1,4 @@
-from tenet.tracer.structures_tracer import *
+from tenet.tracer.node import *
 from tenet.util.disasm import *
 from collections import deque
 import logging
@@ -77,7 +77,7 @@ class SkipLoopLogic:
     def delete_cache_breakpoint(self, ea):
         if ea in self.breakpoints_set:
             del self.breakpoints_set[ea]
-        self.dctx.delete_breakpoint(ea)
+            self.dctx.delete_breakpoint(ea)
         
 
     def cleanup_bp(self):
@@ -188,6 +188,7 @@ class SkipLoopLogic:
         self.init_node = False
         must_find_loop = False
         
+    
         # We hit the return address of a function
         if len(self.call_stack) > 0 and self.ea in self.call_stack:
             # remove all address after the return address
@@ -196,7 +197,7 @@ class SkipLoopLogic:
             self.block_changed = True
             self.is_last_fn_return = True
             if self.node_previous:
-                self.node_previous.is_complete = True
+                self.node_previous.is_branch_node_complete = True
 
         # We did a call, we have a max number of hits for the function
         # if reached, we need to set a breakpoint to the return address
@@ -242,7 +243,7 @@ class SkipLoopLogic:
         # Code handling return instruction
         if self.is_last_fn_return:
             if self.node_previous:
-                self.node_previous.is_complete = True
+                self.node_previous.is_branch_node_complete = True
                 self.flog(self.node_previous.fstr(self.model.seen_instructions_count))
             self.node_previous = self.saved_node_before_call_insn.get(self.ea, None)
             address = self.tohex(self.node_previous.address) if self.node_previous else "None"
@@ -257,7 +258,7 @@ class SkipLoopLogic:
                 self.node_current = self.cfg.node_mapping[self.ea]
                 self.node_previous.j_next = self.node_current.address
                 self.node_previous.j_target = None
-                self.node_previous.is_complete = True
+                self.node_previous.is_branch_node_complete = True
                 show_previous_node = True
                 self.node_current.hit_count += 1
                 # special case, disable predecessors check
@@ -269,7 +270,7 @@ class SkipLoopLogic:
             self.block_changed = True
             # complete the previous node
             if self.node_previous:
-                self.node_previous.is_complete = True
+                self.node_previous.is_branch_node_complete = True
                 show_previous_node = True
             # check if the current ea is already in the node map
             if self.ea in self.cfg.node_mapping:
@@ -359,7 +360,7 @@ class SkipLoopLogic:
         self.next_disable_successor = False
 
         # add the instruction to the current node
-        if not self.node_current.is_complete:
+        if not self.node_current.is_branch_node_complete:
             self.node_current.instructions.append(
                 (
                     self.ea,
@@ -379,7 +380,11 @@ class SkipLoopLogic:
         ):
             self.flog(f"Loop hits count reach for {self.node_current}")
             
-            if not (self.node_current.is_unconditional_jump and self.node_current.op1_reg):
+
+        ### HEREEEEEEEEEEE
+
+
+            if not (self.node_current.is_unconditional_jump and self.node_current.first_operand_reg_name):
                 b_count = 0
                 self.set_cached_breakpoint(self.node_current.exit_target)
                 # "Security" reason.
@@ -445,7 +450,7 @@ class SkipLoopLogic:
             else:
                 self.node_current.j_next = j_target_address
                 self.node_current.is_unconditional_jump = True
-                self.node_current.op1_reg = self.dctx.get_operand_reg_name(self.ea, 0)
+                self.node_current.first_operand_reg_name = self.dctx.get_operand_register_name(self.ea, 0)
                 self.node_current.jump_ea = self.ea
                 
 
@@ -469,13 +474,13 @@ class SkipLoopLogic:
                 f"Call detected, current node is {self.tohex(self.node_current.address)}, fname is {self.dctx.get_function_name_at(self.ea)}"
             )
             self.must_check_max_call = True
-            self.node_current.is_complete = True
+            self.node_current.is_branch_node_complete = True
 
         # Code handling return instruction
         if nmemonic.startswith("ret"):
             self.block_changed = True
             self.is_last_fn_return = True
-            self.node_current.is_complete = True
+            self.node_current.is_branch_node_complete = True
 
         # clean jump stack
         self.jump_stack = self.cleanup_jump_stack(self.jump_stack)

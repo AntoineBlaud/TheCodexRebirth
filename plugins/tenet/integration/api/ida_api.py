@@ -246,7 +246,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         # Attach the condition to the breakpoint
         idc.set_bpt_cond(ea, condition)
     
-    def get_operand_reg_name(self, ea, op_off):
+    def get_operand_register_name(self, ea, op_off):
         """
         Get the register name of an operand if it is a register, otherwise return None.
         
@@ -276,7 +276,7 @@ class IDAContextAPI(DisassemblerContextAPI):
             return None
     
 
-    def get_instruction_addresses(self):
+    def enumerate_instructions_in_base_segment(self):
         """
         Return all instruction addresses from the executable.
         """
@@ -402,60 +402,27 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_sections(self):
         sections = []
+
         for seg_address in idautils.Segments():
             seg = ida_segment.getseg(seg_address)
             section_name = ida_segment.get_segm_name(seg)
             sections.append({"name": section_name, "range": f"{seg.start_ea:08X}-{seg.end_ea:08X}"})
+
         return sections
 
     # TODO: move outside of this class
-    def get_functions_in_section(self, section_name):
+    def get_functions_defined_in_section(self, section_name):
         functions = []
+
         for f_addr in idautils.Functions():
             f_name = ida_name.get_short_name(f_addr)
             seg = ida_segment.getseg(f_addr)
             function_section_name = ida_segment.get_segm_name(seg)
+
             if function_section_name == section_name and ":" not in f_name:
                 functions.append((f_name, f_addr))
+
         return functions
-
-    # TODO: move outside of this class
-    def compute_function_coverage(self, func, section=".text", f_cache_coverages={}, depth=0):
-        """Compute the coverage of a function in the binary."""
-        # get all sub calls
-        if depth > 15:
-            return set()
-        if func is None:
-            return set()
-        f_sub_calls = set()
-        
-        for ea in idautils.FuncItems(func.start_ea):
-            mnem = self.print_insn_mnemonic(ea)
-            if mnem == "call" or mnem == "bl":
-                addr = idc.get_operand_value(ea, 0)
-                # get function name
-                name = idc.get_func_name(addr)
-                # check addr is in code section
-                if idc.get_segm_name(addr) == section:
-                    f_sub_calls.add((name, addr))
-
-        for sub_call_name, sub_call_addr in f_sub_calls.copy():
-
-            # if already explored get the result
-            if sub_call_addr in f_cache_coverages:
-                # merge coverage
-                f_sub_calls |= f_cache_coverages[sub_call_addr]
-                continue
-            # show percentage
-            # else explore the function
-            elif sub_call_name != idc.get_func_name(func.start_ea):
-                sub_func = idaapi.get_func(sub_call_addr)
-                f_sub_sub_calls = self.compute_function_coverage(sub_func, section, f_cache_coverages, depth + 1)
-                # merge coverage
-                f_sub_calls |= f_sub_sub_calls
-
-        f_cache_coverages[func.start_ea] = f_sub_calls
-        return f_sub_calls
 
     def to_ida_color(self, color):
         r, g, b, _ = color.getRgb()
@@ -474,6 +441,10 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_module_base(self):
         root_filename = idc.get_root_filename()
+        
+        for schar in [" ", "-"]:
+            root_filename = root_filename.replace(schar, "_")
+
         for seg_address in idautils.Segments():
             # get seg permissions
             seg = ida_segment.getseg(seg_address)
@@ -557,24 +528,28 @@ class IDAContextAPI(DisassemblerContextAPI):
         return idaapi.get_segm_name(idaapi.getseg(seg))
 
     def reset_code_segment(self, seg_ea, hard=True):
+
         seg = self.get_segm(seg_ea)
         seg_start = idc.get_segm_start(seg)
         seg_end = idc.get_segm_end(seg)
-        seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
+
         for addr in range(seg_start, seg_end):
-            # undefined data DELIT_EXPAND del_items
+            # undefined data 
             idc.del_items(addr, idc.DELIT_EXPAND)
-        # print(f"Reset segment {seg_name} {hex(seg_start)}, {hex(seg_end)}")
-        # do not convert directly
+
         if not hard:
             return
+        
         curr_addr = seg_start
         while curr_addr < seg_end:
+
             idc.create_insn(curr_addr)
             curr_addr += idaapi.get_item_size(curr_addr)
 
     def get_segm(self, ea):
+
         for seg in idautils.Segments():
+            
             seg_start = idc.get_segm_start(seg)
             seg_end = idc.get_segm_end(seg)
             if seg_start <= ea <= seg_end:

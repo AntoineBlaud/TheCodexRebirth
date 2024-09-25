@@ -2,12 +2,12 @@ from tenet.util.qt import *
 from tenet.util.common import *
 from tenet.util.misc import *
 from tenet.util.counter import alt_count
-from tenet.tracer.structures_tracer import *
+from tenet.tracer.node import *
 from tenet.ui import *
 from tenet.integration.api import disassembler
 from tenet.util.misc import get_temp_dir
 from tenet.util.disasm import *
-from tenet.tracer.logic_tracer import SkipLoopLogic
+from tenet.tracer.logic_loop_tracer import SkipLoopLogic
 from capstone.x86_const import *
 from capstone.arm_const import *
 from tenet.tracer.core_tracer import *
@@ -33,11 +33,14 @@ class IDAStepTracerController(StepTracerController):
 
     def stop(self):
         self.trace_file = self.save_trace()
+
         self.model.watcher = Watcher(self.prev_ea)
         self.model.watcher.is_saved = True
         self.model.watcher.path = self.trace_file
+
         self.view._refresh()
         self.save_library_calls(self.skip_logic.library_calls)
+
         # flush log
         self.log_handle.flush()
 
@@ -50,18 +53,24 @@ class IDAStepTracerController(StepTracerController):
         self.log_handle.write(f"{msg}\n")
 
     def initialize(self):
+        
+        if self.model.module_name:
+            return True
         # fetch the current log file
         self.model.reset()
-        self.log_file = get_log_path()
-        self.log_handle = open(self.log_file, "a")
+
+        self.log_handle = open(get_log_path(), "a")
         self.backup_files()
 
         self.model.module_name = self.dctx.get_segm_name(self.ea)
         base = self.dctx.get_module_base()
+
         if not base:
             logger.error(f"Module base not found. Filename must be equal to module base name. Check filename has not space")
             return False
+        
         self.model.tenet_trace.append([f"base={tohex(base, self.arch.POINTER_SIZE)}"])
+
         if self.dctx.is_process_running():
             msg = "Please continue process until we reach a breakpoint before starting StepTracer"
             show_msgbox(msg, "StepTracer - Error")
@@ -69,14 +78,19 @@ class IDAStepTracerController(StepTracerController):
 
         self.skip_logic = SkipLoopLogic(
             self.dctx, self.arch, self.model, 200, self.print_log
-        )  # no limit of breakpoints in ida
+        )  
         self.skip_logic.set_callback_get_ea(lambda: self.dctx.get_pc(self.arch))
+
         return True
 
-    def run(self):
+    def main_loop(self):
+
         self.start = time.time()
+
         while True:
+
             self.prev_ea = self.ea
+
             if self.dctx.user_cancelled():
                 logger.info("User cancelled")
                 return
@@ -90,23 +104,29 @@ class IDAStepTracerController(StepTracerController):
                 return
 
             if (self.idx + 1) % 1000 == 0:
-                self.save_trace(backup=True)
+                self.save_trace()
                 self.save_library_calls(self.skip_logic.library_calls)
 
-            self.skip_logic.step()
+     
             try:
-                ea = self.ea  # make a copy
+                self.skip_logic.step()
+                ea = self.ea  # make a copy (needed)
                 self.finalize_step(ea, self.prev_ea)
+
             except Exception as e:
+
                 logger.error(f"Error getting PC: {e}")
                 import traceback
-
                 traceback.print_exc()
+
                 return
+            
 
     def invoke(self):
+
         if not self.initialize():
-            print("Failed to initialize")
+
+            print("Failed to initialize. Read logs for more details")
             return
 
         logger.info(f"Module to trace: {self.model.module_name}")
@@ -119,12 +139,14 @@ class IDAStepTracerController(StepTracerController):
         self.dctx.suspend_other_threads()
 
         try:
-            self.run()
+            self.main_loop()
+
         except Exception as e:
             import traceback
-
             traceback.print_exc()
             logger.error(f"Error: {e}")
+
         finally:
             self.stop()
+
         self.dctx.resume_threads()

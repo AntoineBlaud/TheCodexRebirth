@@ -93,11 +93,11 @@ def center(s: str, width) -> str:
     """
     Center a string in the console.
     """
-    return f"|{' '.join([s.center(width-2)])}|\n"
+    return f"|{' '.join([s.center(width-2)])}|"
 
 
 def right(s: str, width) -> str:
     """
     Right-align a string in the console.
     """
-    return f"| {' '.join([s.ljust(width-4)])} |\n"
+    return f"| {' '.join([s.ljust(width-4)])} |"

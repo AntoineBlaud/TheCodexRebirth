@@ -60,19 +60,21 @@ BAD_OPERANDS_ARM = []
 ID_COUNTER = None
 VAR_COUNTER = None
 
-
-def get_reg_name(cs, reg):
-    name = cs.reg_name(reg)
-    if isinstance(name, str):
-        return name.upper()
-    return None
-
-
 if not logging_started():
     logger = start_logging()
 
 logger = logging.getLogger("Tenet.Taint_Engines.Core")
 logger.setLevel(logging.INFO)
+
+
+
+def get_reg_name(cs, reg):
+
+    name = cs.reg_name(reg)
+    if isinstance(name, str):
+        return name.upper()
+    
+    return None
 
 
 def create_sym_register_factory(arch):
@@ -81,24 +83,32 @@ def create_sym_register_factory(arch):
     Used also to link a register part to its parent register.
     """
     global SYM_REGISTER_FACTORY
+
     if isinstance(arch, ArchAMD64) or isinstance(arch, ArchX86):
         import tenet.taint_engine.arch.x86 as arch_module
+
     elif isinstance(arch, ArchARM) or isinstance(arch, ArchARM64):
         import tenet.taint_engine.arch.arm as arch_module
+
     else:
         raise Exception("Unsupported architecture")
+    
     SYM_REGISTER_FACTORY = arch_module.create_sym_register_factory()
     return SYM_REGISTER_FACTORY
 
 
 def get_parent_register(arch, register_name, arch_size):
     register_name = register_name.upper()
+
     if isinstance(arch, ArchAMD64) or isinstance(arch, ArchX86):
         import tenet.taint_engine.arch.x86 as arch_module
+
     elif isinstance(arch, ArchARM) or isinstance(arch, ArchARM64):
         import tenet.taint_engine.arch.arm as arch_module
+
     else:
         raise Exception("Unsupported architecture")
+    
     return arch_module.get_parent_register(register_name, arch_size)
 
 
@@ -108,8 +118,10 @@ def check_memory_access(insn):
         return False
 
     for op in insn.operands:
+
         if op.type in [X86_OP_MEM, ARM_OP_MEM]:
             return True
+        
     return False
 
 
@@ -327,9 +339,12 @@ class OperationX86_64(OperationAbstract):
         return None
 
     def _push(self, operation, symbolic_taint_store):
+
         stack_pointer = self.engine.get_stack_pointer()
+
         symbolic_taint_store.create_sym_mem(stack_pointer, 0)
         symbolic_taint_store.update(stack_pointer, operation.v_op1)
+
         return symbolic_taint_store[stack_pointer]
 
     def _pop(self, operation, symbolic_taint_store):
@@ -342,6 +357,7 @@ class OperationX86_64(OperationAbstract):
         if stack_pointer in symbolic_taint_store:
             symbolic_taint_store.update(reg, symbolic_taint_store[stack_pointer])
             symbolic_taint_store.del_sym_var(stack_pointer)
+
         else:
             value = self.engine.read_memory_int(stack_pointer)
             symbolic_taint_store.update(reg, symbolic_taint_store.create_sym_mem(stack_pointer, value))
@@ -352,24 +368,31 @@ class OperationX86_64(OperationAbstract):
         # instanciate a new symbolic register if needed
         # if condition is not met, then delete the symbolic register
         if operation.op1.type == X86_OP_REG:
+
             regname = get_reg_name(self.cs, operation.op1.reg)
             symbolic_taint_store.update(regname, operation.v_op2)
+
             return symbolic_taint_store[regname]
 
         elif operation.op1.type == X86_OP_MEM:
             symbolic_taint_store.update(mem_access, operation.v_op2)
+
             return symbolic_taint_store[mem_access]
 
         raise Exception(f"Operation {operation.cinsn.mnemonic} not supported")
 
     def _lea(self, operation, symbolic_taint_store, mem_access):
+
         global ID_COUNTER
         regname = get_reg_name(self.cs, operation.op1.reg)
+
         # found mem_access to next 4 bytes
         mem_access = mem_access + (mem_access % 4)
         symbolic_taint_store.update(regname, RealValue(mem_access))
+
         id = ID_COUNTER.value
         symbolic_taint_store[regname].id = set([id])
+
         return symbolic_taint_store[regname]
 
     def process(self):
@@ -441,12 +464,16 @@ class OperationArm_AArch64(OperationAbstract):
         # instanciate a new symbolic register if needed
         # if condition is not met, then delete the symbolic register
         if operation.op1.type == X86_OP_REG:
+
             regname = get_reg_name(self.cs, operation.op1.reg)
             symbolic_taint_store.update(regname, operation.v_op2)
+
             return symbolic_taint_store[regname]
 
         elif operation.op1.type == X86_OP_MEM:
+            
             symbolic_taint_store.update(mem_access, operation.v_op2)
+
             return symbolic_taint_store[mem_access]
 
     def _str(self, operation, symbolic_taint_store, mem_access):
@@ -514,27 +541,38 @@ class OperationArm_AArch64(OperationAbstract):
     def _lsl(self, operation, symbolic_taint_store):
         destination = operation.v_op1
         bsize = self.config["BINARY_ARCH_SIZE"]
+
         if operation.v_op3 is not None:
+
             source = operation.v_op2
             count = operation.v_op3.value % bsize
+
             shifted_bits = destination << RealValue(count)
             shifted_bits |= source >> RealValue(bsize - count)
+
         else:
             count = operation.v_op2
             shifted_bits = destination << count
+
         return symbolic_taint_store.update(self.tainted_var_name, shifted_bits)
 
     def _lsr(self, operation, symbolic_taint_store):
+
         destination = operation.v_op1
         bsize = self.config["BINARY_ARCH_SIZE"]
+
         if operation.v_op3 is not None:
+
             source = operation.v_op2
             count = operation.v_op3.value % bsize
+
             shifted_bits = destination >> RealValue(count)
             shifted_bits |= source << RealValue(bsize - count)
+
         else:
             count = operation.v_op2
             shifted_bits = destination >> count
+
         return symbolic_taint_store.update(self.tainted_var_name, shifted_bits)
 
     def _ror(self, operation, symbolic_taint_store):
@@ -544,37 +582,47 @@ class OperationArm_AArch64(OperationAbstract):
 
         operands = operation.cinsn.operands
         sp_offset = 0
+        
         for op in operands:
 
-            reg_name = get_reg_name(self.cs, op.reg)
             stack_pointer = self.engine.get_stack_pointer() + sp_offset
             symbolic_taint_store.create_sym_mem(stack_pointer, 0)
             symbolic_taint_store.update(stack_pointer, operation.v_op1)
+
             # increment the stack pointer
             if isinstance(self.arch, ArchARM):
                 sp_offset -= 4
+
             else:
                 sp_offset -= 8
 
     def _pop(self, operation, symbolic_taint_store):
+
         operands = operation.cinsn.operands
         sp_offset = 0
+
         for op in operands:
+
             reg_name = get_reg_name(self.cs, op.reg)
             stack_pointer = self.engine.get_stack_pointer() + sp_offset
             # Delete the symbolic register
+
             if not reg_name in symbolic_taint_store:
                 symbolic_taint_store.create_sym_reg(reg_name)
 
             if stack_pointer in symbolic_taint_store:
+
                 symbolic_taint_store.update(reg_name, symbolic_taint_store[stack_pointer])
                 symbolic_taint_store.del_sym_var(stack_pointer)
+
             else:
                 value = self.engine.read_memory_int(stack_pointer)
                 symbolic_taint_store.update(reg_name, symbolic_taint_store.create_sym_mem(stack_pointer, value))
+
             # increment the stack pointer
             if isinstance(self.arch, ArchARM):
                 sp_offset += 4
+
             else:
                 sp_offset += 8
 
@@ -636,14 +684,19 @@ class OperationEngine:
         self.cs = self.engine.cs
         self.ks = self.engine.ks
         self.idx_counter = idx_counter
+
         if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
+
             self.op_reg_type = X86_OP_REG
             self.op_imm_type = X86_OP_IMM
             self.op_mem_type = X86_OP_MEM
+
         elif isinstance(self.arch, ArchARM) or isinstance(self.arch, ArchARM64):
+
             self.op_reg_type = ARM_OP_REG
             self.op_imm_type = ARM_OP_IMM
             self.op_mem_type = ARM_OP_MEM
+
         else:
             raise Exception("Unsupported architecture")
         # Initialize variables for tracking the last executed instruction
@@ -675,6 +728,7 @@ class OperationEngine:
 
     
     def parse_operation_operands(self, cinsn, mem_access: int, symbolic_taint_store: VariableStates):
+
         global SYM_REGISTER_FACTORY, logger
         # Parse the operands of the instruction, create symbolic values if needed, and return the Operation object
         operation = Operation(cinsn)
@@ -685,9 +739,13 @@ class OperationEngine:
 
         # Check if the operand is a symbolic memory access and create a symbolic value
         for i, op in enumerate(cinsn.operands):
+
             if op.type == self.op_mem_type and mem_access not in symbolic_taint_store:
+
                 sym_access = self.discover_indirect_access(op, mem_access, symbolic_taint_store)
+
                 if isinstance(sym_access, IndirectSymValue):
+
                     logger.debug(f"Found a indirect sym memory")
                     # set the mem_access to the indirect sym value.
                     # The indirect sym value is equal to the value of the register + the displacement
@@ -696,25 +754,34 @@ class OperationEngine:
         # Process the tainted data of the operands
         #
         for i in range(min(len(cinsn.operands), 3)):
+
             operand = cinsn.operands[i]
             setattr(operation, f"op{i+1}", operand)
+
             # Process REG operands
             if operand.type == self.op_reg_type:
+
                 regname = get_reg_name(self.cs, operand.reg)
+
                 if regname not in symbolic_taint_store and regname in SYM_REGISTER_FACTORY:
                     symbolic_taint_store.create_sym_reg(regname)
+
                 if regname in symbolic_taint_store:
                     setattr(operation, f"v_op{i+1}", symbolic_taint_store[regname])
+
                 else:
                     setattr(operation, f"v_op{i+1}", SymValue(regname))
+
             # Process IMM operands
             elif operand.type == self.op_imm_type:
                 setattr(operation, f"v_op{i+1}", RealValue(operand.imm))
 
             # Process MEM operands
             elif operand.type == self.op_mem_type:
+
                 if mem_access not in symbolic_taint_store:
                     symbolic_taint_store.create_sym_mem(mem_access, self.engine.read_memory_int(mem_access))
+
                 setattr(operation, f"v_op{i+1}", symbolic_taint_store[mem_access])
 
             else:
@@ -727,12 +794,15 @@ class OperationEngine:
         # Parse real values of the operands
         #
         for i, op in enumerate(cinsn.operands):
+
             if op.type == self.op_reg_type:
+
                 regname = get_reg_name(self.cs, op.reg)
                 reg_value = self.engine.read_reg(regname.upper())
                 setattr(operation, f"r_op{i + 1}", reg_value)
 
             elif op.type == self.op_mem_type:
+
                 mem_value = self.engine.read_memory_int(mem_access)
                 setattr(operation, f"r_op{i + 1}", hex(mem_value))
 
@@ -751,52 +821,67 @@ class OperationEngine:
         # sub_var_count = str(tainted_var_value).count("VAR_")
         # if not, then we didn't updated yet, so we create a new varname and assign it to the tainted_var_value
         if var_size > self.config["MAX_VAR_OPERANDS"]:
+
             new_var = f"VAR_{next(VAR_COUNTER):06d}"
             new_value = SymValue(new_var)
             new_value.id = set(tainted_var_value.id)
+
             symbolic_taint_store[new_var] = tainted_var_value.clone()
             symbolic_taint_store.update(tainted_var_name, new_value)
+
             logger.debug(f"Substituting {symbolic_taint_store[new_var]} to {new_var}")
 
     def compute_mem_access(self, cinsn):
         mem_access = 0
         try:
             for op in cinsn.operands:
+
                 if op.type == self.op_mem_type:
+
                     mem_access += self.engine.read_reg(get_reg_name(self.cs, op.mem.base)) if op.mem.base != 0 else 0
                     mem_access += self.engine.read_reg(get_reg_name(self.cs, op.mem.index)) if op.mem.index != 0 else 0
                     mem_access += op.mem.disp
+
                     try:
                         mem_access *= op.mem.scale if op.mem.scale > 1 else 1
+
                     except AttributeError:
                         pass
+
                 elif op.type == self.op_imm_type:
                     mem_access += op.imm
 
         except Exception as e:
             raise e
+        
         return mem_access
 
     
     def evaluate_instruction(self, symbolic_taint_store: VariableStates):
         global logger
+
         if self.config is None:
             raise Exception("Config not set")
 
         # Get the current instruction
         cinsn = self.engine.get_currrent_instruction_disass()
         if cinsn is None:
+
             logger.debug(f"Failed to disassemble instruction at {hex(self.engine.get_ea())}")
             return None
+        
         cinsn_addr = self.engine.get_ea()
         # Check if the instruction is the same as the last one executed
         if cinsn_addr == self.last_instruction_executed:
+
             logger.debug(f"Instruction {hex(cinsn_addr)} already executed\n")
             return None
 
         # check if the operands are not supported
         for bad_op_pattern in self.config["BAD_OPERANDS"]:
+
             if re.match(bad_op_pattern, cinsn.op_str):
+
                 logger.debug(f"Bad operand: {hex(cinsn_addr)} {cinsn.op_str}, the result operation may be wrong")
                 return None
 
@@ -814,19 +899,24 @@ class OperationEngine:
         # Compute the result of the operation
         if isinstance(self.arch, ArchAMD64) or isinstance(self.arch, ArchX86):
             OPClass = OperationX86_64
+
         elif isinstance(self.arch, ArchARM) or isinstance(self.arch, ArchARM64):
             OPClass = OperationArm_AArch64
+
         else:
             raise Exception("Unsupported architecture")
 
         op_engine = OPClass(self.config, self.cs, self.engine, operation, mem_access, symbolic_taint_store)
+
         try:
             operation.v_result = op_engine.process()
+
         except Exception as e:
             logger.error(
                 f"Error processing operation {operation.cinsn.mnemonic} {operation.cinsn.op_str}, idx={self.idx_counter.value}"
             )
             logger.error(e)
+
         logger.debug(f"{hex(cinsn_addr)} {cinsn.mnemonic} {cinsn.op_str}")
 
         # Update variables in symbolic_taint_store
@@ -847,14 +937,17 @@ class Runner:
         self.arch = self.engine.arch
         self.cs = self.engine.cs
         self.ks = self.engine.ks
+
         # only for debugging
         self.symbolic_check = False
         self.symbolic_taint_store = VariableStates()
+
         # Initialize start and end addresses for emulation
         self.trace_records = Trace()
         self.idx_counter = ID_COUNTER
         self.registers_state = DataStoreManager()
         self.memory_state = DataStoreManager()
+
         # Create an instance of the CodexOperationEngine
         self.operation_engine = OperationEngine(self.engine, self.idx_counter)
         self.emulation_time = 0
@@ -876,8 +969,11 @@ class Runner:
 
     
     def register_operations(self, operation: Operation):
+
         idx = self.idx_counter.value
+
         if operation is None:
+
             cinsn = self.engine.get_currrent_instruction_disass()
             operation = Operation(cinsn)
 
@@ -900,9 +996,12 @@ class Runner:
         # We fetching the value of the registers before triggering the run
         # and store them in the global scope
         for reg_name in self.arch.REGISTERS:
+
             try:
+
                 value = self.engine.read_reg(reg_name.upper())
                 globals()[reg_name] = value
+
             except KeyError:
                 pass
 
@@ -913,6 +1012,7 @@ class Runner:
         """
         global logger
         last_trace_entry = self.trace_records.get_last_entry()
+
         if not last_trace_entry:
             return
 
@@ -921,9 +1021,11 @@ class Runner:
         last_v_result = last_operation.v_result
 
         if last_v_result is not None and len(cinsn_operands) > 0:
+
             op1 = cinsn_operands[0]
 
             if op1.type == X86_OP_REG:
+
                 reg_name = get_reg_name(self.cs, op1.reg)
                 value = self.engine.read_reg(reg_name)
 
@@ -944,27 +1046,35 @@ class Runner:
         """
         # register new variables var_xxxxx
         vars_to_register = sorted(set(self.symbolic_taint_store.keys()).difference(set(globals().keys())))
+
         for var_name in vars_to_register:
+
             if var_name.startswith("VAR_"):
                 globals()[var_name] = eval(str(self.symbolic_taint_store[var_name]), globals())
 
         # eval last mem access
         if operation.mem_access:
+
             name = create_name_from_address(operation.mem_access)
+
             if name in self.symbolic_taint_store:
                 globals()[name] = eval(str(self.symbolic_taint_store[name]), globals())
+
             else:
                 globals()[name] = self.engine.read_memory_int(operation.mem_access)
 
         # update registers values
         for op in operation.cinsn.operands:
+
             if op.type in [X86_OP_REG, ARM_OP_REG]:
                 reg_name = get_reg_name(self.cs, op.reg)
+
                 if reg_name in self.symbolic_taint_store:
                     globals()[reg_name] = eval(str(self.symbolic_taint_store[reg_name]), globals())
 
     
     def register_execution_state(self, current_operation: Operation, last_operation: Operation):
+
         idx = self.idx_counter.value
 
         for operation in (current_operation, last_operation):
@@ -983,14 +1093,18 @@ class Runner:
                             self.arch, get_reg_name(self.cs, operand.reg), self.CONFIG["BINARY_ARCH_SIZE"]
                         )
                         register_value = self.engine.read_reg(register_name.upper())
+
                         self.registers_state.register_item(register_name, idx, register_value)
+
                     except KeyError:
                         logger.error(f"Failed to read {register_name}, idx={self.idx_counter.value}")
 
                 elif operand.type in [X86_OP_MEM, ARM_OP_MEM]:
+
                     address = operation.mem_access
                     if address is None:
                         continue
+
                     name = create_name_from_address(address)
                     memory_value = self.engine.read_memory_int(address)
                     self.memory_state.register_item(name, idx, memory_value)
@@ -1047,18 +1161,26 @@ class Runner:
 
     
     def process_analysis(self):
+
         try:
             self.initialize_configuration()
             self.initialize_execution_state()
             self.initialize_symbolic_evaluator()
+
             while self.engine.is_next():
+
+                # run analysis on the current operation
                 op = self.operation_engine.evaluate_instruction(self.symbolic_taint_store)
                 self.register_operations(op)
+                # make a step
                 self.engine.step()
+
         except Exception as e:
             raise e
+        
         finally:
             pass
+
         return self.trace_records
 
     def clone(self):

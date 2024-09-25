@@ -45,7 +45,7 @@ try:
     from tenet.ui import *
     from tenet.util.disasm import *
     from tenet.tracer.structures_tracer import *
-    from tenet.tracer.logic_tracer import SkipLoopLogic
+    from tenet.tracer.logic_loop_tracer import SkipLoopLogic
     from tenet.tracer.core_tracer import *
     from tenet.integration.api.gdb_api import *
     from tenet.util.log import LoggerProxy
@@ -116,7 +116,7 @@ class GDBStepTracerController(StepTracerController):
                 return
 
             if (self.idx + 1) % 1000 == 0:
-                self.save_trace(backup=True)
+                self.save_trace()
                 self.save_library_calls(self.skip_logic.library_calls)
 
             self.skip_logic.step()

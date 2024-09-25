@@ -3,8 +3,51 @@ from tenet.ui.menus import ExportFuncsMenuView
 from tenet.integration.api import disassembler
 import idaapi
 import logging
+import idc
+import idautils
 
 logger = logging.getLogger(f"Tenet.{__name__}")
+
+
+
+    # TODO: move outside of this class
+def compute_function_coverage(dctx, func, section=".text", f_cache_coverages={}, depth=0):
+    """Compute the coverage of a function in the binary."""
+    # get all sub calls
+    if depth > 15:
+        return set()
+    if func is None:
+        return set()
+    f_sub_calls = set()
+    
+    for ea in idautils.FuncItems(func.start_ea):
+        mnem = dctx.print_insn_mnemonic(ea)
+        if mnem == "call" or mnem == "bl":
+            addr = idc.get_operand_value(ea, 0)
+            # get function name
+            name = idc.get_func_name(addr)
+            # check addr is in code section
+            if idc.get_segm_name(addr) == section:
+                f_sub_calls.add((name, addr))
+
+    for sub_call_name, sub_call_addr in f_sub_calls.copy():
+
+        # if already explored get the result
+        if sub_call_addr in f_cache_coverages:
+            # merge coverage
+            f_sub_calls |= f_cache_coverages[sub_call_addr]
+            continue
+        # show percentage
+        # else explore the function
+        elif sub_call_name != idc.get_func_name(func.start_ea):
+            sub_func = idaapi.get_func(sub_call_addr)
+            f_sub_sub_calls = compute_function_coverage(dctx, sub_func, section, f_cache_coverages, depth + 1)
+            # merge coverage
+            f_sub_calls |= f_sub_sub_calls
+
+    f_cache_coverages[func.start_ea] = f_sub_calls
+    return f_sub_calls
+
 
 class ExportFunctionsMenuController:
     def __init__(self, pctx):
@@ -39,7 +82,7 @@ class ExportFunctionsMenuModel:
         for section in sections:
             logger.info(f"Processing section {section['name']}")
             section_name = section["name"]
-            functions = self.dctx.get_functions_in_section(section_name)
+            functions = self.dctx.get_functions_defined_in_section(section_name)
             f_cache_coverages = {}
             length = len(functions)
             counter = 0
@@ -49,7 +92,7 @@ class ExportFunctionsMenuModel:
                 # get all sub calls recursively
                 func = idaapi.get_func(f_addr)
                 logger.info(f"Processing {f_name} in {section_name} ({counter}/{length})")
-                f_cover = self.dctx.compute_function_coverage(func, section_name, f_cache_coverages)
+                f_cover = compute_function_coverage(self.dctx, func, section_name, f_cache_coverages)
                 f_size = func.end_ea - func.start_ea
                 functions_metadata.append((f_name, f_addr, len(f_cover), f_size))
                 counter += 1

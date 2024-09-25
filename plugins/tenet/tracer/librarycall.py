@@ -1,6 +1,3 @@
-
-
-
 class LibraryCall:
     def __init__(self, ea, mod_name, f_name, idx, mod_base) -> None:
         self.ea = ea
