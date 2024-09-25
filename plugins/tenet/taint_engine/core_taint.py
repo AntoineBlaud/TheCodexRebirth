@@ -1,8 +1,7 @@
 #########################################################
 # Author: @d0raken - Antoine Blaud
 # Date: 2023-09-18
-# CodexRebirth is a symbolic execution engine based on Qiling
-# It is used to emulate a binary and to extract the symbolic execution trace
+# Symbolic execution engine
 #########################################################
 
 
