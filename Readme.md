@@ -66,6 +66,7 @@ python -m pip install -r requirements.txt
 
 - Open the IDA database of the program to analyze.
 - Use step tracing to register the instructions and their results.
+- Adjust the base address in the Tenet trace file, as it occasionally fails to compute correctly
 - Import the trace file into CodexRebirth.
 - Explore by using mouse wheel while hovering the timeline, or by using previous/next buttons or shortcuts.
 
