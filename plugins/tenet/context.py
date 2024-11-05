@@ -2,6 +2,8 @@ import os
 import logging
 import traceback
 
+import ida_pro
+
 from tenet.util.qt import *
 from tenet.util.log import pmsg
 from tenet.util.misc import is_plugin_dev
@@ -20,6 +22,8 @@ from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 from tenet.trace.reader import TraceReader
 from tenet.integration.api import disassembler, DisassemblerContextAPI
 from tenet.taint_engine.analysis_runner import TaintAnalysisRunner
+
+
 
 IDA_GLOBAL_CTX = None
 
@@ -62,8 +66,16 @@ class TenetContext(object):
         self.db = db
 
         # select a trace arch based on the binary the disassmbler has loaded
+        inf_procname = None
 
-        if ida_ida.inf_get_procname() == "ARM":
+        if ida_pro.IDA_SDK_VERSION < 900:
+            inf_procname = idaapi.get_inf_structure().procname
+
+        else:
+            inf_procname = ida_ida.inf_get_procname()
+
+
+        if inf_procname == "ARM":
             if disassembler[self].is_64bit():
                 self.arch = ArchARM64()
             else:
