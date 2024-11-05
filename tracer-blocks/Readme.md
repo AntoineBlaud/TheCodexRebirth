@@ -4,7 +4,7 @@ This project implements an experimental tracer that focuses on tracking blocks o
 
 ### Key Features:
 - **Tracing of dynamic jumps**: The tracer is capable of accurately following execution paths involving decoded jumps, which makes it particularly useful for tracing complex code paths in packers like Themida.
-.
+
 
 ### **Limitations of Hooking in Native Code**
 
