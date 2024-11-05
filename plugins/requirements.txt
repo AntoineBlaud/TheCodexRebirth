@@ -8,3 +8,4 @@ jsonschema
 line_profiler
 treelib
 PyQt5
+sortedcontainers

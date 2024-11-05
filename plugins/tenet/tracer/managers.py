@@ -23,7 +23,7 @@ class BreakpointManager:
             self.dctx.set_conditional_breakpoint(ea, condition, reg)
             self.breakpoints_states[ea] = True
 
-    def delete_cache_breakpoint(self, ea):
+    def delete_cached_breakpoint(self, ea):
 
         if ea in self.breakpoints_states:
             

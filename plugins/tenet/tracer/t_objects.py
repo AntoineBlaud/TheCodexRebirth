@@ -8,6 +8,20 @@ class CFG:
         self.root_node: Optional[Node] = None
         self.node_mapping: Dict[int, Node] = {}
 
+
+class Hook():
+
+    original_code = None
+    shellcode_location : Optional[int] = None
+    total_shellcode_size : Optional[int] = None
+    shellcode_size : Optional[int] = None
+    address_hooked : Optional[int] = None
+    node_associated : Optional[int] = None
+    watchdog_address : Optional[int] = None
+    instruction_size_at_hooked_address : Optional[int] = None
+
+    def __init__(self):
+        pass
         
 class Node:
     def __init__(self, address: int, ptr_size: int):
@@ -21,6 +35,8 @@ class Node:
         self.jump_next: Optional[int] = None
         self.exit_target: Optional[int] = None
         self.is_unconditional_jump: bool = False
+        self.already_seen_targets: List[int] = []
+        self.is_call : bool = False
         
         # Loop and hit tracking
         self.is_loop_initiator: bool = False
@@ -34,6 +50,9 @@ class Node:
         
         # Miscellaneous attributes
         self.width: int = 65
+
+        # hook
+        self.hook : Optional[Hook] = None
 
     def __repr__(self):
         return f"Node {tohex(self.address, self.ptr_size)}"

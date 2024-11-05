@@ -3,7 +3,7 @@ from collections import deque
 import logging
 import time
 
-from tenet.tracer.node import *
+from tenet.tracer.t_objects import *
 from tenet.util.disasm import *
 from tenet.tracer.managers import BreakpointManager
 from tenet.tracer.librarycall import LibraryCall
@@ -83,7 +83,7 @@ class SkipLoopLogic:
                 to_remove.append(dest)
         for dest in to_remove:
             stack.remove(dest)
-            self.bm.delete_cache_breakpoint(dest)
+            self.bm.delete_cached_breakpoint(dest)
         # limit to 10
         return list(reversed(stack))[:int(self.max_bp/2)]
 
@@ -140,7 +140,7 @@ class SkipLoopLogic:
 
         self.must_check_max_call = False
         
-        if self.model.seen_instructions_count.get(self.ea, 0) <= self.model.max_step_inside_loop:
+        if self.model.seen_instructions_count.get(self.ea, 0) <= self.model.max_instruction_hits:
             return False
 
         self.flog(f"Max hits reached for function {self.tohex(self.ea)}")
@@ -193,7 +193,7 @@ class SkipLoopLogic:
             self.bm.set_cached_breakpoint(self.call_stack.pop())
 
             self._continue_process()
-            self.bm.delete_cache_breakpoint(self.ea)
+            self.bm.delete_cached_breakpoint(self.ea)
 
             self.block_changed = True
             self.last_function_returns = True
@@ -290,7 +290,7 @@ class SkipLoopLogic:
         self.node_initialization_required = False
         self.skip_all = False
 
-        if self.model.seen_instructions_count.get(self.ea, 0) >= 3 * self.model.max_step_inside_loop:
+        if self.model.seen_instructions_count.get(self.ea, 0) >= 3 * self.model.max_instruction_hits:
             self.skip_all = True
 
     def handle_function_return_instruction(self):
@@ -433,7 +433,7 @@ class SkipLoopLogic:
 
         if (self.node_current.is_loop_initiator or self.skip_all) \
         and self.node_current.exit_target \
-        and self.node_current.hit_count >= self.model.max_step_inside_loop :
+        and self.node_current.hit_count >= self.model.max_instruction_hits :
             
             self.flog(f"Loop hits count reach for {self.node_current}")
 
@@ -502,7 +502,7 @@ class SkipLoopLogic:
         if self.node_current.is_unconditional_jump or self.node_current.first_operand_reg_name:
             self.bm.set_cached_breakpoint(self.node_current.jump_ea)
             self._continue_process()
-            self.bm.delete_cache_breakpoint(self.ea)
+            self.bm.delete_cached_breakpoint(self.ea)
             self.dctx.step_into()
 
         else:
@@ -514,7 +514,7 @@ class SkipLoopLogic:
             self.show_call_stack()
             self._continue_process()
 
-            self.bm.delete_cache_breakpoint(self.ea)
+            self.bm.delete_cached_breakpoint(self.ea)
             self.block_changed = True
             self.flog("L")
 

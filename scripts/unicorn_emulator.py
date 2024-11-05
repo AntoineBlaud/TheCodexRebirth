@@ -14,9 +14,21 @@ import time
 visited_addresses = {}
 visited_addresses_extended = set()
 
+
 PAGE_SIZE = 0x1000
 FIRST_RUN_INSTRUCTION_COUNT = 0x4000
 MAX_JUMP_RANGE = 0x80000000  # ±2 GB range for 32-bit or rel32 in 64-bit
+
+
+class PatchRestartException(Exception):
+    pass
+    
+
+
+# Don't work because of unicorn instruction caching :/ 
+# Hook must be placed before the start of emulation
+instructions_to_replace = {}
+
 
 # Comprehensive mapping of IDA register names to Unicorn constants for both 32-bit and 64-bit registers
 REGISTER_MAP = {
@@ -368,12 +380,35 @@ def disassemble_code(mu, start_addr, size, arg=None):
     """
     # Initialize Capstone disassembler based on architecture    
     code = mu.mem_read(start_addr, size)
-    for i in md.disasm(code, start_addr):
-        print(f"0x{i.address:x}: {i.mnemonic} {i.op_str} ", end="")
+    for instr in md.disasm(code, start_addr):
+        print(f"0x{instr.address:x}: {instr.mnemonic} {instr.op_str} ", end="")
         print(str(arg)) if arg else print("")
-        
-        
 
+
+    return next(md.disasm(code, start_addr)).bytes
+
+
+def handle_instruction_replacement(mu, address, instr_bytes):
+    
+    result = instructions_to_replace.get(instr_bytes.hex(), None)
+    
+    if result: 
+        
+        # Unmap the memory region
+        segments = get_segment_data()
+        
+        for seg in segments:
+            base = seg['base']
+            size = seg['size']
+            if base <= address and address <= (base + size):
+                # Remap the region and write the patched code back, avoid internal instruction caching
+                mu.mem_unmap(base, size)
+                mu.mem_map(base, size)
+                mu.mem_write(address, result)
+                print(f'Replaced instruction bytes {instr_bytes} with {result}')
+                raise PatchRestartException()
+        
+        
 
 def hook_code(mu, address, size, user_data):
     """
@@ -387,32 +422,37 @@ def hook_code(mu, address, size, user_data):
     visited_addresses.setdefault(address, 0)
     visited_addresses[address] +=1
     
-    disassemble_code(mu, address, size, arg=visited_addresses[address])
+    instr_bytes = disassemble_code(mu, address, size, arg=visited_addresses[address])
 
-
+    handle_instruction_replacement(mu, address, instr_bytes)
     
 
-def emulate_code(mu, max_instructions, hook=False):
+def emulate_code(mu, max_instructions, pc, hook=False):
     """
     Start the Unicorn emulation with optional hooking to capture instruction addresses.
     """
-    start_eip = idc.get_reg_value('RIP' if is_64bit else 'EIP')
     
     try:
-        print(f"Starting emulation at EIP: 0x{start_eip:x}")
+        print(f"Starting emulation at PC: 0x{pc:x}")
 
         # Attach the hook for the first emulation if requested
         if hook:
             mu.hook_add(UC_HOOK_CODE, hook_code)
-        else:
-            try:
-                mu.hook_del(UC_HOOK_CODE)
-            except Exception as e:
-                pass
 
-        mu.emu_start(start_eip, 0, timeout=100 * UC_SECOND_SCALE, count=max_instructions)
+        mu.emu_start(pc, 0, timeout=100 * UC_SECOND_SCALE, count=max_instructions)
+        
     except UcError as e:
+        
         print(f"Unicorn error: {e}")
+        
+    except PatchRestartException as e:
+        
+        print("Restarting emulation after instruction patching")
+        
+        pc = mu.reg_read(REGISTER_MAP['RIP' if is_64bit else 'EIP'])
+        
+        # hook already present, deactivate for next
+        return emulate_code(mu, max_instructions, pc,  hook=False)
 
 
 def align_to_page(addr):
@@ -642,10 +682,11 @@ def run_until_crash(mu):
     Measure the time of the second emulation and estimate the number of executed instructions until crash.
     """
     start_time = time.time()
+    pc = idc.get_reg_value('RIP' if is_64bit else 'EIP')
     
     try:
         # Attempt to emulate indefinitely until crash
-        emulate_code(mu, 0xFFFFFFFF)  # Large instruction count to emulate until crash
+        emulate_code(mu, 0xFFFFFFFF, pc)  # Large instruction count to emulate until crash
     except UcError as e:
         print(f"Program crashed due to memory access violation or other error: {e}")
 
@@ -654,31 +695,36 @@ def run_until_crash(mu):
     elapsed_time = end_time - start_time
     print(f"Execution time during second run: {elapsed_time:.4f} seconds")
 
-    # Estimate the number of executed instructions
-    estimated_instructions = elapsed_time * 10_000_000  # 10M instructions per second
-    print(f"Estimated number of instructions executed before crash: {int(estimated_instructions)}")
 
-
-def assemble_shellcode(code):
+def assemble_shellcode(code, size=None):
 
     encoding, count = ks.asm(code)
     instructions = b''
     
     for dec in encoding:
         instructions += int(dec).to_bytes(1, 'little')
+        
+    if size:
+        while len(instructions) < size:
+            instructions += b'\x90'
 
     print("Opcodes Hex = (\"" + instructions.hex() + "\")")
 
     return instructions
     
 
+def populate_instructions_to_replace():
+    
+    instr_mov_rax_gs = bytearray(b'eH\xa10\x00\x00\x00\x00\x00\x00\x00')
+    
+    instructions_to_replace[instr_mov_rax_gs.hex()] =  assemble_shellcode( "mov rax, 0x00000000002FA000", size=len(instr_mov_rax_gs))
 
 
 
 def emulate_and_find_loop_exit_example():
     global mu
     
-    names = [".boot", ".text", "Stack", "ntdll", "debug"]
+    names = [".boot", ".themida", ".text", "Stack", "ntdll", "debug"]
     
     # Step 1: Get memory segments from IDA and map them into Unicorn
     ida_segments = get_segment_data()
@@ -689,7 +735,8 @@ def emulate_and_find_loop_exit_example():
 
     # Step 3: First run to capture executed instruction addresses
     print("Starting first run to capture executed instruction addresses...")
-    emulate_code(mu, FIRST_RUN_INSTRUCTION_COUNT, hook=True)
+    pc = idc.get_reg_value('RIP' if is_64bit else 'EIP')
+    emulate_code(mu, FIRST_RUN_INSTRUCTION_COUNT, pc,  hook=True)
     print_visited_address_ranges(mu)
 
     # Step 4: Find the segment where the EIP/RIP is located
@@ -741,6 +788,10 @@ def emulate_and_find_loop_exit_example():
 
 
 def emulate():
+    
+    # Step 0: Replace bad instructions
+    populate_instructions_to_replace()
+     
     # Step 1: Get memory segments from IDA and map them into Unicorn
     ida_segments = get_segment_data()
     map_segments(mu, ida_segments)
@@ -749,7 +800,8 @@ def emulate():
     copy_registers_from_ida(mu)
 
     # Step 3: Start Unicorn emulation
-    emulate_code(mu, 0xFFFFFF)
+    pc = idc.get_reg_value('RIP' if is_64bit else 'EIP')
+    emulate_code(mu, 0xFFFFFF, pc, hook=True)
 
     # Step 4: Dump the state of the registers after emulation
     dump_registers(mu)
@@ -804,7 +856,8 @@ def emulate_with_shellcode_example():
     disassemble_code(mu, shellcode_location, 0x20)  # Disassemble 0x20 bytes after EIP
     
     # Step 4: Start Unicorn emulation
-    emulate_code(mu, 4)
+    pc = idc.get_reg_value('RIP' if is_64bit else 'EIP')
+    emulate_code(mu, 4, pc)
     print("\nDisassembly view during shellcode execution")
     ip = 'RIP' if is_64bit else 'EIP'
     current_pc = mu.reg_read(REGISTER_MAP[ip])
@@ -814,6 +867,6 @@ def emulate_with_shellcode_example():
 
 
 if __name__ == '__main__':
-    emulate_and_find_loop_exit_example()
+    emulate()
     
   

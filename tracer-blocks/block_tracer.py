@@ -5,40 +5,45 @@ from tenet.util.counter import alt_count
 from tenet.tracer.t_objects import *
 from tenet.ui import *
 from tenet.integration.api import disassembler
+from tenet.context import IDA_GLOBAL_CTX
 from tenet.util.misc import get_temp_dir
 from tenet.util.disasm import *
-from tenet.tracer.logic_loop_tracer import SkipLoopLogic
 from capstone.x86_const import *
 from capstone.arm_const import *
 from tenet.tracer.core_tracer import *
 from tenet.util.misc import tohex
 from tenet.util.log import get_log_path
+from tenet.integration.api import ida_api
+from tenet.integration.api import *
+from tenet.trace.arch import *
+
+import time
+import importlib
+
+
+import logics.logic_block_tracer 
+import shellcode_managers
+
 
 logger = logging.getLogger(f"Tenet.{__name__}")
 
 
 
-class IDAStepTracerController(TracerController):
-    def __init__(self, pctx):
-        super().__init__(disassembler[pctx], pctx.arch)
-        self.pctx = pctx
-        self.dctx = disassembler[self.pctx]
-        self.view = StepTracerView(self, self.model)
-        self.view.show()
+
+class IDABlockTracerController(TracerController):
+    def __init__(self, dctx, arch,  shellcode_class):
+        super().__init__(dctx, arch)
+        self.dctx = dctx
         self.cs = get_capstone_md(self.arch)
         self.ks = get_keystone_md(self.arch)
+        self.shellcode_manager = shellcode_manager
+        self.shellcode_location = None
 
     def show(self):
         self.view.show()
 
     def stop(self):
         self.trace_file = self.save_trace()
-
-        self.model.watcher = Watcher(self.prev_ea)
-        self.model.watcher.is_saved = True
-        self.model.watcher.path = self.trace_file
-
-        self.view._refresh()
         self.save_library_calls(self.skip_logic.library_calls)
         self.log_segments_metadata()
 
@@ -48,14 +53,15 @@ class IDAStepTracerController(TracerController):
     def update_ui(self):
         # update ui
         self.dctx.update_ui()
-        self.view.update_progress(self.start, self.idx)
-
+        
     def log_segments_metadata(self):
-        sections = self.dctx.get_sections()
-        self.print_log("\n".join(sections))
-
+        sections = dctx.get_sections()
+        for section in sections:
+            self.print_log(section)
+        
     def print_log(self, msg):
-        self.log_handle.write(f"{msg}\n")
+        #self.log_handle.write(f"{msg}\n")
+        print(msg)
 
     def initialize(self):
         
@@ -80,11 +86,13 @@ class IDAStepTracerController(TracerController):
             msg = "Please continue process until we reach a breakpoint before starting StepTracer"
             show_msgbox(msg, "StepTracer - Error")
             raise Exception(msg)
+        
 
-        self.skip_logic = SkipLoopLogic(
-            self.dctx, self.arch, self.model, 200, self.print_log
+        self.skip_logic = logics.logic_block_tracer.LogicBlockTracer(
+            self.dctx, self.arch, self.model, self.print_log, self.shellcode_manager
         )  
         self.skip_logic.set_callback_get_ea(lambda: self.dctx.get_pc(self.arch))
+        self.skip_logic.init()
 
         return True
 
@@ -117,7 +125,6 @@ class IDAStepTracerController(TracerController):
                 self.skip_logic.step()
                 ea = self.ea  # make a copy (needed)
                 self.finalize_step(ea, self.prev_ea)
-                self.update_seen_instructions_count(ea)
 
             except Exception as e:
 
@@ -156,3 +163,22 @@ class IDAStepTracerController(TracerController):
             self.stop()
 
         self.dctx.resume_threads()
+
+
+if __name__ == "__main__":
+    importlib.reload(logics.logic_block_tracer)
+    importlib.reload(logics.memory_manager)
+    importlib.reload(shellcode_managers)
+        
+    shellcode_manager = shellcode_managers.Windows_64_SM
+    dctx = IDAContextAPI(IDACoreAPI())
+    arch = ArchAMD64()
+
+    jump_tracer = IDABlockTracerController(dctx, arch, shellcode_manager)
+
+    jump_tracer.model.run_timeout = 6000
+    jump_tracer.model.root_filename = dctx.get_root_filename()
+    jump_tracer.model.shellcode_location = 0x000000014A730E6E
+    jump_tracer.model.shellcode_location = 0x000000014A731000
+   
+    jump_tracer.invoke()

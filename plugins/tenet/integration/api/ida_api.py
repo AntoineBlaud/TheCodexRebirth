@@ -23,6 +23,7 @@ import ida_idaapi
 import ida_idd
 import ida_diskio
 import ida_kernwin
+import ida_ida
 import ida_segment
 import idc
 import idaapi
@@ -222,9 +223,10 @@ class IDAContextAPI(DisassemblerContextAPI):
         pass
 
     def is_64bit(self):
-        inf = ida_idaapi.get_inf_structure()
         # target_filetype = inf.filetype
-        return inf.is_64bit()
+        if ida_pro.IDA_SDK_VERSION < 900:
+            return ida_idaapi.get_inf_structure().is_64bit()
+        return not ida_ida.inf_is_32bit_exactly()
 
     def is_call_insn(self, address):
         insn = ida_ua.insn_t()
@@ -479,6 +481,9 @@ class IDAContextAPI(DisassemblerContextAPI):
             return idc.get_reg_value(reg)
         except:
             return 0
+        
+    def set_reg_value(self, reg, value):
+        return idc.set_reg_value(value, reg)
 
     def read_memory(self, address, size):
         return ida_bytes.get_bytes(address, size)
@@ -546,14 +551,6 @@ class IDAContextAPI(DisassemblerContextAPI):
             idc.create_insn(curr_addr)
             curr_addr += idaapi.get_item_size(curr_addr)
 
-    def get_segm(self, ea):
-
-        for seg in idautils.Segments():
-            
-            seg_start = idc.get_segm_start(seg)
-            seg_end = idc.get_segm_end(seg)
-            if seg_start <= ea <= seg_end:
-                return seg
 
     def get_segm_start(self, seg):
         return idc.get_segm_start(seg)

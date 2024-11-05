@@ -16,3 +16,4 @@ tracer-gdb/inactivity_alert.py
 install.sh
 plugins/tenet/tracer/jump_tracer.py
 .DS_Store
+*pyc

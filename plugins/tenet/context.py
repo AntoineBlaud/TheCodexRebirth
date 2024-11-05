@@ -5,7 +5,6 @@ import traceback
 from tenet.util.qt import *
 from tenet.util.log import pmsg
 from tenet.util.misc import is_plugin_dev
-
 from tenet.stack import StackController
 from tenet.memory import MemoryController
 from tenet.registers import RegisterController
@@ -21,6 +20,8 @@ from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 from tenet.trace.reader import TraceReader
 from tenet.integration.api import disassembler, DisassemblerContextAPI
 from tenet.taint_engine.analysis_runner import TaintAnalysisRunner
+
+IDA_GLOBAL_CTX = None
 
 logger = logging.getLogger("Tenet.Context")
 NMEM = 3
@@ -45,7 +46,7 @@ NMEM = 3
 #    not change how this context system works under the hood.
 #
 
-import idaapi
+import ida_ida
 
 
 class TenetContext(object):
@@ -54,13 +55,15 @@ class TenetContext(object):
     """
 
     def __init__(self, core, db):
+        global IDA_GLOBAL_CTX
         disassembler[self] = DisassemblerContextAPI(db)
+        IDA_GLOBAL_CTX = self
         self.core = core
         self.db = db
 
         # select a trace arch based on the binary the disassmbler has loaded
 
-        if idaapi.get_inf_structure().procname == "ARM":
+        if ida_ida.inf_get_procname() == "ARM":
             if disassembler[self].is_64bit():
                 self.arch = ArchARM64()
             else:

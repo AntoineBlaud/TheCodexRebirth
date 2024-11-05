@@ -54,7 +54,7 @@ except ImportError as e:
 
 
 
-class GDBStepTracerController(StepTracerController):
+class GDBStepTracerController(TracerController):
     def __init__(self, dctx, arch):
         super().__init__(dctx, arch)
         self.dctx = dctx

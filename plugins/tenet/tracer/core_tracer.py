@@ -2,7 +2,7 @@ from tenet.util.qt import *
 from tenet.util.common import *
 from tenet.util.misc import *
 from tenet.util.counter import alt_count
-from tenet.tracer.node import *
+from tenet.tracer.t_objects import *
 from tenet.ui import *
 from tenet.integration.api import disassembler
 from tenet.util.disasm import *
@@ -28,12 +28,13 @@ class StepTracerModel:
     def __init__(self):
         self.run_timeout = 0
         self.dump_size = 10
-        self.max_step_inside_loop = 1
+        self.max_instruction_hits = 1
         self.stop_at_idx = 10000000
         self.counter = alt_count()
         self.root_filename = None
         self.module_name = None
         self.module_base = None
+        self.shellcode_location = None
         self.watchdog_max_hits = 5000
         self.watcher = Watcher(0x0)
         self.execution_counter_outside_main_module = alt_count()
@@ -45,7 +46,7 @@ class StepTracerModel:
         self.cache_string_value = {}
 
 
-class StepTracerController(object):
+class TracerController(object):
     def __init__(self, dctx, arch):
         self.prev_ea = None
         self.arch = arch
@@ -215,7 +216,6 @@ class StepTracerController(object):
     def update_seen_instructions_count(self, ea):
         self.model.seen_instructions_count[ea] = self.model.seen_instructions_count.get(ea, 0) + 1
 
-
     def skip_special_loop_instruction(self, ea, prev_ea):
 
         if ea != prev_ea:
@@ -237,7 +237,6 @@ class StepTracerController(object):
 
     def finalize_step(self, ea, prev_ea):
 
-        self.update_seen_instructions_count(ea)
 
         self.skip_special_loop_instruction(ea, prev_ea)
 

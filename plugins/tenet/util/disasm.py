@@ -109,3 +109,14 @@ def get_operand_value(self, insn, op):
     if op.type in (X86_OP_MEM, ARM_OP_MEM):
         logger.warning("Memory operand not supported")
         raise Exception(f"Unsupported operand type {op.type}")
+
+
+def get_jump_target(dctx, arch, ea):
+    mnemonic = dctx.print_insn_mnemonic(ea)
+    if mnemonic.startswith(arch.COND_JUMP_INSTRUCTION) and not mnemonic.startswith("bic"):
+        try:
+            j_target_address = dctx.get_operand_value(ea, 0)
+            return j_target_address if j_target_address != 0 else None
+        except Exception as e:
+            pass
+    return None
