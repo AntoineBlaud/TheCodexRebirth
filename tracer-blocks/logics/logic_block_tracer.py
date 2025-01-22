@@ -533,13 +533,4 @@ class LogicBlockTracer:
         return True
 
 
-
-
-
-
-
-# ne pas hook un call
-    
-
-
     
