@@ -5,6 +5,12 @@ from capstone.x86_const import *
 from capstone.arm_const import *
 import time
 
+#
+# TODO: SCRIPT NEEDS TO BE FIXED - CURRENT IMPORT AND API CHANGED
+#
+
+
+
 # Configure logging to stdout
 logging.basicConfig(
     format='%(asctime)s %(levelname)5s: %(message)s',
@@ -36,15 +42,15 @@ if sys.path[0] != PLUGIN_PATH:
 
 try:
     from tenet.util.qt import *
-    from tenet.util.common import *
-    from tenet.util.misc import *
+    from tenet.util import *
     from tenet.ui import *
-    from tenet.util.disasm import *
-    from tenet.tracer.structures_tracer import *
-    from tenet.tracer.logic_loop_tracer import SkipLoopLogic
+
+    from tenet.tracer.tracer_components import *
     from tenet.tracer.core_tracer import *
-    from tenet.integration.api.gdb_api import *
-    from tenet.util.log import LoggerProxy
+    from tenet.integration.api import *
+    from tenet.trace_analysis.arch import *
+    from tenet.tracer.logics.tracer_logic_step import SkipLoopLogic
+
 except ImportError as e:
     raise Exception(f"Error importing Tenet: {e}")
 
