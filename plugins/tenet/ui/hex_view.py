@@ -3,7 +3,7 @@ import struct
 import tenet
 from tenet.types import *
 from tenet.util.qt import *
-from tenet.trace.arch import *
+from tenet.trace_analysis.arch import *
 import re
 try:
     import ida_kernwin, ida_idaapi

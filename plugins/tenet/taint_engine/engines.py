@@ -2,9 +2,7 @@ from typing import Mapping
 from superglobals import *
 from tenet.util.disasm import *
 import abc
-from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
-import binascii
-
+from tenet.trace_analysis.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 
 class EngineWrapper(abc.ABC):
     def get_ea(self):
@@ -106,15 +104,19 @@ class TextEngine(EngineWrapper):
 
     def read_reg(self, regname):
         regname = regname.upper()
+
         if regname == "X29":
             regname = "FP"
+
         if regname == "X30":
             regname = "LR"
+
         if regname not in self.arch.REGISTERS_MAIN:
             self.log(f"Register {regname} is not a Main register")
             return 0
         try:
             return self.reader.get_register(regname, self.idx)
+        
         except ValueError:
             self.log(f"Register {regname} not found")
             return 0

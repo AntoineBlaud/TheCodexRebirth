@@ -1,5 +1,6 @@
 from tenet.ui import *
 from tenet.types import *
+
 from tenet.util.qt.util import copy_to_clipboard
 from tenet.integration.api import DockableWindow
 import struct

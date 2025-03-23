@@ -1,4 +1,4 @@
-capstone==5.0.0.post1
+capstone
 unicorn
 keystone-engine
 z3-solver

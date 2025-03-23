@@ -1,20 +1,17 @@
 import sys
-import os 
+import os
 import logging
 from capstone.x86_const import *
 from capstone.arm_const import *
 import time
 
-# redirect logging to stdout
-# config the logger
+# Configure logging to stdout
 logging.basicConfig(
-        format='%(asctime)s %(levelname)5s: %(message)s',
-        datefmt='%m-%d-%Y %H:%M:%S',
-        level=logging.INFO,
-        
+    format='%(asctime)s %(levelname)5s: %(message)s',
+    datefmt='%m-%d-%Y %H:%M:%S',
+    level=logging.INFO,
 )
 logger = logging
-
 
 try:
     import pwndbg
@@ -22,20 +19,19 @@ except ImportError:
     logger.info("Please run this script inside gdb with pwndbg installed")
     sys.exit(1)
 
-
-# fetcg env variable PLUGIN_PATH
+# Fetch environment variable PLUGIN_PATH
 PLUGIN_PATH = "/mnt/hgfs/vmware_sharefolder/plugins/"
 if not os.path.exists(PLUGIN_PATH):
     raise Exception("PLUGIN_PATH not set or invalid")
 
-
-MAX_BREAKPOINTS = 28 
+# Constants
+MAX_BREAKPOINTS = 28
 MAX_STEP_INSIDE_LOOP = 2
 RUN_TIMEOUT = 20
 DUMP_SIZE = 10
 
+# Ensure PLUGIN_PATH is in sys.path
 if sys.path[0] != PLUGIN_PATH:
-    # import tenet
     sys.path.insert(0, PLUGIN_PATH)
 
 try:
@@ -52,19 +48,15 @@ try:
 except ImportError as e:
     raise Exception(f"Error importing Tenet: {e}")
 
-
-
 class GDBStepTracerController(TracerController):
     def __init__(self, dctx, arch):
         super().__init__(dctx, arch)
         self.dctx = dctx
-        self.cs = get_capstone_md(self.arch)
-        
-    
+        self.cs = get_capstone_md_from_arch(self.arch)
+
     @property
     def ea(self):
         return self.dctx.get_reg_value(self.dctx.reg_pc)
-
 
     def stop(self):
         self.trace_file = self.save_trace()
@@ -73,11 +65,10 @@ class GDBStepTracerController(TracerController):
         self.model.watcher.path = self.trace_file
         library_calls = self.skip_logic.library_calls
         self.save_library_calls(library_calls)
-        
+
     def update_ui(self):
         return None
-        
-    
+
     def initialize(self):
         execute_command("shell clear")
         execute_command("delete")
@@ -85,28 +76,26 @@ class GDBStepTracerController(TracerController):
         self.backup_files()
         self.model.module_name = self.dctx.get_segm_name(self.ea)
         if "<" not in self.model.module_name:
-            base = self.dctx.get_module_base_by_name(self.model.module_name)
+            base = self.dctx.get_main_module_start_by_name(self.model.module_name)
         else:
-            base = self.dctx.get_module_base(self.ea)
+            base = self.dctx.get_main_module_start(self.ea)
         if not base:
             logger.error(f"Module {self.model.module_name} not found")
             return False
         self.model.tenet_trace.append([f"base={tohex(base, self.arch.POINTER_SIZE)}"])
-        
+
         if self.dctx.is_process_running():
             raise Exception("Process is running, must be paused")
-        
+
         self.model.run_timeout = RUN_TIMEOUT
         self.model.dump_size = DUMP_SIZE
         self.model.max_step_inside_loop = MAX_STEP_INSIDE_LOOP
-        
-        
-        self.skip_logic = SkipLoopLogic(self.dctx, self.arch, self.model, MAX_BREAKPOINTS, print) # no limit of 
+
+        self.skip_logic = SkipLoopLogic(self.dctx, self.arch, self.model, MAX_BREAKPOINTS, print)
         self.skip_logic.set_callback_get_ea(lambda: self.dctx.get_reg_value(self.dctx.reg_pc))
         return True
-    
+
     def run(self):
-        
         self.start = time.time()
         while True:
             self.prev_ea = self.ea
@@ -121,7 +110,7 @@ class GDBStepTracerController(TracerController):
 
             self.skip_logic.step()
             try:
-                ea = self.ea # make a copy
+                ea = self.ea  # make a copy
                 self.finalize_step(ea, self.prev_ea)
             except Exception as e:
                 logger.error(f"Error getting PC: {e}")
@@ -129,7 +118,6 @@ class GDBStepTracerController(TracerController):
                 traceback.print_exc()
                 return
 
-            
     def invoke(self, arg, from_tty):
         if not self.initialize():
             return
@@ -144,28 +132,24 @@ class GDBStepTracerController(TracerController):
         try:
             self.run()
         except Exception as e:
-            # show traceback
             import traceback
             traceback.print_exc()
         finally:
             self.stop()
-            
-            
+
+# Mapping of architectures to Tenet arch classes
 pwnlib_archs_mapping = {
-    "x86-64" : ArchAMD64(),
-    "x86" : ArchX86(),
-    "arm" : ArchARM(),
-    "aarch64" : ArchARM64()
+    "x86-64": ArchAMD64(),
+    "x86": ArchX86(),
+    "arm": ArchARM(),
+    "aarch64": ArchARM64()
 }
-            
-            
-        
+
 try:
     dctx = GDBContextAPI()
     arch = pwnlib_archs_mapping[pwndbg.gdblib.arch.current]
     GDBStepTracerController(dctx, arch).invoke("", False)
 except Exception as e:
     import traceback
-
     traceback.print_exc()
     print("[ERROR] Please attach gdb to a process before loading the script")

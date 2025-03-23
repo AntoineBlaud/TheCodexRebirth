@@ -50,12 +50,18 @@ Then backward propagation can be represented as a tree. On same line are represe
 
 **Note: For IDA plugin, you need to have at least python 3.8 installed and IDA must be configured to use it.**
 
-- After python 3.8 is installed, you need run idapyswitch to python 3.8.10, then install setuptools and wheel.
-- Select the IDA python 3.8.10 binary full path (*ex: C:\Users\antoi\AppData\Local\Programs\Python\Python38\python.exe*)
+
+```bash
+# To determine the current Python executable used by IDA, run the following command inside IDA:
+import sys
+print(sys.executable)
+```
+- Select the IDA Python 3 binary full path based on the output of the above command.
+
 
 - Install required python packages by running the following command:
 ```bash
-python -m pip install -r requirements.txt
+<python-binary-full-path> -m pip install -r requirements.txt
 ```
 
 

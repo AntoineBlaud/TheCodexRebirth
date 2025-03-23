@@ -3,7 +3,6 @@ import errno
 import struct
 import weakref
 import threading
-import tempfile
 
 # ------------------------------------------------------------------------------
 # Plugin Util
@@ -188,19 +187,4 @@ def notify_callback(callback_list, *args):
         callback_list.remove(callback_ref)
 
 
-def get_temp_dir(root_filename):
-    # Create a temporary directory to store the snapshot
-    temp_dir = tempfile.gettempdir()
-    # get current binary name
-    file_name = os.path.splitext(root_filename)[0]
-    temp_dir = os.path.join(temp_dir, file_name)
-    # create it
-    if not os.path.exists(temp_dir):
-        os.mkdir(temp_dir)
 
-    return temp_dir
-
-
-def tohex(val, PTR_SIZE):
-    nbits = PTR_SIZE * 8
-    return hex((val + (1 << nbits)) % (1 << nbits))

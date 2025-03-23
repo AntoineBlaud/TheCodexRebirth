@@ -1,18 +1,12 @@
-from tenet.util.qt import *
-from tenet.util.common import *
-from tenet.util.misc import *
-from tenet.util.counter import alt_count
-from tenet.tracer.t_objects import *
-from tenet.ui import *
-from tenet.integration.api import disassembler
-from tenet.util.disasm import *
+
 import logging
 from pathlib import Path
 from typing import List
-from capstone.x86_const import *
-from capstone.arm_const import *
-import time
-import datetime
+
+from tenet.util.qt import *
+from tenet.util import *
+from tenet.tracer.tracer_components import *
+from tenet.ui import *
 
 logger = logging.getLogger(f"Tenet.{__name__}")
 
@@ -26,7 +20,10 @@ class Watcher:
 
 class StepTracerModel:
     def __init__(self):
-        self.run_timeout = 0
+        self.run_timeout = 10
+        self.start_time = 0
+        self.idx = 0
+        self.tracer_type = None
         self.dump_size = 10
         self.max_instruction_hits = 1
         self.stop_at_idx = 10000000
@@ -34,7 +31,7 @@ class StepTracerModel:
         self.root_filename = None
         self.module_name = None
         self.module_base = None
-        self.shellcode_location = None
+        self.shellcode_location = 0
         self.watchdog_max_hits = 5000
         self.watcher = Watcher(0x0)
         self.execution_counter_outside_main_module = alt_count()
@@ -65,10 +62,15 @@ class TracerController(object):
         return self.model.counter.value
 
     @property
-    def log_dir(self):
+    def trace_dir(self):
         """Return the plugin log directory."""
-        root_dir = self.dctx.get_root_filename_dir()
-        return Path(root_dir).joinpath("tenet_traces")
+        try:
+            root_dir = self.dctx.get_root_filename_dir()
+            if not root_dir:
+                root_dir = Path.home()
+            return Path(root_dir).joinpath("tenet_traces")
+        except Exception as e:
+            return Path.home().joinpath("tenet_traces")
 
 
     def read_memory_and_append_entry(self, mem_addr, new_trace_entry):
@@ -175,12 +177,12 @@ class TracerController(object):
         """
         trace = [",".join(entry) for entry in self.model.tenet_trace]
 
-        if not self.log_dir.exists():
-            self.log_dir.mkdir(parents=True)
+        if not self.trace_dir.exists():
+            self.trace_dir.mkdir(parents=True)
 
         root_filename = self.dctx.get_root_filename()
 
-        trace_file = self.log_dir.joinpath(f"ida_trace_{root_filename}_{self.idx}.tenet")
+        trace_file = self.trace_dir.joinpath(f"ida_trace_{root_filename}_{self.idx}.tenet")
      
         with open(trace_file, "w") as f:
             f.write('\n'.join(trace))
@@ -199,11 +201,11 @@ class TracerController(object):
         """
         library_calls = [str(call) for call in library_calls]
 
-        if not self.log_dir.exists():
-            self.log_dir.mkdir(parents=True)
+        if not self.trace_dir.exists():
+            self.trace_dir.mkdir(parents=True)
 
         root_filename = self.dctx.get_root_filename()
-        library_calls_file = self.log_dir.joinpath(f"ida_library_calls_{root_filename}_{self.idx}.txt")
+        library_calls_file = self.trace_dir.joinpath(f"ida_library_calls_{root_filename}_{self.idx}.txt")
 
         with open(library_calls_file, "w") as f:
             f.write('\n'.join(library_calls))

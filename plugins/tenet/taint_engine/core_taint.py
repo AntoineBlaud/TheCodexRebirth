@@ -7,30 +7,28 @@
 
 from capstone.x86_const import X86_OP_MEM, X86_OP_REG, X86_OP_IMM
 from capstone.arm_const import ARM_OP_MEM, ARM_OP_REG, ARM_OP_IMM
-from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
+from tenet.trace_analysis.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
 from capstone import *
 from keystone import *
 from superglobals import *
 from tenet.util.log import logging_started, start_logging
 
-from tenet.util.counter import *
-from tenet.util.common import *
-from tenet.util.exceptions import *
+from tenet.util import *
 import logging
 
 # allow to register functions called during eval
 # DO NOT REMOVE
-from tenet.util.bitwise_math import *
+from .sym_operation.bitwise_math import *
 
-from .operation import (
+from .sym_operation.Operation_sym import (
     Operation,
 )
-from .trace_data_register import Trace
-
-from .values_taint import SymValue, RealValue, IndirectSymValue, SymRegister, SymMemory
-
+from .trace_entries import Trace
+from .sym_operation.Value_sym import (
+    SymValue, RealValue, 
+    IndirectSymValue, SymRegister, SymMemory
+)
 from .datastore_taint import DataStoreManager
-
 from z3 import set_option
 import re
 
@@ -55,6 +53,7 @@ class DebugLevel:
 
 BAD_OPERANDS_X86_64 = []
 BAD_OPERANDS_ARM = []
+SYM_REGISTER_FACTORY = []
 
 ID_COUNTER = None
 VAR_COUNTER = None
@@ -93,7 +92,6 @@ def create_sym_register_factory(arch):
         raise Exception("Unsupported architecture")
     
     SYM_REGISTER_FACTORY = arch_module.create_sym_register_factory()
-    return SYM_REGISTER_FACTORY
 
 
 def get_parent_register(arch, register_name, arch_size):
@@ -160,7 +158,6 @@ class VariableStates(dict):
         return super().__delitem__(key_object)
 
     def update(self, key, value):
-        global SYM_REGISTER_FACTORY
         _object = self[key]
 
         # fix error if a SymReg has been set to a mem
@@ -190,7 +187,6 @@ class VariableStates(dict):
     def create_sym_reg(self, name):
         # we reset the register to a new symbolic value
         # each register parts are reset to a new symbolic value
-        global SYM_REGISTER_FACTORY, logger
         # Create a new symbolic register and propagate the value to its parts
         # (e.g., 'ah' to ['rax', 'eax', 'ax', 'ah', 'al'])
         logger.debug(f"Create symbolic register {name}")
@@ -209,9 +205,7 @@ class VariableStates(dict):
     def del_sym_var(self, name):
         # Delete a symbolic variable, handling register parts and
         # individual variables
-        global SYM_REGISTER_FACTORY, logger
         name = create_name_from_address(name)
-
         logger.debug(f"Delete symbolic variable {name}")
 
         if name not in self:
@@ -728,7 +722,6 @@ class OperationEngine:
     
     def parse_operation_operands(self, cinsn, mem_access: int, symbolic_taint_store: VariableStates):
 
-        global SYM_REGISTER_FACTORY, logger
         # Parse the operands of the instruction, create symbolic values if needed, and return the Operation object
         operation = Operation(cinsn)
         operation.mem_access = mem_access
@@ -1151,7 +1144,8 @@ class Runner:
         # make first update
         setglobal("CONFIG", self.CONFIG)
         # Must be called after CONFIG BINARY_MAX_MASK and BINARY_ARCH_SIZE are set
-        self.CONFIG["SYM_REGISTER_FACTORY"] = create_sym_register_factory(self.arch)
+        create_sym_register_factory(self.arch)
+        self.CONFIG["SYM_REGISTER_FACTORY"] = SYM_REGISTER_FACTORY
         self.CONFIG["IS_INITIALIZED"] = True
         # make second update
         setglobal("CONFIG", self.CONFIG)

@@ -1,8 +1,9 @@
 import os
 import sys
 import logging
-
+from pathlib import Path
 from .misc import makedirs, is_plugin_dev
+from .common import get_temp_dir
 from ..integration.api import disassembler
 
 # ------------------------------------------------------------------------------
@@ -29,7 +30,10 @@ def get_log_dir():
     """
     Return the plugin log directory.
     """
-    log_directory = os.path.join(disassembler.get_root_filename_dir(), "tenet_logs")
+    root_dir = disassembler.get_root_filename_dir()
+    if not root_dir:
+        root_dir = Path.home()
+    log_directory = os.path.join(root_dir, "tenet_logs")
     return log_directory
 
 

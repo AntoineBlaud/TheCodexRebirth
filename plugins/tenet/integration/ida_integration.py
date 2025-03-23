@@ -277,16 +277,16 @@ class TenetIDA(TenetCore):
 
     def _install_export_function_map(self, widget, popup):
         self._install_action_to_widget(
-            widget, popup, self.ACTION_EXPORT_FUNCTION_MAP, "Export function map", self._interactive_export_function_map
+            widget, popup, self.ACTION_EXPORT_FUNCTION_MAP, "Export Functions", self._interactive_export_function_map
         )
 
     def _install_step_tracer(self, widget, popup):
         self._install_action_to_widget(
-            widget, popup, self.ACTION_STEP_TRACER, "Use step tracer", self._interactive_step_tracer
+            widget, popup, self.ACTION_STEP_TRACER, "Tracing", self._interactive_step_tracer
         )
 
     def _install_ultimap(self, widget, popup):
-        self._install_action_to_widget(widget, popup, self.ACTION_ULTIMAP, "Use Ultimap", self._interactive_ultimap)
+        self._install_action_to_widget(widget, popup, self.ACTION_ULTIMAP, "Ultimap", self._interactive_ultimap)
 
     def _uninstall_load_trace(self):
 

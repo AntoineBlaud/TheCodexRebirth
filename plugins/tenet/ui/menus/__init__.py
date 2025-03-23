@@ -1,1 +1,1 @@
-from .export_funcs_map_view import ExportFuncsMenuView
+from .export_function_view import ExportFuncsMenuView

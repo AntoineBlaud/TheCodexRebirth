@@ -9,7 +9,7 @@ import time
 import pathlib
 import pwndbg
 from tenet.util.disasm import compute_mem_access
-from tenet.util.misc import tohex
+from tenet.util.common import tohex
 
 
 def execute_command(cmd):
@@ -29,6 +29,7 @@ class GDBContextAPI:
         self.reg_sets = pwndbg.lib.regs.reg_sets[self.arch]
         self.reg_pc = self.reg_sets.pc
         self._registers = self.reg_sets.gpr + (self.reg_pc, self.reg_sets.stack)
+        
         if self.reg_sets.frame:
             self._registers += (self.reg_sets.frame,)
 
@@ -47,10 +48,13 @@ class GDBContextAPI:
         min_vaddr = 0xFFFFFFFFFFFFFFFF
         max_vaddr = 0
         for page in self.cache_pages:
+
             if page.start < min_vaddr:
                 min_vaddr = page.start
+
             if page.end > max_vaddr:
                 max_vaddr = page.end
+
         return min_vaddr, max_vaddr
 
     def get_disassembler(self, pc):
@@ -100,25 +104,28 @@ class GDBContextAPI:
         try:
             # Get the instruction using the Capstone disassembler
             insn = self.get_instruction(ea)
-            
-            # Check if the operand offset is valid
-            if op_off >= len(insn.operands):
-                print(f"Operand offset {op_off} is out of range for instruction at {hex(ea)}")
-                return None
-            
-            # Get the specified operand
-            op = insn.operands[op_off]
-            
-            # Check if the operand is a register
-            if op.type == X86_OP_REG:
-                # Get the register name from Capstone
-                reg_name = self.cs.reg_name(op.reg)
-                return reg_name
-            else:
-                return None
+
         except StopIteration:
+
             print(f"Failed to disassemble instruction at {hex(ea)}")
             return None
+            
+        # Check if the operand offset is valid
+        if op_off >= len(insn.operands):
+            print(f"Operand offset {op_off} is out of range for instruction at {hex(ea)}")
+            return None
+        
+        # Get the specified operand
+        op = insn.operands[op_off]
+        
+        # Check if the operand is a register
+        if op.type == X86_OP_REG:
+            # Get the register name from Capstone
+            reg_name = self.cs.reg_name(op.reg)
+            return reg_name
+        else:
+            return None
+
 
     def delete_breakpoint(self, ea):
         try:
@@ -180,39 +187,50 @@ class GDBContextAPI:
 
     def get_segm_name(self, ea):
         pages = self.cache_pages
+
         for page in pages:
+
             if page.start <= ea <= page.end:
                 return os.path.basename(str(page.objfile)).lower()
 
-    def get_module_base(self, ea):
+    def get_main_module_start(self, ea):
         pages = self.cache_pages
+
         for page in pages:
+
             if page.start <= ea <= page.end:
+
                 if not page.execute:
                     self.log("[WARNING] Page is not executable")
                 return page.start
             
     def get_segm_start(self, ea):
-        return self.get_module_base(ea)
+        return self.get_main_module_start(ea)
 
-    def get_module_base_by_name(self, name):
+    def get_main_module_start_by_name(self, name):
         pages = self.cache_pages
+
         for page in pages:
+
             if name in str(page.objfile).lower():
                 return page.start
 
-    def get_module_end(self, ea):
+    def get_main_module_end(self, ea):
         pages = self.cache_pages
         for page in pages:
+
             if page.start <= ea <= page.end:
+
                 if not page.execute:
                     self.log("[WARNING] Page is not executable")
                 return page.end
 
     def get_root_filename(self):
         f_name = gdb.current_progspace().filename
+
         if f_name is None:
             return "unknown"
+        
         return os.path.basename(f_name)
 
     def generate_disasm_line(self, ea):
@@ -224,14 +242,18 @@ class GDBContextAPI:
 
     def is_mapped(self, ea):
         pages = self.cache_pages
+
         if ea < self.min_vaddr or ea > self.max_vaddr:
             return False
+        
         for page in pages:
+
             if page.start <= ea <= page.end:
                 # place the page at the top of the cache
                 pages.remove(page)
                 pages.insert(0, page)
                 return True
+            
         return False
 
     def get_pc(self, arch):

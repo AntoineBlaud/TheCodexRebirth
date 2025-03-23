@@ -1,6 +1,7 @@
 import logging
 import functools
 import os
+import pathlib
 
 #
 # TODO: should probably cleanup / document this file a bit better.
@@ -148,7 +149,8 @@ class IDACoreAPI(DisassemblerCoreAPI):
 
         # get the viewer's qt widget
         viewer_twidget = viewer.GetWidget()
-        viewer_widget = ida_kernwin.PluginForm.TWidgetToPyQtWidget(viewer_twidget)
+        viewer_widget = ida_kernwin.PluginForm.TWidgetToPyQtWidget(
+            viewer_twidget)
 
         # fetch the background color property
         # viewer.Show() # TODO: re-enable!
@@ -192,8 +194,8 @@ class IDACoreAPI(DisassemblerCoreAPI):
         return ida_nalt.get_root_filename()
 
     def get_root_filename_dir(self):
-        return os.path.dirname(self.get_root_filename())
-
+        binary_path = ida_nalt.get_input_file_path()
+        return os.path.dirname(binary_path)
 
 # ------------------------------------------------------------------------------
 # Disassembler Context API (database-specific)
@@ -218,22 +220,20 @@ class IDAContextAPI(DisassemblerContextAPI):
         return ida_kernwin.get_screen_ea()
 
     def get_processor_type(self):
-        ## get the target arch, PLFM_386, PLFM_ARM, etc # TODO
+        # get the target arch, PLFM_386, PLFM_ARM, etc # TODO
         # arch = idaapi.ph_get_id()
         pass
 
     def is_64bit(self):
-        # target_filetype = inf.filetype
         if ida_pro.IDA_SDK_VERSION < 900:
             return ida_idaapi.get_inf_structure().is_64bit()
+
         return not ida_ida.inf_is_32bit_exactly()
 
     def is_call_insn(self, address):
         insn = ida_ua.insn_t()
-        if ida_ua.decode_insn(insn, address) and ida_idp.is_call_insn(insn):
-            return True
-        return False
-    
+        return (ida_ua.decode_insn(insn, address) and ida_idp.is_call_insn(insn))
+
     def set_conditional_breakpoint(self, ea, condition, reg):
         """
         Set a conditional breakpoint at a given address with a specific condition.
@@ -244,31 +244,31 @@ class IDAContextAPI(DisassemblerContextAPI):
         """
         # Set a breakpoint at the given address
         idc.add_bpt(ea)
-        
+
         # Attach the condition to the breakpoint
         idc.set_bpt_cond(ea, condition)
-    
+
     def get_operand_register_name(self, ea, op_off):
         """
         Get the register name of an operand if it is a register, otherwise return None.
-        
+
         :param ea: The address of the instruction.
         :param op_off: The operand offset (0 for first operand, 1 for second operand, etc.).
         :return: Register name if the operand is a register, None otherwise.
         """
         # Decode the instruction at the provided address
         insn = idautils.DecodeInstruction(ea)
-        
+
         PTR_SIZE = 8 if self.is_64bit() else 4
-        
+
         # Check if instruction exists
         if not insn:
             print(f"No valid instruction found at {hex(ea)}")
             return None
-        
+
         # Get the operand at the provided offset
         operand = insn.ops[op_off]
-        
+
         # Check if the operand is a register
         if operand.type == idaapi.o_reg:
             # Get the register name using get_reg_name
@@ -276,9 +276,8 @@ class IDAContextAPI(DisassemblerContextAPI):
             return reg_name
         else:
             return None
-    
 
-    def enumerate_instructions_in_base_segment(self):
+    def enumerate_instruction_in_segment(self, target_seg_address):
         """
         Return all instruction addresses from the executable.
         """
@@ -286,23 +285,20 @@ class IDAContextAPI(DisassemblerContextAPI):
 
         for seg_address in idautils.Segments():
 
-            # fetch code segments
+            if seg_address != target_seg_address:
+                continue
+
+            # Fetch code segments
             seg = ida_segment.getseg(seg_address)
-            # IDA bug
-            # if seg.sclass != ida_segment.SEG_CODE:
-            #    continue
 
             current_address = seg_address
             end_address = seg.end_ea
 
-            # save the address of each instruction in the segment
             while current_address < end_address:
-                current_address = ida_bytes.next_head(current_address, end_address)
-                if ida_bytes.is_code(ida_bytes.get_flags(current_address)):
-                    instruction_addresses.append(current_address)
-
-        #    print(f"Seg {seg.start_ea:08X} --> {seg.end_ea:08X} CODE")
-        # print(f" -- {len(instruction_addresses):,} instructions found")
+                next_instr_addr = ida_bytes.next_head(
+                    current_address, end_address)
+                if ida_bytes.is_code(ida_bytes.get_flags(next_instr_addr)):
+                    instruction_addresses.append(next_instr_addr)
 
         return instruction_addresses
 
@@ -348,7 +344,7 @@ class IDAContextAPI(DisassemblerContextAPI):
         if fn:
             return idaapi.get_func_name(fn.start_ea)
         # test 2
-        name  = ida_name.get_name(address)
+        name = ida_name.get_name(address)
         if name:
             return name
         return "unknown"
@@ -363,7 +359,8 @@ class IDAContextAPI(DisassemblerContextAPI):
         return ida_nalt.get_root_filename()
 
     def get_root_filename_dir(self):
-        return os.path.dirname(self.get_root_filename())
+        binary_path = ida_nalt.get_input_file_path()
+        return os.path.dirname(binary_path)
 
     def navigate(self, address):
 
@@ -404,11 +401,11 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_sections(self):
         sections = []
-
         for seg_address in idautils.Segments():
             seg = ida_segment.getseg(seg_address)
             section_name = ida_segment.get_segm_name(seg)
-            sections.append({"name": section_name, "range": f"{seg.start_ea:08X}-{seg.end_ea:08X}"})
+            sections.append(
+                {"name": section_name, "range": f"{seg.start_ea:08X}-{seg.end_ea:08X}"})
 
         return sections
 
@@ -435,15 +432,18 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_segm_name(self, ea):
         for seg in idautils.Segments():
+
             seg_start = idc.get_segm_start(seg)
             seg_end = idc.get_segm_end(seg)
-            seg_name = idaapi.get_segm_name(idaapi.getseg(seg))
-            if seg_start <= ea <= seg_end:
-                return seg_name
 
-    def get_module_base(self):
+            if seg_start <= ea <= seg_end:
+                return idaapi.get_segm_name(idaapi.getseg(seg))
+
+        return None
+
+    def get_main_module_start(self):
         root_filename = idc.get_root_filename()
-        
+
         for schar in [" ", "-"]:
             root_filename = root_filename.replace(schar, "_")
 
@@ -451,14 +451,18 @@ class IDAContextAPI(DisassemblerContextAPI):
             # get seg permissions
             seg = ida_segment.getseg(seg_address)
             seg_name = ida_segment.get_segm_name(seg)
+
             if root_filename in seg_name:
                 return seg_address
+
         return None
 
-    def get_module_end(self, ea):
+    def get_main_module_end(self, ea):
         for seg in idautils.Segments():
+
             seg_start = idc.get_segm_start(seg)
             seg_end = idc.get_segm_end(seg)
+
             if seg_start <= ea <= seg_end:
                 return seg_end
         return None
@@ -481,7 +485,7 @@ class IDAContextAPI(DisassemblerContextAPI):
             return idc.get_reg_value(reg)
         except:
             return 0
-        
+
     def set_reg_value(self, reg, value):
         return idc.set_reg_value(value, reg)
 
@@ -500,6 +504,7 @@ class IDAContextAPI(DisassemblerContextAPI):
     def rebase_0(self):
         offset = idaapi.get_imagebase()
         idaapi.rebase_program(-offset, idaapi.MSF_NOFIX)
+        print("rebase")
         # wait for rebase
         while idaapi.get_imagebase() != 0:
             time.sleep(0.1)
@@ -521,12 +526,14 @@ class IDAContextAPI(DisassemblerContextAPI):
     def take_memory_snapshot(self):
         idaapi.take_memory_snapshot(0)
 
-    def get_segm(self, seg_ea):
+    def _get_segm(self, seg_ea):
         for seg in idautils.Segments():
+
             seg_start = idc.get_segm_start(seg)
             seg_end = idc.get_segm_end(seg)
             if seg_start <= seg_ea <= seg_end:
                 return seg
+
         raise Exception("Segment not found")
 
     def get_segm_name(self, seg):
@@ -534,23 +541,22 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def reset_code_segment(self, seg_ea, hard=True):
 
-        seg = self.get_segm(seg_ea)
+        seg = self._get_segm(seg_ea)
         seg_start = idc.get_segm_start(seg)
         seg_end = idc.get_segm_end(seg)
 
         for addr in range(seg_start, seg_end):
-            # undefined data 
+            # undefined data
             idc.del_items(addr, idc.DELIT_EXPAND)
 
         if not hard:
             return
-        
+
         curr_addr = seg_start
         while curr_addr < seg_end:
 
             idc.create_insn(curr_addr)
             curr_addr += idaapi.get_item_size(curr_addr)
-
 
     def get_segm_start(self, seg):
         return idc.get_segm_start(seg)
@@ -574,7 +580,7 @@ class IDAContextAPI(DisassemblerContextAPI):
             print("Process still running after", timeout, "seconds")
             raise Exception(f"Process still running after {timeout} seconds")
 
-    def  is_process_running(self):
+    def is_process_running(self):
         # check idaapi.WFNE_SUSP is false
         if idaapi.get_process_state() == idaapi.DSTATE_RUN:
             return True
@@ -623,7 +629,7 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_pc(self, arch):
         return self.get_reg_value(arch.IP)
-    
+
     def suspend_other_threads(self):
         # Get the total number of threads
         thread_qty = ida_dbg.get_thread_qty()
@@ -644,9 +650,9 @@ class IDAContextAPI(DisassemblerContextAPI):
 
         # Restore the current thread selection
         ida_dbg.select_thread(current_thread_id)
-        
+
     def resume_threads(self):
-            # Get the total number of threads
+        # Get the total number of threads
         thread_qty = ida_dbg.get_thread_qty()
 
         # Get the ID of the current thread
@@ -662,9 +668,27 @@ class IDAContextAPI(DisassemblerContextAPI):
 
         # Restore the current thread selection
         ida_dbg.select_thread(current_thread_id)
-        
+
     def get_current_thread(self):
         return ida_dbg.get_current_thread()
+
+    def get_func_items(self, func_start_ea):
+        return list(idautils.FuncItems(func_start_ea))
+
+    def get_func(self, ea):
+        return idaapi.get_func(ea)
+
+        
+    def get_target_filetype(self):
+        if ida_pro.IDA_SDK_VERSION < 900:
+            filetype = idaapi.get_inf_structure().filetype
+        else:
+            filetype = ida_ida.inf_get_filetype()
+            
+        if filetype == ida_ida.f_PE:
+            return "PE"
+        elif filetype == ida_ida.f_ELF:
+            return "ELF"
 
 
 # ------------------------------------------------------------------------------
@@ -828,7 +852,7 @@ def lex_citem_indexes(line):
                 # in this context, it is actually the index number of a citem
                 #
 
-                citem_index = int(line[i : i + idaapi.COLOR_ADDR_SIZE], 16)
+                citem_index = int(line[i: i + idaapi.COLOR_ADDR_SIZE], 16)
                 i += idaapi.COLOR_ADDR_SIZE
 
                 # save the extracted citem index
@@ -890,7 +914,8 @@ class DockableWindow(ida_kernwin.PluginForm):
             WOPN_SZHINT = 0x200
 
             # create the dockable widget, without actually showing it
-            self.Show(self.title, options=ida_kernwin.PluginForm.WOPN_CREATE_ONLY | ida_kernwin.WOPN_NOT_CLOSED_BY_ESC)
+            self.Show(self.title, options=ida_kernwin.PluginForm.WOPN_CREATE_ONLY |
+                      ida_kernwin.WOPN_NOT_CLOSED_BY_ESC)
 
             # use some kludge to display our widget, and enforce the use of its sizehint
             ida_widget = self.GetWidget()
@@ -905,7 +930,8 @@ class DockableWindow(ida_kernwin.PluginForm):
 
         # move the window to a given location if specified
         if dock_position is not None:
-            ida_kernwin.set_dock_pos(self.title, self._dock_target, dock_position)
+            ida_kernwin.set_dock_pos(
+                self.title, self._dock_target, dock_position)
 
     def hide(self):
         self.Close(1)

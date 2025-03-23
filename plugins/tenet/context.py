@@ -11,17 +11,16 @@ from tenet.stack import StackController
 from tenet.memory import MemoryController
 from tenet.registers import RegisterController
 from tenet.breakpoints import BreakpointController
-from tenet.export_function_menu import ExportFunctionsMenuController
-from tenet.step_tracer import IDAStepTracerController
-from tenet.ultimap import UltimapController
+from tenet.export_function import ExportFunctionsMenuController
+from tenet.tracer import IDAUnifiedTracerController, UltimapController
 from tenet.ui.trace_view import TraceDock
 from tenet.ui.tree_view import TreeDock
 
 from tenet.types import BreakpointType
-from tenet.trace.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
-from tenet.trace.reader import TraceReader
+from tenet.trace_analysis.arch import ArchAMD64, ArchX86, ArchARM, ArchARM64
+from tenet.trace_analysis.reader import TraceReader
 from tenet.integration.api import disassembler, DisassemblerContextAPI
-from tenet.taint_engine.analysis_runner import TaintAnalysisRunner
+from tenet.taint_engine.taint_analysis_runner import TaintAnalysisRunner
 
 
 
@@ -51,7 +50,7 @@ NMEM = 3
 #
 
 import ida_ida
-
+import idaapi
 
 class TenetContext(object):
     """
@@ -198,16 +197,18 @@ class TenetContext(object):
         disassembler.show_wait_box(self.create_loading_msg(filepath))
 
         dctx = disassembler[self]
+
         logger.info(f"Loading trace from disk: {filepath}")
         pmsg(f"Loading trace from disk: {filepath}")
+
         self.reader = TraceReader(filepath, self.arch, disassembler[self], self)
+
         pmsg(f"- {self.reader.trace.length:,} instructions...")
         logger.info(f"- {self.reader.trace.length:,} instructions")
 
         if self.reader.analysis.slide != None:
             pmsg(f"- {self.reader.analysis.slide:#x} ASLR slide...")
         else:
-            disassembler.warning("Failed to automatically detect ASLR base!\n\nSee console for more info...")
             pmsg(" +------------------------------------------------------")
             pmsg(" |- ERROR: Failed to detect ASLR base for this trace.")
             pmsg(" |       ---------------------------------------     ")
@@ -217,7 +218,10 @@ class TenetContext(object):
             pmsg("   |  predicting an ASLR slide.")
         pmsg(" |- INFO: Taint analysis has been started.")
         dctx.update_ui()
-        self.taint_analysis_runner = TaintAnalysisRunner(self.arch, disassembler[self], self.reader)
+
+        if(show_msgbox_with_checkbox("Run Taint Analysis", title="Taint Analysis")):
+            self.taint_analysis_runner = TaintAnalysisRunner(self.arch, disassembler[self], self.reader)
+
         pmsg(" +------------------------------------------------------")
         logger.info("Trace loaded successfully.")
 
@@ -239,8 +243,10 @@ class TenetContext(object):
         self.trace.attach_reader(self.reader)
         self.tree.attach_reader(self.reader)
         self.stack.attach_reader(self.reader)
+
         for i in range(NMEM):
             self.memories[i].attach_reader(self.reader)
+
         self.registers.attach_reader(self.reader)
 
         #
@@ -427,7 +433,7 @@ class TenetContext(object):
         Handle UI actions for exporting the function map.
         """
         # load the function map controller
-        controller = IDAStepTracerController(self)
+        controller = IDAUnifiedTracerController(self)
         controller.show()
 
     def interactive_ultimap(self):
@@ -445,7 +451,6 @@ class TenetContext(object):
         This will make the disassembler track with the PC/IP of the trace reader.
         """
         dctx = disassembler[self]
-
         #
         # get a 'rebased' version of the current instruction pointer, which
         # should map to the disassembler / open database if it is a code

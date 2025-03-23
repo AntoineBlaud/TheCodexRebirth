@@ -125,9 +125,9 @@ class CallTreeView(QWidget):
         reader.idx_changed(self.scrolld)
 
     def depth_color(self, depth):
-        r = 255 - 14 * abs(depth % 12 - 6)
-        g = 255 - 14 * abs((depth + 4) % 12 - 6)
-        b = 255 - 14 * abs((depth + 8) % 12 - 6)
+        r = 150 - 14 * abs(depth % 12 - 6)
+        g = 150 - 14 * abs((depth + 4) % 12 - 6)
+        b = 150 - 14 * abs((depth + 8) % 12 - 6)
         return r, g, b
 
     def append_found_strings(self, qitem_str, detected_strings):
@@ -208,7 +208,7 @@ class CallTreeView(QWidget):
         # make a ratio
         ratio = max_scroll / (rect_x + rect.width() - 120)
         # set the value
-        self.tree.horizontalScrollBar().setValue(rect_x * ratio)
+        self.tree.horizontalScrollBar().setValue(int(rect_x * ratio))
         # print(f"rect_x: {rect_x}, max_scroll: {max_scroll}, ratio: {ratio}, rect.x(): {rect.x()}, first_rect.x(): {first_rect.x()}")
 
     def scrolld(self, idx):
