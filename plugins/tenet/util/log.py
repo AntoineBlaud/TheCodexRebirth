@@ -34,6 +34,9 @@ def get_log_dir():
     if not root_dir:
         root_dir = Path.home()
     log_directory = os.path.join(root_dir, "tenet_logs")
+    # create directory if it does not exist
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory)
     return log_directory
 
 

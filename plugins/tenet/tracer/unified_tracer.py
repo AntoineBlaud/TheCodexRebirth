@@ -100,7 +100,8 @@ class IDAUnifiedTracerController(TracerController):
             logger.error(f"Module base not found. Filename must be equal to module base name. Check filename has not space")
             return False
         
-        self.model.tenet_trace.append([f"base={tohex(base, self.arch.POINTER_SIZE)}"])
+        if(len(self.model.tenet_trace) == 0):
+            self.model.tenet_trace.append([f"base={tohex(base, self.arch.POINTER_SIZE)}"])
 
         if self.dctx.is_process_running():
             msg = "Please continue process until we reach a breakpoint before starting Tracer"

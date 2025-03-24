@@ -2,6 +2,7 @@
 import logging
 from pathlib import Path
 from typing import List
+import os 
 
 from tenet.util.qt import *
 from tenet.util import *
@@ -68,9 +69,13 @@ class TracerController(object):
             root_dir = self.dctx.get_root_filename_dir()
             if not root_dir:
                 root_dir = Path.home()
-            return Path(root_dir).joinpath("tenet_traces")
+            p = Path(root_dir).joinpath("tenet_traces")
         except Exception as e:
-            return Path.home().joinpath("tenet_traces")
+            p = Path.home().joinpath("tenet_traces")
+            
+        if not os.path.exists(p):
+            os.makedirs(p)
+        return p
 
 
     def read_memory_and_append_entry(self, mem_addr, new_trace_entry):

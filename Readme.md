@@ -74,6 +74,7 @@ print(sys.executable)
 - Use step tracing to register the instructions and their results.
 - Adjust the base address in the Tenet trace file, as it occasionally fails to compute correctly
 - Import the trace file into CodexRebirth.
+- In case the imported trace file failed to load, update base address in the trace file and re-import it. You must manually analyze the trace file to determine the correct base address to use.
 - Explore by using mouse wheel while hovering the timeline, or by using previous/next buttons or shortcuts.
 
 ## Basic Usage For Shellcode Analysis
