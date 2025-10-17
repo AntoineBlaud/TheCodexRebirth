@@ -195,8 +195,9 @@ class IDACoreAPI(DisassemblerCoreAPI):
 
     def get_root_filename_dir(self):
         binary_path = ida_nalt.get_input_file_path()
-        return os.path.dirname(binary_path)
-
+        if binary_path:
+            return os.path.dirname(binary_path)
+        return None
 # ------------------------------------------------------------------------------
 # Disassembler Context API (database-specific)
 # ------------------------------------------------------------------------------
@@ -360,7 +361,9 @@ class IDAContextAPI(DisassemblerContextAPI):
 
     def get_root_filename_dir(self):
         binary_path = ida_nalt.get_input_file_path()
-        return os.path.dirname(binary_path)
+        if binary_path:
+            return os.path.dirname(binary_path)
+        return None
 
     def navigate(self, address):
 
